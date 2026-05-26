@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom'
 import {
   Calendar, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
   CalendarDays, Filter, MoreHorizontal, X, FileClock, MonitorSmartphone,
-  LogIn, LogOut, MapPin, MapPinOff,
+  LogIn, LogOut, MapPin, MapPinOff, Loader2,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -32,7 +32,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, toast,
 } from '@/components/ui/overlays'
 import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/lib/routes'
@@ -46,104 +46,23 @@ import {
 import { useShifts } from '@/hooks/useShifts'
 import { useGeolocationPermission } from '@/hooks/useGeolocationPermission'
 import { useAccountFlags } from '@/hooks/useAccountFlags'
+import { formatTime, formatDayLabel, toISODate, toISOMonth, startOfWeek, addDays, formatHoursWorked } from '@/lib/datetime'
+import {
+  classify, statusLabel, statusTone, computeStats,
+  type DayInfo, type AttendanceWeekStats,
+} from '@/lib/attendance/calendar'
+import { useLiveDuration } from '@/hooks/useLiveDuration'
+import { EmptyState } from '@/components/shared/EmptyState'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+// The day-format / ISO helpers (`formatTime`, `formatDayLabel`,
+// `toISODate`, `toISOMonth`) live in `lib/datetime.ts` and are imported
+// alongside the other modules. Only the week-window arithmetic stays
+// local since it is unique to this page's calendar header.
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function toISODate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
-function formatDayLabel(d: Date): string {
-  return `${String(d.getDate()).padStart(2, '0')}-${MONTHS_SHORT[d.getMonth()]}-${d.getFullYear()}`
-}
-
-function startOfWeek(d: Date): Date {
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() - out.getDay()) // Sunday-start
-  return out
-}
-
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() + n)
-  return out
-}
-
-function isoMonth(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-interface DayInfo {
-  date: Date
-  iso: string
-  cell: CalendarCell | null
-  // Pre-computed display fields so each render is cheap.
-  label: { weekday: string; day: string }
-  classification: DayClassification
-}
-
-type DayClassification =
-  | 'weekend'
-  | 'holiday'
-  | 'present'
-  | 'late'
-  | 'short'
-  | 'absent'
-  | 'wfh'
-  | 'on_leave'
-  | 'future'
-
-function classify(cell: CalendarCell | null, date: Date, today: Date): DayClassification {
-  if (date > today) return 'future'
-  if (!cell) return 'absent'
-  if (cell.code === 'WO') return 'weekend'
-  if (cell.code === 'H') return 'holiday'
-  if (cell.code === 'A' || cell.code === 'N/A') return 'absent'
-  if (cell.code === 'WFH') return 'wfh'
-  if (cell.code === 'P-late') return 'late'
-  if (cell.code === 'P-short') return 'short'
-  if (cell.code.endsWith('L')) return 'on_leave'
-  return 'present'
-}
-
-function statusLabel(c: DayClassification): string {
-  switch (c) {
-    case 'weekend': return 'Weekend'
-    case 'holiday': return 'Holiday'
-    case 'present': return 'Present'
-    case 'late': return 'Late'
-    case 'short': return 'Early out'
-    case 'absent': return 'Absent'
-    case 'wfh': return 'WFH'
-    case 'on_leave': return 'On leave'
-    case 'future': return ''
-  }
-}
-
-function statusTone(c: DayClassification): { bar: string; pill: string } {
-  switch (c) {
-    case 'weekend': return { bar: 'bg-amber-200/60 dark:bg-amber-900/30', pill: 'border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30' }
-    case 'holiday': return { bar: 'bg-sky-200/60 dark:bg-sky-900/30', pill: 'border-sky-300 text-sky-800 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/30' }
-    case 'present':
-    case 'late':
-    case 'short':
-      return { bar: 'bg-emerald-200/60 dark:bg-emerald-900/30', pill: 'border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/30' }
-    case 'absent': return { bar: 'bg-rose-200/60 dark:bg-rose-900/30', pill: 'border-rose-300 text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/30' }
-    case 'wfh': return { bar: 'bg-violet-200/60 dark:bg-violet-900/30', pill: 'border-violet-300 text-violet-800 dark:text-violet-300 bg-violet-50/70 dark:bg-violet-950/30' }
-    case 'on_leave': return { bar: 'bg-blue-200/60 dark:bg-blue-900/30', pill: 'border-blue-300 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30' }
-    case 'future': return { bar: 'bg-muted/40', pill: 'border-border text-muted-foreground' }
-  }
-}
-
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
 
 function hhmmToMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number)
@@ -169,7 +88,7 @@ export function MyAttendancePage() {
   // Calendar response is per-month. When the week spans two months we fall
   // back to the month containing weekStart — for the screenshots' use case
   // (current week), this is always the right month.
-  const monthQuery = isoMonth(weekStart)
+  const monthQuery = toISOMonth(weekStart)
   const { data: calendar, isLoading } = useAttendanceCalendar(monthQuery, { employeeId })
   const myRow = (calendar?.employees?.[0] ?? null) as CalendarEmployee | null
   const { data: shifts = [] } = useShifts({ includeInactive: true })
@@ -199,7 +118,7 @@ export function MyAttendancePage() {
     return out
   }, [weekStart, myRow, today])
 
-  const stats = useMemo(() => computeStats(days), [days])
+  const stats = useMemo(() => computeStatsLocal(days), [days])
 
   // ── Check-in widget ────────────────────────────────────────────────────
   const todayInfo = useMemo(() => {
@@ -224,23 +143,135 @@ export function MyAttendancePage() {
   // permission is granted. Mirrors the policy on physical biometric devices
   // (you can't punch in without being at the reader). Check-out is still
   // allowed without location since the user is already on premises.
+  //
+  // We treat the Permissions API as a *hint*, not a hard gate. Some browsers
+  // (older Safari, in-app webviews, embedded WebKit) stall at `'checking'`
+  // or return `'prompt'` even when the underlying OS already granted the
+  // permission. So instead of disabling check-in until we see `'granted'`,
+  // we always attempt the geolocation read on click and react to what
+  // actually comes back.
   const geo = useGeolocationPermission()
-  const locationReady = geo.status === 'granted'
+  const locationDenied = geo.status === 'denied'
   const locationUnsupported = geo.status === 'unsupported'
+  const locationGranted = geo.status === 'granted'
 
-  const handleCheckIn = () => {
-    if (!employeeId) return
-    if (!locationReady) {
-      // Defensive — the button is disabled in this state, but a stray call
-      // shouldn't slip through.
+  // Eagerly resolve the position on mount when the permission is already
+  // granted, so the inline preview strip can show actual coordinates
+  // without making the user click first. We don't trigger a fresh
+  // permission prompt here — `request()` against a granted permission
+  // just reads the current position. When the user later changes the
+  // browser permission (e.g. from blocked to granted), the Permissions
+  // API change handler flips `status` to 'granted' and we run again.
+  useEffect(() => {
+    if (!punchAllowed) return
+    if (locationGranted && !geo.position) {
       void geo.request()
+    }
+    // We intentionally depend on `locationGranted` (not the whole `geo`
+    // object) so this fires once when status transitions to granted,
+    // not on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [punchAllowed, locationGranted])
+
+  const handleCheckIn = async () => {
+    if (!employeeId) {
+      toast.error(
+        'Could not find your employee record',
+        'Refresh the page or contact HR if this keeps happening.',
+      )
       return
     }
-    checkIn.mutate(employeeId)
+    if (locationUnsupported) {
+      toast.error(
+        'Location not available',
+        'This device does not provide geolocation, so attendance check-in is unavailable here.',
+      )
+      return
+    }
+
+    // Prefer the cached position when we already have a recent one — the
+    // preview strip eagerly resolves on mount, so by the time HR clicks
+    // Check-in we usually have coords ready. Only fall back to a fresh
+    // request() when there's no cached fix yet (first interaction, or the
+    // initial read failed).
+    //
+    // `request()` resolves with `null` on failure (denied / timeout /
+    // unavailable) — we treat that as the signal to surface a toast and
+    // bail instead of silently no-op'ing.
+    const pos = geo.position ?? await geo.request()
+    if (!pos) {
+      if (geo.status === 'denied') {
+        toast.error(
+          'Location is blocked',
+          'Enable location for this site in your browser settings, then try again.',
+        )
+      } else {
+        toast.error(
+          'Could not read your location',
+          'Make sure location is on and try once more.',
+        )
+      }
+      return
+    }
+    // Send the coords we just collected (and the note typed in the
+    // sibling input). Backend stores both — without this, the punch
+    // would land geo-anonymous even though we just asked the browser
+    // for a position, which defeats the whole gate.
+    checkIn.mutate(
+      {
+        employeeId,
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        notes: note.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Checked in')
+          setNote('')
+        },
+        onError: (err: unknown) => {
+          toast.error(
+            'Check-in failed',
+            err instanceof Error ? err.message : 'Please try again in a moment.',
+          )
+        },
+      },
+    )
   }
-  const handleCheckOut = () => {
-    if (!employeeId) return
-    checkOut.mutate(employeeId)
+  const handleCheckOut = async () => {
+    if (!employeeId) {
+      toast.error('Could not find your employee record')
+      return
+    }
+    // Best-effort geolocation on check-out too — same business logic
+    // (we want to know where the punch happened) but we don't *gate*
+    // check-out on it: if the user left the building and lost location,
+    // they should still be able to close their shift.
+    let coords: { latitude: number; longitude: number } | null = null
+    if (!locationUnsupported) {
+      const pos = await geo.request().catch(() => null)
+      if (pos) coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude }
+    }
+    checkOut.mutate(
+      {
+        employeeId,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+        notes: note.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Checked out')
+          setNote('')
+        },
+        onError: (err: unknown) => {
+          toast.error(
+            'Check-out failed',
+            err instanceof Error ? err.message : 'Please try again in a moment.',
+          )
+        },
+      },
+    )
   }
 
   const liveTimer = useLiveDuration(todayInfo?.cell?.checkIn, todayInfo?.cell?.checkOut)
@@ -374,11 +405,30 @@ export function MyAttendancePage() {
               <span className="text-xs leading-none tabular-nums">{liveTimer}</span>
             </div>
           </Button>
-        ) : locationReady ? (
+        ) : (
+          // The check-in button is always clickable (unless geolocation is
+          // entirely unsupported by the device). Clicking attempts a fresh
+          // geolocation read — if the browser hasn't asked yet it'll prompt,
+          // if it's denied the handler surfaces a clear toast, and if the
+          // device has no API at all the button is disabled with a hint.
+          //
+          // Previous behaviour disabled the button on `geo.status !== 'granted'`,
+          // which left the button frozen during the Permissions API's
+          // `'checking'` window AND in browsers that report `'prompt'` even
+          // when the OS-level permission is already granted. That created
+          // the "location is on but check-in is impossible" bug — fixed
+          // by trusting the click + the geolocation result, not the
+          // cached permission state.
           <Button
             onClick={handleCheckIn}
             loading={checkIn.isPending}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            disabled={locationUnsupported}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
+            title={locationUnsupported
+              ? 'This device does not provide geolocation, so check-in is unavailable here.'
+              : locationDenied
+                ? 'Location is blocked. We will ask you to re-enable it on click.'
+                : 'Click to check in. We will ask for location if needed.'}
           >
             <LogIn className="size-4 me-1" />
             <div className="flex flex-col items-start">
@@ -386,61 +436,64 @@ export function MyAttendancePage() {
               <span className="text-xs leading-none tabular-nums">{liveTimer}</span>
             </div>
           </Button>
-        ) : (
-          // Location not granted — block check-in and surface a primary CTA
-          // that re-requests permission. Disabled "Check-in" stays visible so
-          // users still see what they're trying to do.
-          <div className="flex items-center gap-2">
-            <Button
-              disabled
-              className="bg-emerald-600/40 text-white cursor-not-allowed"
-              title="Enable location to check in"
-            >
-              <LogIn className="size-4 me-1" />
-              <div className="flex flex-col items-start">
-                <span className="text-xs leading-none">Check-in</span>
-                <span className="text-[10px] leading-none opacity-80">Location required</span>
-              </div>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => geo.request()}
-              disabled={locationUnsupported}
-              title={locationUnsupported
-                ? 'This device does not support geolocation'
-                : geo.status === 'denied'
-                  ? 'Permission was blocked — re-enable it in your browser/OS settings'
-                  : 'Allow location access to check in'}
-              className="gap-1.5"
-            >
-              {locationUnsupported ? (
-                <MapPinOff className="size-4" />
-              ) : (
-                <MapPin className="size-4" />
-              )}
-              <span className="text-xs">
-                {locationUnsupported
-                  ? 'Not supported'
-                  : geo.status === 'denied'
-                    ? 'Unblock location'
-                    : 'Enable location'}
-              </span>
-            </Button>
-          </div>
         ))}
       </div>
-      {punchAllowed && !isCheckedIn && !locationReady && (
-        // Helper text under the widget so users understand why the action is
-        // gated. Kept short — the button title="" carries the long-form hint.
-        <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
-          <MapPinOff className="size-3.5" />
-          {locationUnsupported
-            ? 'Your device does not provide geolocation, so attendance check-in is unavailable here.'
-            : geo.status === 'denied'
-              ? 'Location is blocked. Open your browser settings and allow location for this site, then click "Unblock location".'
-              : 'Click "Enable location" so we can record where the check-in happened.'}
-        </p>
+      {/* Live location strip — shown whenever punching is allowed so HR
+          can see at a glance where the punch will be tagged. Mirrors the
+          portal pattern: pending → resolved (with Maps link) → blocked.
+          The coords come from `useGeolocationPermission`, which we
+          eagerly read on mount. */}
+      {punchAllowed && !isCheckedIn && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            {locationUnsupported ? (
+              <>
+                <MapPinOff className="size-3.5 text-rose-500" />
+                <span>Your device does not provide geolocation, so check-in is unavailable here.</span>
+              </>
+            ) : locationDenied ? (
+              <>
+                <MapPinOff className="size-3.5 text-rose-500" />
+                <span>Location is blocked. Enable it in your browser settings to record your punch location.</span>
+              </>
+            ) : geo.position ? (
+              <>
+                <MapPin className="size-3.5 text-emerald-600" />
+                <span>Location:</span>
+                <a
+                  href={`https://maps.google.com/?q=${geo.position.coords.latitude},${geo.position.coords.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono tabular-nums text-foreground hover:text-primary hover:underline"
+                  title="Open in Google Maps"
+                >
+                  {geo.position.coords.latitude.toFixed(4)}, {geo.position.coords.longitude.toFixed(4)}
+                </a>
+              </>
+            ) : (
+              <>
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                <span>Resolving your location…</span>
+              </>
+            )}
+          </span>
+          {/* Action affordance on the right — refresh when we have a fix,
+              enable-prompt when blocked, hidden when unsupported. Keeps
+              the strip compact when nothing's wrong. */}
+          {!locationUnsupported && (
+            <button
+              type="button"
+              onClick={() => { void geo.request() }}
+              className="text-primary hover:underline"
+            >
+              {locationDenied
+                ? 'Enable location'
+                : geo.position
+                  ? 'Refresh'
+                  : 'Retry'}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Body */}
@@ -576,7 +629,7 @@ function TimelineView({
             </div>
             {/* Hours */}
             <div className="text-right">
-              <p className="text-sm font-semibold tabular-nums">{d.cell?.hoursWorked ?? '00:00'}</p>
+              <p className="text-sm font-semibold tabular-nums">{formatHoursWorked(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut)}</p>
               <p className="text-[10px] text-muted-foreground">Hrs worked</p>
             </div>
           </button>
@@ -619,7 +672,7 @@ function ListView({ days }: { days: DayInfo[] }) {
         <tbody className="divide-y">
           {days.map((d) => {
             const tone = statusTone(d.classification)
-            const hours = d.cell?.hoursWorked ?? '—'
+            const hours = d.cell?.checkIn ? formatHoursWorked(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut) : '—'
             return (
               <tr key={d.iso} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-2.5 whitespace-nowrap">
@@ -687,7 +740,7 @@ function CalendarView({ month, myRow }: { month: string; myRow: CalendarEmployee
               )}
             >
               <span className="font-medium tabular-nums">{c.day}</span>
-              {c.cell?.hoursWorked && <span className="text-[9px] text-muted-foreground tabular-nums">{c.cell.hoursWorked}</span>}
+              {c.cell?.hoursWorked && <span className="text-[9px] text-muted-foreground tabular-nums">{formatHoursWorked(c.cell?.hoursWorked, c.cell?.checkIn, c.cell?.checkOut)}</span>}
             </div>
           )
         })}
@@ -697,42 +750,38 @@ function CalendarView({ month, myRow }: { month: string; myRow: CalendarEmployee
 }
 
 // ─── Stats footer ───────────────────────────────────────────────────────────
+// Day counts come from the shared computeStats helper in
+// lib/attendance/calendar.ts. We extend with `hoursWorked` (total minutes)
+// since the main-app footer also surfaces total worked time, which the
+// portal doesn't.
 
-interface Stats {
-  payable: number
-  present: number
-  onDuty: number
-  paidLeave: number
-  holidays: number
-  weekend: number
+interface Stats extends AttendanceWeekStats {
   hoursWorked: number
 }
 
-function computeStats(days: DayInfo[]): Stats {
-  const s: Stats = { payable: 0, present: 0, onDuty: 0, paidLeave: 0, holidays: 0, weekend: 0, hoursWorked: 0 }
+function computeStatsLocal(days: DayInfo[]): Stats {
+  const base = computeStats(days)
+  let hoursWorked = 0
   for (const d of days) {
     if (d.classification === 'future') continue
-    if (d.classification === 'present' || d.classification === 'late' || d.classification === 'short') { s.present++; s.payable++; s.onDuty++ }
-    if (d.classification === 'wfh') { s.present++; s.payable++; s.onDuty++ }
-    if (d.classification === 'on_leave') { s.paidLeave++; s.payable++ }
-    if (d.classification === 'holiday') { s.holidays++; s.payable++ }
-    if (d.classification === 'weekend') s.weekend++
     const hw = d.cell?.hoursWorked
     if (hw && /^\d{2}:\d{2}/.test(hw)) {
       const [h, m] = hw.split(':').map(Number)
-      s.hoursWorked += (h ?? 0) * 60 + (m ?? 0)
+      hoursWorked += (h ?? 0) * 60 + (m ?? 0)
     }
   }
-  return s
+  return { ...base, hoursWorked }
 }
 
 function FooterStats({ stats, shift }: { stats: Stats; shift: string }) {
   const entries: Array<{ label: string; value: string; sub: string; tone: string }> = [
-    { label: 'Payable Days', value: String(stats.payable), sub: 'Day', tone: 'bg-emerald-500' },
-    { label: 'Present', value: String(stats.present), sub: 'Day', tone: 'bg-green-500' },
+    // Alphabetical by label — keeps the legend strip predictable across the
+    // app (employee portal mirrors this order).
+    { label: 'Holidays', value: String(stats.holidays), sub: 'Day', tone: 'bg-sky-500' },
     { label: 'On Duty', value: String(stats.onDuty), sub: 'Day', tone: 'bg-violet-500' },
     { label: 'Paid leave', value: String(stats.paidLeave), sub: 'Day', tone: 'bg-amber-500' },
-    { label: 'Holidays', value: String(stats.holidays), sub: 'Day', tone: 'bg-sky-500' },
+    { label: 'Payable Days', value: String(stats.payable), sub: 'Day', tone: 'bg-emerald-500' },
+    { label: 'Present', value: String(stats.present), sub: 'Day', tone: 'bg-green-500' },
     { label: 'Weekend', value: String(stats.weekend), sub: 'Day', tone: 'bg-blue-400' },
   ]
   return (
@@ -852,7 +901,7 @@ function DayDetailSheet({
           </div>
           <div className="border-l-2 border-blue-500 ps-2 text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Hours</p>
-            <p className="text-sm font-medium tabular-nums">{cell?.hoursWorked ?? '00:00'}</p>
+            <p className="text-sm font-medium tabular-nums">{formatHoursWorked(cell?.hoursWorked, cell?.checkIn, cell?.checkOut)}</p>
           </div>
         </div>
       </SheetContent>
@@ -896,10 +945,7 @@ function AuditHistoryDialog({
         </DialogHeader>
         <DialogBody className="overflow-y-auto">
           {events.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              <FileClock className="size-8 mb-2 opacity-40" />
-              <p className="text-sm">No events recorded for this day.</p>
-            </div>
+            <EmptyState icon={FileClock} title="No events recorded for this day." size="sm" />
           ) : (
             <ol className="relative border-l-2 border-border ms-4 pt-2 space-y-5">
               {events.map((e, i) => (
@@ -924,24 +970,3 @@ function AuditHistoryDialog({
 }
 
 
-/** Ticks every second so the check-in / check-out button can show a live
- *  H:MM:SS timer. When `endIso` is set, the duration is frozen at end−start;
- *  when only `startIso` is set, it counts up from now. */
-function useLiveDuration(startIso: string | null | undefined, endIso: string | null | undefined): string {
-    const [now, setNow] = useState(() => Date.now())
-    const running = !!startIso && !endIso
-    useEffect(() => {
-        if (!running) return
-        const id = setInterval(() => setNow(Date.now()), 1000)
-        return () => clearInterval(id)
-    }, [running])
-    if (!startIso) return '0:00:00'
-    const startMs = Date.parse(startIso)
-    if (Number.isNaN(startMs)) return '0:00:00'
-    const endMs = endIso ? Date.parse(endIso) : now
-    const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
-    const h = Math.floor(secs / 3600)
-    const m = Math.floor((secs % 3600) / 60)
-    const s = secs % 60
-    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-}

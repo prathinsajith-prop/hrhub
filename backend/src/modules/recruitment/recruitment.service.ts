@@ -522,6 +522,293 @@ export async function validateBulkJobRows(
     return Promise.resolve(validateBulkJobRowsSync(rows))
 }
 
+// ─── Bulk import — candidates / job applications ──────────────────────────
+//
+// Hiring teams typically migrate from LinkedIn exports or an ATS (Workable,
+// Greenhouse, BambooHR, Recruitee). All of these emit slightly different
+// CSV headers but the underlying columns are the same: name, email,
+// optional phone / experience / notes. The bulk-validator below detects
+// both header families (LinkedIn's "First Name"/"Last Name" pair and the
+// generic "Name"/"Candidate Name" column) and produces a uniform shape.
+//
+// jobId is picked once in the dialog and applied to every row — same
+// pattern as the payroll bulk-adjustment category, keeps the sheet lean.
+
+export interface BulkCandidateInputRow {
+    rowNumber: number
+    // Raw fields as parsed from the spreadsheet. The validator is the one
+    // that knows how to combine firstName + lastName into the canonical
+    // `name` column.
+    firstName?: string | null
+    lastName?: string | null
+    name?: string | null
+    email?: string | null
+    phone?: string | null
+    nationality?: string | null
+    experience?: number | string | null
+    expectedSalary?: number | string | null
+    notes?: string | null
+}
+
+export interface BulkCandidateRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    /** Marked when the row's email is already in this job's live pipeline. */
+    duplicate?: boolean
+    /** Echoed display fields so the preview can show the candidate name
+     *  even if validation failed (useful for "row 7: missing email"). */
+    displayName?: string
+    displayEmail?: string
+    /** Set when ok — payload ready for DB insert (jobId injected later). */
+    resolved?: {
+        name: string
+        email: string
+        phone: string | null
+        nationality: string | null
+        experience: number | null
+        expectedSalary: string | null
+        notes: string | null
+    }
+}
+
+export interface BulkCandidateValidationResult {
+    rows: BulkCandidateRowResult[]
+    summary: { total: number; valid: number; invalid: number; duplicate: number }
+}
+
+export interface BulkCandidateLookups {
+    /** Lower-cased emails already in this job's active pipeline (any stage
+     *  other than 'rejected'). Hits flag the row as `duplicate`. */
+    existingEmailsInJob: Set<string>
+}
+
+// Permissive but RFC-style enough to catch typos. Email validation is
+// notoriously over-specified; we trust the candidate to fix on follow-up.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/**
+ * Pure row-validation core. Same pattern as the assets / jobs / mappings
+ * validators — no DB calls, just rule application against pre-loaded
+ * lookups. Rules:
+ *   • email is required and must look like an email
+ *   • a candidate name is required; if the source carries firstName+lastName
+ *     we combine them, otherwise we use the single `name` column
+ *   • experience (years) must be a non-negative integer when present
+ *   • expectedSalary must be a non-negative number when present (stored as
+ *     2-decimal string)
+ *   • email is unique inside the upload AND not already in the job's live
+ *     pipeline (duplicates are flagged but distinct from "invalid")
+ */
+export function validateBulkCandidateRowsSync(
+    rows: BulkCandidateInputRow[],
+    lookups: BulkCandidateLookups,
+): BulkCandidateValidationResult {
+    // Pre-pass — count email occurrences in the upload so we can flag
+    // every row carrying a duplicate, not just the second one.
+    const emailOccurrences = new Map<string, number>()
+    for (const r of rows) {
+        const e = (r.email ?? '').trim().toLowerCase()
+        if (e) emailOccurrences.set(e, (emailOccurrences.get(e) ?? 0) + 1)
+    }
+
+    const results: BulkCandidateRowResult[] = rows.map((r) => {
+        const errors: string[] = []
+
+        // ── name (required; combine firstName + lastName if present) ─
+        const first = (r.firstName ?? '').trim()
+        const last = (r.lastName ?? '').trim()
+        const combined = `${first} ${last}`.trim()
+        const direct = (r.name ?? '').trim()
+        // Prefer the explicit `name` column if HR filled it, otherwise
+        // synthesise from first/last. Some LinkedIn exports only carry
+        // first+last; some ATSes only carry a single "Candidate Name".
+        const name = direct || combined
+        if (!name) errors.push('name is required (or both first_name and last_name)')
+
+        // ── email (required + format + duplicate) ────────────────────
+        const emailRaw = (r.email ?? '').trim()
+        const email = emailRaw.toLowerCase()
+        let duplicate = false
+        if (!emailRaw) {
+            errors.push('email is required')
+        } else if (!EMAIL_RE.test(emailRaw)) {
+            errors.push(`email "${emailRaw}" is not a valid email address`)
+        } else {
+            if (lookups.existingEmailsInJob.has(email)) {
+                // Existing candidate in the job's live pipeline. Surfaced
+                // as a non-blocking *duplicate* (HR can decide to add a
+                // second application by un-flagging in the UI later).
+                duplicate = true
+                errors.push(`email "${emailRaw}" already has an active application for this job`)
+            } else if ((emailOccurrences.get(email) ?? 0) > 1) {
+                duplicate = true
+                errors.push(`email "${emailRaw}" appears more than once in this file`)
+            }
+        }
+
+        // ── experience (integer years) ───────────────────────────────
+        let experience: number | null = null
+        if (r.experience !== null && r.experience !== undefined && r.experience !== '') {
+            const n = typeof r.experience === 'number' ? r.experience : Number(String(r.experience).trim())
+            if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+                errors.push('experience must be a non-negative whole number of years')
+            } else {
+                experience = n
+            }
+        }
+
+        // ── expected salary (non-negative number, stored 2-decimal) ──
+        let expectedSalary: string | null = null
+        if (r.expectedSalary !== null && r.expectedSalary !== undefined && r.expectedSalary !== '') {
+            const n = typeof r.expectedSalary === 'number' ? r.expectedSalary : Number(String(r.expectedSalary).trim())
+            if (!Number.isFinite(n) || n < 0) {
+                errors.push('expected_salary must be a non-negative number')
+            } else {
+                expectedSalary = n.toFixed(2)
+            }
+        }
+
+        const ok = errors.length === 0
+        return {
+            rowNumber: r.rowNumber,
+            ok,
+            errors,
+            duplicate,
+            displayName: name || undefined,
+            displayEmail: emailRaw || undefined,
+            resolved: ok
+                ? {
+                      name,
+                      email: emailRaw,
+                      phone: (r.phone ?? '').trim() || null,
+                      nationality: (r.nationality ?? '').trim() || null,
+                      experience,
+                      expectedSalary,
+                      notes: (r.notes ?? '').trim() || null,
+                  }
+                : undefined,
+        }
+    })
+
+    return {
+        rows: results,
+        summary: {
+            total: results.length,
+            valid: results.filter((r) => r.ok).length,
+            invalid: results.filter((r) => !r.ok && !r.duplicate).length,
+            duplicate: results.filter((r) => r.duplicate).length,
+        },
+    }
+}
+
+/**
+ * Loads the per-job duplicate lookup in one query, then runs the sync
+ * core. Caller passes the target jobId (picked once in the dialog).
+ */
+export async function validateBulkCandidateRows(
+    tenantId: string,
+    jobId: string,
+    rows: BulkCandidateInputRow[],
+): Promise<BulkCandidateValidationResult & { jobExists: boolean }> {
+    // Verify the job belongs to this tenant before doing any duplicate
+    // lookup. Returning a `jobExists: false` flag lets the route map this
+    // to a 404 without throwing.
+    const [job] = await db
+        .select({ id: recruitmentJobs.id })
+        .from(recruitmentJobs)
+        .where(and(
+            eq(recruitmentJobs.id, jobId),
+            eq(recruitmentJobs.tenantId, tenantId),
+            isNull(recruitmentJobs.deletedAt),
+        ))
+        .limit(1)
+    if (!job) {
+        return {
+            rows: [],
+            summary: { total: 0, valid: 0, invalid: 0, duplicate: 0 },
+            jobExists: false,
+        }
+    }
+
+    // Pull only the emails we need to check — bounded by what's in the
+    // upload — rather than the entire pipeline for the job. Saves a lot
+    // of memory on jobs with thousands of historical applications.
+    const referencedEmails = Array.from(
+        new Set(
+            rows
+                .map((r) => (r.email ?? '').trim().toLowerCase())
+                .filter((e) => e.length > 0),
+        ),
+    )
+    const existingEmailsInJob = new Set<string>()
+    if (referencedEmails.length > 0) {
+        const live = await db
+            .select({ email: jobApplications.email })
+            .from(jobApplications)
+            .where(and(
+                eq(jobApplications.tenantId, tenantId),
+                eq(jobApplications.jobId, jobId),
+                ne(jobApplications.stage, 'rejected'),
+                isNull(jobApplications.deletedAt),
+                inArray(jobApplications.email, referencedEmails),
+            ))
+        for (const r of live) existingEmailsInJob.add(r.email.toLowerCase())
+    }
+
+    const result = validateBulkCandidateRowsSync(rows, { existingEmailsInJob })
+    return { ...result, jobExists: true }
+}
+
+/**
+ * Insert every valid, non-duplicate row in one transaction. Duplicate
+ * rows are silently dropped (the UI showed them at preview). Returns the
+ * full validation result plus `created` / `skipped` counts.
+ */
+export async function bulkCreateCandidates(
+    tenantId: string,
+    jobId: string,
+    rows: BulkCandidateInputRow[],
+): Promise<BulkCandidateValidationResult & { jobExists: boolean; created: number; skipped: number }> {
+    const validation = await validateBulkCandidateRows(tenantId, jobId, rows)
+    if (!validation.jobExists) {
+        return { ...validation, created: 0, skipped: 0 }
+    }
+    // Only insertable = valid AND not a duplicate. Duplicates are valid-
+    // shape rows that we just don't want to insert a second copy of.
+    const insertable = validation.rows.filter((r) => r.ok && r.resolved && !r.duplicate)
+    if (insertable.length === 0) {
+        return {
+            ...validation,
+            created: 0,
+            skipped: validation.summary.invalid + validation.summary.duplicate,
+        }
+    }
+    await db.transaction(async (tx) => {
+        const values = insertable.map((r) => {
+            const x = r.resolved!
+            return {
+                tenantId,
+                jobId,
+                name: x.name,
+                email: x.email,
+                phone: x.phone,
+                nationality: x.nationality,
+                experience: x.experience,
+                expectedSalary: x.expectedSalary,
+                notes: x.notes,
+                stage: 'received' as const,
+            }
+        })
+        await tx.insert(jobApplications).values(values)
+    })
+    return {
+        ...validation,
+        created: insertable.length,
+        skipped: validation.summary.invalid + validation.summary.duplicate,
+    }
+}
+
 /**
  * Insert all valid rows in one transaction. Re-runs validation server-
  * side and silently drops invalid rows — the UI told HR which rows

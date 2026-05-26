@@ -27,7 +27,15 @@ export function MonthSwitcher({
             >
                 <ChevronLeft className="size-4" />
             </Button>
-            <div className="px-3 text-xs font-medium min-w-[140px] text-center border-l border-r">
+            {/* Centre label.
+                Was `min-w-[140px]` which both (a) pushed adjacent header
+                content off-screen on 320px viewports, and (b) overflowed
+                with Arabic month strings (e.g. "سبتمبر 2026") because the
+                inline-flex parent couldn't wrap. Switched to a content-
+                hugging size with a softer minimum, and added
+                `whitespace-nowrap` so the label still tabular-aligns
+                across prev/next clicks without jittering. */}
+            <div className="px-3 text-xs font-medium text-center border-l border-r whitespace-nowrap tabular-nums min-w-[110px]">
                 {label}
             </div>
             <Button

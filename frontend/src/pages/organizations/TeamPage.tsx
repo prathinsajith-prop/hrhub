@@ -15,8 +15,10 @@ import { OrgHierarchyPath } from '@/components/shared/OrgHierarchyPath'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -541,36 +543,33 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                         {isLoading ? (
                             <div className="px-3 pb-3 space-y-0.5">
                                 {[...Array(3)].map((_, i) => (
-                                    <div key={i} className="flex items-center gap-3 py-2.5 px-2 animate-pulse">
-                                        <div className="size-8 rounded-full bg-muted shrink-0" />
+                                    <div key={i} className="flex items-center gap-3 py-2.5 px-2">
+                                        <Skeleton className="size-8 rounded-full shrink-0" />
                                         <div className="flex-1 space-y-1.5">
-                                            <div className="h-2.5 bg-muted rounded w-32" />
-                                            <div className="h-2 bg-muted rounded w-20" />
+                                            <Skeleton className="h-2.5 w-32" />
+                                            <Skeleton className="h-2 w-20" />
                                         </div>
-                                        <div className="h-5 w-16 bg-muted rounded-full shrink-0" />
+                                        <Skeleton className="h-5 w-16 rounded-full shrink-0" />
                                     </div>
                                 ))}
                             </div>
                         ) : filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-8 gap-2 text-center px-4 pb-4">
-                                <div className="size-10 rounded-full bg-muted flex items-center justify-center">
-                                    <Users className="size-5 text-muted-foreground/40" />
-                                </div>
-                                <p className="text-xs text-muted-foreground font-medium">
-                                    {search ? t('team.noMembersMatch') : t('team.noMembersYet')}
-                                </p>
-                                {canManage && !search && (
+                            <EmptyState
+                                icon={Users}
+                                title={search ? t('team.noMembersMatch') : t('team.noMembersYet')}
+                                size="sm"
+                                action={canManage && !search ? (
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-7 text-xs mt-1"
+                                        className="h-7 text-xs"
                                         leftIcon={<UserPlus className="size-3" />}
                                         onClick={e => { e.stopPropagation(); setAddOpen(true) }}
                                     >
                                         {t('team.addMembers')}
                                     </Button>
-                                )}
-                            </div>
+                                ) : undefined}
+                            />
                         ) : (
                             <ScrollArea className={filtered.length > 5 ? 'h-[220px]' : undefined}>
                                 <TooltipProvider delayDuration={300}>
@@ -696,19 +695,19 @@ interface TeamGridProps {
 
 function TeamGridSkeletonRow() {
     return (
-        <div className="rounded-xl border border-border/60 bg-card p-4 animate-pulse">
+        <div className="rounded-xl border border-border/60 bg-card p-4">
             <div className="flex items-start gap-3">
-                <div className="size-10 rounded-lg bg-muted shrink-0" />
+                <Skeleton className="size-10 rounded-lg shrink-0" />
                 <div className="flex-1 space-y-2 pt-0.5">
-                    <div className="h-3.5 bg-muted rounded w-2/3" />
-                    <div className="h-2.5 bg-muted rounded w-1/2" />
+                    <Skeleton className="h-3.5 w-2/3" />
+                    <Skeleton className="h-2.5 w-1/2" />
                 </div>
             </div>
             <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2">
                 <div className="flex -space-x-2">
-                    {[0, 1, 2].map(i => <div key={`div-${i}`} className="size-7 rounded-full border-2 border-background bg-muted" />)}
+                    {[0, 1, 2].map(i => <Skeleton key={`div-${i}`} className="size-7 rounded-full border-2 border-background" />)}
                 </div>
-                <div className="h-2.5 bg-muted rounded w-16" />
+                <Skeleton className="h-2.5 w-16" />
             </div>
         </div>
     )
@@ -835,21 +834,23 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                         {teamsLoading ? (
                             <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : allTeams.length === 0 ? (
-                            <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="size-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">{t('team.noTeamsYet')}</p>
-                                {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
-                            </CardContent></Card>
+                            <EmptyState
+                                icon={Users}
+                                title={t('team.noTeamsYet')}
+                                variant="card"
+                                action={canManage ? (
+                                    <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
+                                        {t('team.createTeam')}
+                                    </Button>
+                                ) : undefined}
+                            />
                         ) : teamGrid(allTeams, true)}
                     </TabsContent>
                     <TabsContent value="mine">
                         {myTeamsLoading ? (
                             <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                         ) : myTeams.length === 0 ? (
-                            <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                                <Users className="size-8 text-muted-foreground/40" />
-                                <p className="text-sm text-muted-foreground">{t('team.notAssignedToTeams')}</p>
-                            </CardContent></Card>
+                            <EmptyState icon={Users} title={t('team.notAssignedToTeams')} variant="card" />
                         ) : teamGrid(myTeams, false)}
                     </TabsContent>
                 </Tabs>
@@ -859,13 +860,16 @@ function TeamsPanel({ canManage, canViewAll, userId }: TeamsPanelProps) {
                     {myTeamsLoading ? (
                         <div className="text-sm text-muted-foreground py-8 text-center">{t('common.loading')}</div>
                     ) : myTeams.length === 0 ? (
-                        <Card><CardContent className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                            <Users className="size-8 text-muted-foreground/40" />
-                            <p className="text-sm text-muted-foreground">
-                                {canManage ? t('team.createToGetStarted') : t('team.notAssignedToTeams')}
-                            </p>
-                            {canManage && <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>{t('team.createTeam')}</Button>}
-                        </CardContent></Card>
+                        <EmptyState
+                            icon={Users}
+                            title={canManage ? t('team.createToGetStarted') : t('team.notAssignedToTeams')}
+                            variant="card"
+                            action={canManage ? (
+                                <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
+                                    {t('team.createTeam')}
+                                </Button>
+                            ) : undefined}
+                        />
                     ) : teamGrid(myTeams, true)}
                 </div>
             )}

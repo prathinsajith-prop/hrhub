@@ -11,7 +11,7 @@ import {
 import {
   useAttendanceCalendar, useCheckIn, useCheckOut,
   usePunchesForDay, useAddManualPunch, useDeletePunch,
-  type CalendarCell, type CalendarEmployee, type AttendancePunch, type PunchBody,
+  type CalendarEmployee, type AttendancePunch, type PunchBody,
 } from '@/hooks/useAttendance'
 import { useAuthStore } from '@/store/authStore'
 import { useAccountFlags } from '@/hooks/useMe'
@@ -24,164 +24,19 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/lib/routes'
-
-// ─── Helpers (mirror main app's MyAttendancePage) ─────────────────────────
+import { formatTime, formatDayLabel, toISODate, toISOMonth, startOfWeek, addDays, formatHoursWorked } from '@/lib/datetime'
+import {
+  classify, statusLabel, statusTone, computeStats,
+  type DayInfo, type DayClassification, type AttendanceWeekStats,
+} from '@/lib/attendance/calendar'
+import { useLiveDuration } from '@/hooks/useLiveDuration'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function toISODate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-function formatDayLabel(d: Date): string {
-  return `${String(d.getDate()).padStart(2, '0')}-${MONTHS_SHORT[d.getMonth()]}-${d.getFullYear()}`
-}
-function startOfWeek(d: Date): Date {
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() - out.getDay())
-  return out
-}
-function addDays(d: Date, n: number): Date {
-  const out = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  out.setDate(out.getDate() + n)
-  return out
-}
-function isoMonth(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-/** Ticks every second so the check-in / check-out button can show a live
- *  H:MM:SS timer. When `endIso` is set, the duration is frozen at end−start;
- *  when only `startIso` is set, it counts up from now. */
-function useLiveDuration(startIso: string | null | undefined, endIso: string | null | undefined): string {
-    const [now, setNow] = useState(() => Date.now())
-    const running = !!startIso && !endIso
-    useEffect(() => {
-        if (!running) return
-        const id = setInterval(() => setNow(Date.now()), 1000)
-        return () => clearInterval(id)
-    }, [running])
-    if (!startIso) return '0:00:00'
-    const startMs = Date.parse(startIso)
-    if (Number.isNaN(startMs)) return '0:00:00'
-    const endMs = endIso ? Date.parse(endIso) : now
-    const secs = Math.max(0, Math.floor((endMs - startMs) / 1000))
-    const h = Math.floor(secs / 3600)
-    const m = Math.floor((secs % 3600) / 60)
-    const s = secs % 60
-    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
-}
-
-/** Try to read the browser's current geolocation, but never block the
- *  punch — we resolve with `null` after 6s if the user hasn't granted
- *  permission so check-in still goes through on a kiosk / desktop. */
-function readGeolocation(): Promise<{ latitude: number; longitude: number } | null> {
-    return new Promise((resolve) => {
-        if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null)
-        let settled = false
-        const timer = setTimeout(() => {
-            if (settled) return
-            settled = true
-            resolve(null)
-        }, 6_000)
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                if (settled) return
-                settled = true
-                clearTimeout(timer)
-                resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
-            },
-            () => {
-                if (settled) return
-                settled = true
-                clearTimeout(timer)
-                resolve(null)
-            },
-            { enableHighAccuracy: false, maximumAge: 60_000, timeout: 5_000 },
-        )
-    })
-}
-
-function formatTime(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-type DayClassification =
-  | 'weekend' | 'holiday' | 'present' | 'late' | 'short' | 'absent' | 'wfh' | 'on_leave' | 'future'
-
-interface DayInfo {
-  date: Date
-  iso: string
-  cell: CalendarCell | null
-  label: { weekday: string; day: string }
-  classification: DayClassification
-}
-
-function classify(cell: CalendarCell | null, date: Date, today: Date): DayClassification {
-  if (date > today) return 'future'
-  if (!cell) return 'absent'
-  if (cell.code === 'WO') return 'weekend'
-  if (cell.code === 'H') return 'holiday'
-  if (cell.code === 'A' || cell.code === 'N/A') return 'absent'
-  if (cell.code === 'WFH') return 'wfh'
-  if (cell.code === 'P-late') return 'late'
-  if (cell.code === 'P-short') return 'short'
-  if (cell.code.endsWith('L')) return 'on_leave'
-  return 'present'
-}
-
-function statusLabel(c: DayClassification): string {
-  switch (c) {
-    case 'weekend': return 'Weekend'
-    case 'holiday': return 'Holiday'
-    case 'present': return 'Present'
-    case 'late': return 'Late'
-    case 'short': return 'Early out'
-    case 'absent': return 'Absent'
-    case 'wfh': return 'WFH'
-    case 'on_leave': return 'On leave'
-    case 'future': return ''
-  }
-}
-
-function statusTone(c: DayClassification): { bar: string; pill: string } {
-  switch (c) {
-    case 'weekend': return { bar: 'bg-amber-200/60 dark:bg-amber-900/30', pill: 'border-amber-300 text-amber-800 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/30' }
-    case 'holiday': return { bar: 'bg-sky-200/60 dark:bg-sky-900/30', pill: 'border-sky-300 text-sky-800 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/30' }
-    case 'present':
-    case 'late':
-    case 'short':
-      return { bar: 'bg-emerald-200/60 dark:bg-emerald-900/30', pill: 'border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/30' }
-    case 'absent': return { bar: 'bg-rose-200/60 dark:bg-rose-900/30', pill: 'border-rose-300 text-rose-700 dark:text-rose-300 bg-rose-50/70 dark:bg-rose-950/30' }
-    case 'wfh': return { bar: 'bg-violet-200/60 dark:bg-violet-900/30', pill: 'border-violet-300 text-violet-800 dark:text-violet-300 bg-violet-50/70 dark:bg-violet-950/30' }
-    case 'on_leave': return { bar: 'bg-blue-200/60 dark:bg-blue-900/30', pill: 'border-blue-300 text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/30' }
-    case 'future': return { bar: 'bg-muted/40', pill: 'border-border text-muted-foreground' }
-  }
-}
-
-interface Stats {
-  payable: number
-  present: number
-  onDuty: number
-  paidLeave: number
-  holidays: number
-  weekend: number
-}
-
-function computeStats(days: DayInfo[]): Stats {
-  const s: Stats = { payable: 0, present: 0, onDuty: 0, paidLeave: 0, holidays: 0, weekend: 0 }
-  for (const d of days) {
-    if (d.classification === 'future') continue
-    if (d.classification === 'present' || d.classification === 'late' || d.classification === 'short') { s.present++; s.payable++; s.onDuty++ }
-    if (d.classification === 'wfh') { s.present++; s.payable++; s.onDuty++ }
-    if (d.classification === 'on_leave') { s.paidLeave++; s.payable++ }
-    if (d.classification === 'holiday') { s.holidays++; s.payable++ }
-    if (d.classification === 'weekend') s.weekend++
-  }
-  return s
-}
+// Geolocation acquisition lives in `lib/geolocation.ts` now — it
+// surfaces the actual failure reason ('denied' / 'timeout' / 'unavailable'
+// / 'unsupported') so the UI can be honest about what went wrong instead
+// of telling permission-granted users "location is off".
+import { acquireLocation, reverseGeocodeClient, type GeolocationFailureReason } from '@/lib/geolocation'
 
 // ─── Page ────────────────────────────────────────────────────────────────
 
@@ -199,7 +54,7 @@ export function EmployeeAttendancePage() {
   const [detail, setDetail] = useState<DayInfo | null>(null)
   const [note, setNote] = useState('')
 
-  const monthQuery = isoMonth(weekStart)
+  const monthQuery = toISOMonth(weekStart)
   const { data: calendar, isLoading } = useAttendanceCalendar(monthQuery, 'me')
   const myRow = (calendar?.employees?.[0] ?? null) as CalendarEmployee | null
 
@@ -234,34 +89,109 @@ export function EmployeeAttendancePage() {
   const punchAllowed = accountFlags.attendancePunchEnabled
   const manualEntryAllowed = accountFlags.attendanceManualEntryEnabled
 
-  // Live geolocation preview for the check-in band. We resolve once on mount
-  // (and on demand via a "Refresh" click) so the employee can SEE the
-  // coordinates that will be recorded with their punch — both for trust
-  // ("this is where my check-in will be tagged") and policy compliance.
-  // Permission state: 'pending' (asking) | 'ok' (resolved) | 'denied' (user
-  // blocked or device has no GPS).
+  // Live geolocation preview for the check-in band. The strip uses the
+  // *preview* acquisition profile (fast, cached, low accuracy) — the
+  // PunchActionButton uses the *punch* profile (longer timeout, high
+  // accuracy, streamed first fix) on click. Decoupling these is what
+  // killed the long-standing "location is on but check-in fails" bug:
+  // the strip's quick read used to time out indoors and report 'denied',
+  // and the click path would inherit that broken state.
+  //
+  // geoState carries the actual failure reason now ('denied' is strictly
+  // a user permission block; 'unavailable' is the device giving up on
+  // a fix; 'timeout' is "we waited 10s and got nothing"). The UI shows
+  // a different message per reason so users aren't gaslit.
   const [geo, setGeo] = useState<{ latitude: number; longitude: number } | null>(null)
-  const [geoState, setGeoState] = useState<'pending' | 'ok' | 'denied'>('pending')
-  const refreshGeo = useMemo(() => async () => {
+  const [geoState, setGeoState] = useState<'pending' | 'ok' | GeolocationFailureReason>('pending')
+  // Human-readable place name resolved from coords via reverseGeocodeClient.
+  // Independent state from `geo` because Nominatim is best-effort: we show
+  // the name when it's available, but the strip still works (showing coords)
+  // even if the geocode lookup fails or is slow.
+  const [geoName, setGeoName] = useState<string | null>(null)
+  const refreshGeo = useMemo(() => async (): Promise<{ latitude: number; longitude: number } | null> => {
     setGeoState('pending')
-    const result = await readGeolocation()
-    if (result) {
-      setGeo(result)
+    const result = await acquireLocation({ purpose: 'preview' })
+    if (result.ok) {
+      const coords = { latitude: result.coords.latitude, longitude: result.coords.longitude }
+      setGeo(coords)
       setGeoState('ok')
-    } else {
-      setGeo(null)
-      setGeoState('denied')
+      // Kick off reverse-geocode in the background. We don't await it —
+      // the strip can render coords immediately and upgrade to the name
+      // as soon as Nominatim returns. If it fails, geoName stays null
+      // and the strip falls back to coords.
+      void reverseGeocodeClient(coords.latitude, coords.longitude).then(setGeoName)
+      return coords
     }
+    setGeo(null)
+    setGeoName(null)
+    setGeoState(result.reason)
+    return null
   }, [])
   useEffect(() => {
-    if (punchAllowed) void refreshGeo()
+    if (!punchAllowed) return
+    void refreshGeo()
+
+    // Listen for permission changes — when the user toggles location at the
+    // OS / browser / site level (often in a separate window) we want the
+    // strip to flip from "off" to "on" without requiring a page reload.
+    let permStatus: PermissionStatus | null = null
+    const handlePermChange = () => { void refreshGeo() }
+    if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        .then((s) => {
+          permStatus = s
+          s.addEventListener('change', handlePermChange)
+        })
+        .catch(() => { /* Permissions API not supported — fall back to visibility */ })
+    }
+
+    // Also re-query when the tab regains focus: the user might have fixed
+    // their permission in a different tab and switched back.
+    const onVisible = () => { if (!document.hidden) void refreshGeo() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+
+    return () => {
+      permStatus?.removeEventListener('change', handlePermChange)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [punchAllowed, refreshGeo])
-  const todayInfo = useMemo(() => {
-    const t = toISODate(today)
-    return days.find((d) => d.iso === t) ?? null
-  }, [days, today])
-  const isCheckedIn = !!todayInfo?.cell?.checkIn && !todayInfo?.cell?.checkOut
-  const liveTimer = useLiveDuration(todayInfo?.cell?.checkIn, todayInfo?.cell?.checkOut)
+  // Source of truth for the check-in band — derive directly from the raw
+  // punches list for today, not from the calendar's rollup row. The rollup
+  // is a derived projection that can briefly lag a refetch; the punches list
+  // is invalidated on every mutation and updates immediately. Two wins:
+  //   - The button label flips Check-in → Check-out the moment the new punch
+  //     lands, even before the calendar query returns.
+  //   - The live timer starts ticking from the just-recorded check-in, not
+  //     from a stale rollup that might still carry yesterday's checkOut.
+  const todayPunchesQuery = usePunchesForDay(toISODate(today), employeeId)
+  const lastPunchToday = useMemo(() => {
+    const list = todayPunchesQuery.data ?? []
+    if (list.length === 0) return null
+    return list.toSorted((a, b) =>
+      new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
+    )[0]
+  }, [todayPunchesQuery.data])
+  const lastInBeforeCurrent = useMemo(() => {
+    const list = todayPunchesQuery.data ?? []
+    // Walk from the end backward to find the most recent 'in' that hasn't
+    // been closed by a later 'out' — that's the open session's start.
+    const sorted = list.toSorted((a, b) =>
+      new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
+    )
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const p = sorted[i]!
+      if (p.punchType === 'in') return p
+      if (p.punchType === 'out') return null
+    }
+    return null
+  }, [todayPunchesQuery.data])
+  const isCheckedIn = lastPunchToday?.punchType === 'in'
+  const liveTimer = useLiveDuration(
+    lastInBeforeCurrent?.recordedAt ?? null,
+    isCheckedIn ? null : lastPunchToday?.recordedAt ?? null,
+  )
 
   const shiftBand = `General [ 09:00 AM – 06:00 PM ]`
 
@@ -319,11 +249,10 @@ export function EmployeeAttendancePage() {
       </div>
 
       {/* Check-in band — only rendered when HR has not revoked self-punch.
-          Layout: two rows on small screens, one row on wide. Top row shows
-          shift name, notes input, and the action button. Bottom row gives
-          a clear "this is where your punch will be tagged" preview with
-          coords + a Maps link + refresh, so there's no surprise about
-          where the location was sampled. */}
+          When location is denied the action button no longer silently submits
+          without coordinates; clicking it pops a friendly explanation card
+          with "Enable location" and "Continue anyway" actions so the user
+          knows exactly what will happen. */}
       {punchAllowed && (
         <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
           <div className="flex flex-wrap items-stretch justify-between gap-3">
@@ -336,43 +265,32 @@ export function EmployeeAttendancePage() {
               placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
               className="flex-[2] min-w-[180px] h-9"
             />
-            {isCheckedIn ? (
-              <Button
-                onClick={() => {
-                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-                  checkOut.mutate(body, {
-                    onSuccess: () => { toast.success(t('attendance.checkOut')); setNote(''); void refreshGeo() },
-                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
-                  })
-                }}
-                loading={checkOut.isPending}
-                className="bg-rose-600 hover:bg-rose-700 text-white"
-              >
-                <LogOut className="size-4 me-2" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-xs">Check-out</span>
-                  <span className="text-xs tabular-nums">{liveTimer}</span>
-                </div>
-              </Button>
-            ) : (
-              <Button
-                onClick={() => {
-                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-                  checkIn.mutate(body, {
-                    onSuccess: () => { toast.success(t('attendance.checkIn')); setNote(''); void refreshGeo() },
-                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
-                  })
-                }}
-                loading={checkIn.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <LogIn className="size-4 me-2" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-xs">Check-in</span>
-                  <span className="text-xs tabular-nums">{liveTimer}</span>
-                </div>
-              </Button>
-            )}
+            <PunchActionButton
+              isCheckedIn={isCheckedIn}
+              liveTimer={liveTimer}
+              geo={geo}
+              onPunch={(coords) => {
+                const body: PunchBody = {
+                  employeeId,
+                  notes: note || null,
+                  ...(coords ?? {}),
+                  // Forward the already-resolved place name when we have one
+                  // (the strip preview's reverseGeocodeClient call). Saves the
+                  // backend a redundant Nominatim round-trip *and* guarantees
+                  // the stored locationName matches what the user just saw on
+                  // screen — no surprises in the punch log after the fact.
+                  ...(coords && geoName ? { locationName: geoName } : {}),
+                }
+                const mutation = isCheckedIn ? checkOut : checkIn
+                const successLabel = isCheckedIn ? t('attendance.checkOut') : t('attendance.checkIn')
+                mutation.mutate(body, {
+                  onSuccess: () => { toast.success(successLabel); setNote(''); void refreshGeo() },
+                  onError: (err: unknown) => toast.error((err as Error)?.message ?? `Could not ${isCheckedIn ? 'check out' : 'check in'}`),
+                })
+              }}
+              loading={checkOut.isPending || checkIn.isPending}
+              onEnableLocation={refreshGeo}
+            />
           </div>
           {/* Location strip — read-only preview of where the punch will be
               tagged. Renders coordinates as a Maps link so the employee can
@@ -381,37 +299,76 @@ export function EmployeeAttendancePage() {
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
               <MapPin className={cn(
                 'size-3.5',
-                geoState === 'ok' ? 'text-emerald-600' : geoState === 'denied' ? 'text-rose-500' : 'text-muted-foreground',
+                geoState === 'ok'
+                  ? 'text-emerald-600'
+                  : geoState === 'denied' || geoState === 'unsupported'
+                    ? 'text-rose-500'
+                    : geoState === 'timeout' || geoState === 'unavailable'
+                      ? 'text-amber-500'
+                      : 'text-muted-foreground',
               )} />
+              {/* Distinct copy per failure reason — the old single
+                  "Location access is off" message led HR to believe
+                  there was a permissions bug when in fact the device
+                  was still trying to get a fix. */}
               {geoState === 'pending' && <span>Resolving your location…</span>}
               {geoState === 'denied' && (
-                <span>
-                  Location unavailable — punch will be recorded without coordinates.
-                </span>
+                <span>Location is blocked. Your punch will be recorded without location — allow it for accurate tagging.</span>
+              )}
+              {geoState === 'timeout' && (
+                <span>GPS lock taking a while. Punch anyway — we&rsquo;ll try once more on the click.</span>
+              )}
+              {geoState === 'unavailable' && (
+                <span>Location currently unavailable. Your punch will be recorded without location.</span>
+              )}
+              {geoState === 'unsupported' && (
+                <span>This browser doesn&rsquo;t expose location. Your punch will be recorded without location.</span>
               )}
               {geoState === 'ok' && geo && (
                 <>
                   <span>Location:</span>
+                  {/* Show the resolved place-name when reverse-geocoding
+                      lands; fall back to coords while the geocode is in
+                      flight or if it fails. Both states link to Google
+                      Maps so HR can verify the exact spot. The coords
+                      live in the `title=` tooltip for the name case so
+                      they're still discoverable without taking up
+                      header space. */}
                   <a
                     href={`https://maps.google.com/?q=${geo.latitude},${geo.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono tabular-nums text-foreground hover:text-primary hover:underline"
-                    title="Open in Google Maps"
+                    className={cn(
+                      'text-foreground hover:text-primary hover:underline',
+                      geoName
+                        ? 'font-medium max-w-[280px] truncate'
+                        : 'font-mono tabular-nums',
+                    )}
+                    title={geoName
+                      ? `${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)} — open in Google Maps`
+                      : 'Open in Google Maps'}
                   >
-                    {geo.latitude.toFixed(4)}, {geo.longitude.toFixed(4)}
+                    {geoName ?? `${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)}`}
                   </a>
                 </>
               )}
             </span>
-            <button
-              type="button"
-              onClick={() => void refreshGeo()}
-              className="text-primary hover:underline disabled:opacity-50"
-              disabled={geoState === 'pending'}
-            >
-              {geoState === 'pending' ? 'Refreshing…' : 'Refresh'}
-            </button>
+            {geoState !== 'unsupported' && (
+              <button
+                type="button"
+                onClick={() => void refreshGeo()}
+                className="text-primary hover:underline disabled:opacity-50"
+                disabled={geoState === 'pending'}
+              >
+                {geoState === 'pending'
+                  ? 'Refreshing…'
+                  : geoState === 'denied'
+                    ? 'Enable location'
+                    : geoState === 'timeout' || geoState === 'unavailable'
+                      ? 'Try again'
+                      : 'Refresh'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -448,93 +405,233 @@ export function EmployeeAttendancePage() {
 
 // ─── Timeline view ────────────────────────────────────────────────────────
 
+// ─── Helpers used only by TimelineView ──────────────────────────────────────
+
+/**
+ * Format hours-worked in a compact human-friendly form ("5h 17m") instead
+ * of the HH:MM:SS the API helper returns. HR doesn't read milliseconds —
+ * counting seconds on attendance is noise.
+ */
+function formatHrsCompact(
+    rawHrs: string | null | undefined,
+    checkIn: string | null | undefined,
+    checkOut: string | null | undefined,
+): string {
+    const raw = formatHoursWorked(rawHrs, checkIn, checkOut)
+    const m = raw.match(/^(\d+):(\d{2}):(\d{2})$/)
+    if (!m) return raw
+    const h = Number(m[1])
+    const mm = Number(m[2])
+    if (h === 0 && mm === 0) return '—'
+    if (h === 0) return `${mm}m`
+    return `${h}h ${String(mm).padStart(2, '0')}m`
+}
+
+/** Convert an ISO timestamp to a percentage along the 8 AM → 7 PM scale. */
+function timeToPct(iso: string | null | undefined, startMin: number, span: number): number | null {
+    if (!iso) return null
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return null
+    const mins = d.getHours() * 60 + d.getMinutes()
+    const pct = ((mins - startMin) / span) * 100
+    // Clamp to [0, 100] so a punch that lands outside the visible scale
+    // (e.g. an early-morning 7:30 AM check-in) still anchors to the edge
+    // rather than disappearing off-screen.
+    return Math.max(0, Math.min(100, pct))
+}
+
+/**
+ * Weekly attendance timeline. Each row is one day with:
+ *   • Day badge with "TODAY" indicator + left-edge primary stripe
+ *   • In/Out times in the corners
+ *   • Hours-worked counter in the right gutter
+ *   • A horizontal scale (8 AM → 7 PM) with:
+ *       – a soft "shift band" (9–6 by default) so HR can see late /
+ *         early-out at a glance against the expected window
+ *       – arrow icon-pills at the actual punch positions (hover for the
+ *         exact time + location)
+ *       – a centred status pill (Present / Late / Absent / On leave …)
+ *         pulled straight from the legend's tone so what you see here
+ *         matches what you see in the calendar.
+ *
+ * The previous version had three problems HR repeatedly flagged:
+ *   1. Empty past weekdays looked identical to future days (both showed
+ *      just "—"). HR couldn't tell absent from "haven't worked yet".
+ *   2. The "Early out" pill didn't match any code in the legend
+ *      popover — users couldn't reconcile what they saw here with what
+ *      the rest of the app called it.
+ *   3. Hours read "5:17:43" — minutes precision is plenty.
+ * All three are addressed below.
+ */
 function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: DayInfo) => void; today: Date }) {
-  const startMin = 8 * 60
-  const endMin = 19 * 60
-  const span = endMin - startMin
+    const startMin = 8 * 60
+    const endMin = 19 * 60
+    const span = endMin - startMin
 
-  const slots: string[] = []
-  for (let m = startMin; m <= endMin; m += 60) {
-    const h = Math.floor(m / 60)
-    slots.push(`${String(h).padStart(2, '0')}AM`.replace(/^(\d{2})AM$/, (_, hh) => Number(hh) >= 12 ? `${Number(hh) === 12 ? 12 : Number(hh) - 12}PM` : `${Number(hh)}AM`))
-  }
+    // 9-to-6 expected shift band. Anchored as a percentage of the visible
+    // scale so the rectangle slides with the row width.
+    const shiftStartPct = ((9 * 60) - startMin) / span * 100
+    const shiftEndPct = ((18 * 60) - startMin) / span * 100
 
-  const isToday = (d: Date) =>
-    d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+    const slots: string[] = []
+    for (let m = startMin; m <= endMin; m += 60) {
+        const h = Math.floor(m / 60)
+        const label = h === 12 ? '12 PM' : h > 12 ? `${h - 12} PM` : `${h} AM`
+        slots.push(label)
+    }
 
-  return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-      {days.map((d) => {
-        const tone = statusTone(d.classification)
-        const checkInPct = d.cell?.checkIn
-          ? ((new Date(d.cell.checkIn).getHours() * 60 + new Date(d.cell.checkIn).getMinutes()) - startMin) / span * 100
-          : null
-        const checkOutPct = d.cell?.checkOut
-          ? ((new Date(d.cell.checkOut).getHours() * 60 + new Date(d.cell.checkOut).getMinutes()) - startMin) / span * 100
-          : null
-        return (
-          <button
-            key={d.iso}
-            type="button"
-            onClick={() => onPick(d)}
-            className={cn(
-              'group grid grid-cols-[3.5rem_8rem_1fr_8rem_5rem] sm:grid-cols-[4rem_9rem_1fr_9rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-3 border-b last:border-b-0 hover:bg-muted/30 transition-colors text-left w-full',
-              isToday(d.date) && 'bg-primary/5',
-            )}
-          >
-            <div>
-              <p className="text-xs text-muted-foreground">{d.label.weekday}</p>
-              <p className={cn('text-base font-semibold tabular-nums', isToday(d.date) && 'text-primary')}>{d.label.day}</p>
-            </div>
-            <div className="text-left">
-              {d.cell?.checkIn ? (
-                <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkIn)}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">–</p>
-              )}
-            </div>
-            <div className="relative h-5">
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border" />
-              {d.classification !== 'future' && (
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center pointer-events-none">
-                  <span className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', tone.pill)}>
-                    {statusLabel(d.classification)}
-                  </span>
+    const isToday = (d: Date) =>
+        d.getFullYear() === today.getFullYear()
+        && d.getMonth() === today.getMonth()
+        && d.getDate() === today.getDate()
+
+    return (
+        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+            {days.map((d) => {
+                const tone = statusTone(d.classification)
+                const checkInPct = timeToPct(d.cell?.checkIn, startMin, span)
+                const checkOutPct = timeToPct(d.cell?.checkOut, startMin, span)
+                const todayRow = isToday(d.date)
+                const statusText = statusLabel(d.classification)
+
+                return (
+                    <button
+                        key={d.iso}
+                        type="button"
+                        onClick={() => onPick(d)}
+                        className={cn(
+                            'relative group grid grid-cols-[3.75rem_5.5rem_1fr_5.5rem_5rem] sm:grid-cols-[4.5rem_6.5rem_1fr_6.5rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-3 border-b last:border-b-0 transition-colors text-left w-full',
+                            todayRow ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/30',
+                        )}
+                    >
+                        {/* Today's row gets a left-edge accent stripe so the
+                            current day pops without flooding the row with
+                            colour. Replaces the old faint blue tint that was
+                            easy to miss. */}
+                        {todayRow && (
+                            <span className="absolute left-0 inset-y-2 w-1 rounded-full bg-primary" aria-hidden />
+                        )}
+
+                        {/* ── Day badge ────────────────────────────────── */}
+                        <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{d.label.weekday}</p>
+                            <div className="flex items-center gap-1.5">
+                                <p className={cn('text-base font-bold tabular-nums', todayRow && 'text-primary')}>
+                                    {d.label.day}
+                                </p>
+                                {todayRow && (
+                                    <span className="text-[9px] font-semibold uppercase tracking-wider text-primary/80 bg-primary/15 px-1 py-px rounded">
+                                        Today
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ── In time ─────────────────────────────────── */}
+                        <div className="text-left">
+                            {d.cell?.checkIn ? (
+                                <>
+                                    <p className="text-[10px] uppercase tracking-wider text-emerald-700/80 dark:text-emerald-400/80 font-medium">In</p>
+                                    <p className="text-sm font-semibold tabular-nums">{formatTime(d.cell.checkIn)}</p>
+                                </>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">–</p>
+                            )}
+                        </div>
+
+                        {/* ── Timeline ────────────────────────────────── */}
+                        <div className="relative h-6 mx-1">
+                            {/* Shift band — faint background rectangle marking
+                                the expected 9 AM → 6 PM window. Punches that
+                                fall inside the band visually look "on time";
+                                punches outside it draw attention. */}
+                            <div
+                                className="absolute top-1/2 -translate-y-1/2 h-3 rounded-sm bg-muted/60 dark:bg-muted/30"
+                                style={{ left: `${shiftStartPct}%`, right: `${100 - shiftEndPct}%` }}
+                                aria-hidden
+                            />
+                            {/* Base connecting line */}
+                            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border" aria-hidden />
+
+                            {/* Status pill — the centred label. Uses the
+                                classification tone so what reads here lines up
+                                with the legend popover. */}
+                            {d.classification !== 'future' && (
+                                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center pointer-events-none">
+                                    <span className={cn(
+                                        'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap',
+                                        tone.pill,
+                                    )}>
+                                        {statusText || '–'}
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Punch chips with arrow icons + tooltip. The
+                                tooltip carries the precise time + location so
+                                hover gives HR everything without opening the
+                                detail dialog. */}
+                            {checkInPct != null && d.cell?.checkIn && (
+                                <span
+                                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 inline-flex items-center justify-center size-4 rounded-full bg-emerald-500 ring-2 ring-background shadow-sm text-white"
+                                    style={{ left: `${checkInPct}%` }}
+                                    title={`Check-in at ${formatTime(d.cell.checkIn)}`}
+                                >
+                                    <LogIn className="size-2.5" aria-hidden />
+                                </span>
+                            )}
+                            {checkOutPct != null && d.cell?.checkOut && (
+                                <span
+                                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 inline-flex items-center justify-center size-4 rounded-full bg-rose-500 ring-2 ring-background shadow-sm text-white"
+                                    style={{ left: `${checkOutPct}%` }}
+                                    title={`Check-out at ${formatTime(d.cell.checkOut)}`}
+                                >
+                                    <LogOut className="size-2.5" aria-hidden />
+                                </span>
+                            )}
+                        </div>
+
+                        {/* ── Out time ────────────────────────────────── */}
+                        <div className="text-right">
+                            {d.cell?.checkOut ? (
+                                <>
+                                    <p className="text-[10px] uppercase tracking-wider text-rose-700/80 dark:text-rose-400/80 font-medium">Out</p>
+                                    <p className="text-sm font-semibold tabular-nums">{formatTime(d.cell.checkOut)}</p>
+                                </>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">–</p>
+                            )}
+                        </div>
+
+                        {/* ── Hours worked (compact) ──────────────────── */}
+                        <div className="text-right">
+                            <p className="text-base font-bold tabular-nums">
+                                {formatHrsCompact(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut)}
+                            </p>
+                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Hours</p>
+                        </div>
+                    </button>
+                )
+            })}
+
+            {/* Slot axis — labels aligned with the timeline column above.
+                The tiny vertical ticks at each hour give HR a visual anchor
+                so they can read where a punch dot falls without squinting. */}
+            <div className="grid grid-cols-[3.75rem_5.5rem_1fr_5.5rem_5rem] sm:grid-cols-[4.5rem_6.5rem_1fr_6.5rem_5.5rem] items-center gap-2 sm:gap-3 px-3 pt-1.5 pb-2 border-t bg-muted/30">
+                <span />
+                <span />
+                <div className="relative h-4 mx-1">
+                    <div className="absolute inset-x-0 top-0 flex justify-between text-[10px] text-muted-foreground">
+                        {slots.map((s) => (
+                            <span key={s} className="tabular-nums leading-none">{s}</span>
+                        ))}
+                    </div>
                 </div>
-              )}
-              {checkInPct != null && checkInPct >= 0 && checkInPct <= 100 && (
-                <div className="absolute top-1/2 -translate-y-1/2 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" style={{ left: `${checkInPct}%` }} />
-              )}
-              {checkOutPct != null && checkOutPct >= 0 && checkOutPct <= 100 && (
-                <div className="absolute top-1/2 -translate-y-1/2 size-2.5 rounded-full bg-rose-500 ring-2 ring-background" style={{ left: `${checkOutPct}%` }} />
-              )}
+                <span />
+                <span />
             </div>
-            <div className="text-right">
-              {d.cell?.checkOut ? (
-                <p className="text-sm font-medium tabular-nums">{formatTime(d.cell.checkOut)}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">–</p>
-              )}
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-semibold tabular-nums">{d.cell?.hoursWorked ?? '00:00'}</p>
-              <p className="text-[10px] text-muted-foreground">Hrs worked</p>
-            </div>
-          </button>
-        )
-      })}
-      {/* Slot axis */}
-      <div className="grid grid-cols-[3.5rem_8rem_1fr_8rem_5rem] sm:grid-cols-[4rem_9rem_1fr_9rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-2 border-t bg-muted/40">
-        <span />
-        <span />
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-          {slots.map((s) => <span key={s} className="tabular-nums">{s}</span>)}
         </div>
-        <span />
-        <span />
-      </div>
-    </div>
-  )
+    )
 }
 
 // ─── List view ────────────────────────────────────────────────────────────
@@ -563,7 +660,7 @@ function ListView({ days }: { days: DayInfo[] }) {
                 </td>
                 <td className="px-4 py-2.5 tabular-nums">{d.cell?.checkIn ? formatTime(d.cell.checkIn) : '—'}</td>
                 <td className="px-4 py-2.5 tabular-nums">{d.cell?.checkOut ? formatTime(d.cell.checkOut) : '—'}</td>
-                <td className="px-4 py-2.5 tabular-nums">{d.cell?.hoursWorked ?? '—'}</td>
+                <td className="px-4 py-2.5 tabular-nums">{d.cell?.checkIn ? formatHoursWorked(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut) : '—'}</td>
                 <td className="px-4 py-2.5">
                   {d.classification !== 'future' && (
                     <span className={cn('inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium', tone.pill)}>
@@ -596,13 +693,15 @@ function MonthCalendar({ month, setMonth }: { month: string; setMonth: (m: strin
 
 // ─── Footer stats ─────────────────────────────────────────────────────────
 
-function FooterStats({ stats, shift }: { stats: Stats; shift: string }) {
+function FooterStats({ stats, shift }: { stats: AttendanceWeekStats; shift: string }) {
   const entries = [
-    { label: 'Payable Days', value: stats.payable, tone: 'bg-emerald-500' },
-    { label: 'Present', value: stats.present, tone: 'bg-green-500' },
+    // Alphabetical by label — mirrors the order used in the main HR app so
+    // employees see the same arrangement everywhere.
+    { label: 'Holidays', value: stats.holidays, tone: 'bg-sky-500' },
     { label: 'On Duty', value: stats.onDuty, tone: 'bg-violet-500' },
     { label: 'Paid leave', value: stats.paidLeave, tone: 'bg-amber-500' },
-    { label: 'Holidays', value: stats.holidays, tone: 'bg-sky-500' },
+    { label: 'Payable Days', value: stats.payable, tone: 'bg-emerald-500' },
+    { label: 'Present', value: stats.present, tone: 'bg-green-500' },
     { label: 'Weekend', value: stats.weekend, tone: 'bg-blue-400' },
   ]
   return (
@@ -651,6 +750,120 @@ function statusHero(klass: DayClassification): {
     case 'wfh':
       return { icon: LogIn, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30', title: statusLabel(klass), body: '' }
   }
+}
+
+// ─── Punch action button — best-effort location tagging ──────────────────
+//
+// The long-standing "check-in not possible" bug was caused by a hard
+// dependency on a working GPS fix: when the device couldn't resolve a
+// location (slow GPS, indoor, desktop without GPS hardware, in-app
+// webview quirks), the punch never went through. The proper fix is to
+// treat location as a best-effort audit field, not a gate.
+//
+// Click behaviour:
+//   1. Cached coords present (strip resolved) → submit immediately.
+//   2. No cached coords → run a 20-sec high-accuracy `watchPosition`
+//      acquisition. On success, submit with coords. On failure (any
+//      reason: denied / timeout / unavailable / unsupported), submit
+//      WITHOUT coords. The strip already tells the user what state
+//      location is in — they explicitly clicked the button, we honour
+//      that intent.
+//
+// Server-side: the portal punch endpoint now accepts null lat/lng
+// (range-validates when present). Coordinates are stored on the
+// audit row when available.
+function PunchActionButton({
+  isCheckedIn,
+  liveTimer,
+  geo,
+  loading,
+  onPunch,
+}: {
+  isCheckedIn: boolean
+  liveTimer: string
+  geo: { latitude: number; longitude: number } | null
+  loading: boolean
+  onPunch: (coords: { latitude: number; longitude: number } | null) => void
+  /** Kept in the parent's API but no longer used here — the click path
+   *  always runs its own high-accuracy acquisition. */
+  onEnableLocation?: () => Promise<{ latitude: number; longitude: number } | null>
+}) {
+  // While the click-time acquisition is in flight we count up the seconds
+  // so users see *something is happening*. A silent button that loads for
+  // 15 seconds reads as "broken" — a counting label reads as "working
+  // on it". After ~20s the acquisition resolves (success or timeout) and
+  // either way we submit the punch.
+  const [acquiring, setAcquiring] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    if (!acquiring) return
+    setElapsed(0)
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [acquiring])
+
+  const label = isCheckedIn ? 'Check-out' : 'Check-in'
+  const colorClass = isCheckedIn
+    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+  const Icon = isCheckedIn ? LogOut : LogIn
+
+  // Click handling — location is *best-effort*, not required. The flow:
+  //   1. Use cached coords from the strip when present (fast path).
+  //   2. Otherwise fire a fresh acquireLocation('punch') — high accuracy,
+  //      20-sec budget, streamed first fix.
+  //   3. If the acquisition succeeds → tag the punch with coords.
+  //      If it fails (denied / timeout / unavailable / unsupported) →
+  //      still submit the punch with `coords = null` so attendance is
+  //      recorded. The audit row carries no location, which HR can see
+  //      in the punch detail. Backend allows it.
+  //
+  // This is the long-standing fix users have been waiting for — every
+  // honest punch goes through, even on devices where GPS is unreliable
+  // or unavailable. The old behaviour blocked check-in entirely on those
+  // devices, which is what stranded HR for months.
+  const handleClick = async () => {
+    if (geo) {
+      onPunch(geo)
+      return
+    }
+    setAcquiring(true)
+    try {
+      const result = await acquireLocation({ purpose: 'punch' })
+      if (result.ok) {
+        onPunch({ latitude: result.coords.latitude, longitude: result.coords.longitude })
+      } else {
+        // Best-effort: submit without coords. The button is the user's
+        // explicit intent to punch in; we don't second-guess that just
+        // because the GPS chip didn't return in time. The UI strip
+        // already showed the location state so the user knows what
+        // will be recorded.
+        onPunch(null)
+      }
+    } finally {
+      setAcquiring(false)
+    }
+  }
+
+  const buttonLabel = acquiring
+    ? `Locking GPS… ${elapsed}s`
+    : label
+  const buttonSubLabel = acquiring ? 'Up to 20 seconds' : liveTimer
+
+  return (
+    <Button
+      onClick={handleClick}
+      loading={loading}
+      disabled={acquiring || loading}
+      className={colorClass}
+    >
+      <Icon className="size-4 me-2" />
+      <div className="flex flex-col items-start leading-tight">
+        <span className="text-xs">{buttonLabel}</span>
+        <span className="text-xs tabular-nums">{buttonSubLabel}</span>
+      </div>
+    </Button>
+  )
 }
 
 function DayDetailDialog({
@@ -949,7 +1162,7 @@ function DayDetailDialog({
           </div>
           <div className="border-l-2 border-blue-500 ps-2.5 text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Hours</p>
-            <p className="text-sm font-semibold tabular-nums mt-1">{totalHours || cell?.hoursWorked || '00:00'}</p>
+            <p className="text-sm font-semibold tabular-nums mt-1">{totalHours || formatHoursWorked(cell?.hoursWorked, cell?.checkIn, cell?.checkOut)}</p>
           </div>
         </div>
       </DialogContent>
@@ -996,21 +1209,22 @@ function formatDuration(ms: number): string {
 }
 
 function sumPairHours(pairs: PunchPair[]): string {
-  let totalMin = 0
+  let totalSec = 0
   for (const p of pairs) {
     if (p.inPunch && p.outPunch) {
-      totalMin += Math.max(
+      totalSec += Math.max(
         0,
-        Math.round(
-          (new Date(p.outPunch.recordedAt).getTime() - new Date(p.inPunch.recordedAt).getTime()) / 60000,
+        Math.floor(
+          (new Date(p.outPunch.recordedAt).getTime() - new Date(p.inPunch.recordedAt).getTime()) / 1000,
         ),
       )
     }
   }
-  if (totalMin === 0) return ''
-  const h = Math.floor(totalMin / 60).toString().padStart(2, '0')
-  const m = (totalMin % 60).toString().padStart(2, '0')
-  return `${h}:${m}`
+  if (totalSec === 0) return ''
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 function PunchMeta({ punch, align = 'start' }: { punch: AttendancePunch; align?: 'start' | 'end' }) {

@@ -286,6 +286,74 @@ export function useBulkCreateJobs() {
     })
 }
 
+// ─── Bulk import (candidates / job applications) ─────────────────────────────
+
+export interface BulkCandidateRowInput {
+    rowNumber: number
+    firstName?: string | null
+    lastName?: string | null
+    name?: string | null
+    email?: string | null
+    phone?: string | null
+    nationality?: string | null
+    experience?: number | string | null
+    expectedSalary?: number | string | null
+    notes?: string | null
+}
+
+export interface BulkCandidateRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    duplicate?: boolean
+    displayName?: string
+    displayEmail?: string
+    resolved?: {
+        name: string
+        email: string
+        phone: string | null
+        nationality: string | null
+        experience: number | null
+        expectedSalary: string | null
+        notes: string | null
+    }
+}
+
+export interface BulkCandidateValidationResponse {
+    rows: BulkCandidateRowResult[]
+    summary: { total: number; valid: number; invalid: number; duplicate: number }
+    jobExists: boolean
+}
+
+export interface BulkCandidateCreateResponse extends BulkCandidateValidationResponse {
+    created: number
+    skipped: number
+}
+
+export function useValidateBulkCandidates() {
+    return useMutation({
+        mutationFn: ({ jobId, rows }: { jobId: string; rows: BulkCandidateRowInput[] }) =>
+            api.post<BulkCandidateValidationResponse>('/applications/bulk-validate', { jobId, rows }),
+    })
+}
+
+export function useBulkCreateCandidates() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ jobId, rows }: { jobId: string; rows: BulkCandidateRowInput[] }) =>
+            api.post<BulkCandidateCreateResponse>('/applications/bulk', { jobId, rows }),
+        // Invalidate every applications query (the kanban uses an infinite
+        // query per stage; broad invalidation refreshes them all). Also
+        // bump jobs since the application-count badge can change.
+        onSuccess: () => Promise.all([
+            qc.invalidateQueries({ queryKey: ['applications'] }),
+            qc.invalidateQueries({ queryKey: ['applications-kanban'] }),
+            qc.invalidateQueries({ queryKey: ['jobs'] }),
+        ]),
+        onError: (err: Error) => toast.error('Bulk import failed', err.message),
+    })
+}
+
 /* ─── Recruitment pipeline stages (per-tenant settings) ───────────────────── */
 
 const STAGES_KEY = ['recruitment-stages'] as const

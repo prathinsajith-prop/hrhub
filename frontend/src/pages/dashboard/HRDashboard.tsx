@@ -182,8 +182,14 @@ export function HRDashboard() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      {/* KPI Cards — five tiles.
+          The previous `grid-cols-2 md:grid-cols-3 xl:grid-cols-5` left the
+          5th card orphaned on its own row at md/lg (768-1280px, the most
+          common laptop width). The lg:grid-cols-5 step keeps all five
+          tiles on one row above 1024px; below that, two evenly-balanced
+          rows (2+3 on sm, 2+2+1 → 3+2 on md) read better than 3+2 with a
+          half-width stub. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {kpiCards.map(({ labelKey, labelFallback, key, subKey, subFallback, icon, color }) => (
           <KpiCardCompact
             key={key}

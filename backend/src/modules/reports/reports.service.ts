@@ -1,6 +1,9 @@
-import { eq, and, count, lte, sql, desc } from 'drizzle-orm'
+import { eq, and, count, lte, gte, sql, desc, isNull, inArray } from 'drizzle-orm'
 import { db, withLongTimeout } from '../../db/index.js'
-import { employees, payrollRuns } from '../../db/schema/index.js'
+import {
+    employees, payrollRuns, attendanceRecords, leaveRequests,
+    exitRequests, onboardingChecklists, performanceReviews,
+} from '../../db/schema/index.js'
 import { getPROCostReport } from '../visa/visa_costs.service.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 
@@ -139,4 +142,749 @@ export async function getVisaExpiryReport(tenantId: string, days = 90) {
         normal: normal.length,
         employees: resolvedEmployees,
     }
+}
+
+// ─── Attendance Summary ──────────────────────────────────────────────────
+//
+// Roll-up of the last N days of `attendance_records`. The default 90-day
+// window mirrors the visa report so the page-level date selector controls
+// both simultaneously. All counts come from GROUP BY in SQL — no row-by-row
+// JS aggregation — so this stays cheap even for 200-employee tenants.
+//
+// Shape returned:
+//   • KPI counters (working days, present, late, absent, avg hours)
+//   • Monthly trend (attendance % per month)
+//   • By-department breakdown (present / late / absent counts + rate)
+//   • Top-10 late arrivals leaderboard
+
+export async function getAttendanceSummaryReport(tenantId: string, days = 90) {
+    return withLongTimeout(async (tx) => {
+        const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+        const baseWhere = and(
+            eq(attendanceRecords.tenantId, tenantId),
+            gte(attendanceRecords.date, cutoff),
+        )
+
+        // Per-status totals in one shot.
+        const statusRows = await tx
+            .select({ status: attendanceRecords.status, count: count() })
+            .from(attendanceRecords)
+            .where(baseWhere)
+            .groupBy(attendanceRecords.status)
+        const byStatus: Record<string, number> = {}
+        for (const r of statusRows) byStatus[r.status ?? 'unknown'] = Number(r.count)
+
+        const present = (byStatus.present ?? 0) + (byStatus.half_day ?? 0) + (byStatus.wfh ?? 0) + (byStatus.late ?? 0)
+        const late = byStatus.late ?? 0
+        const absent = byStatus.absent ?? 0
+        const onLeave = byStatus.on_leave ?? 0
+        const totalRecords = present + absent + onLeave
+        const attendanceRate = totalRecords > 0 ? Math.round((present / totalRecords) * 1000) / 10 : 0
+
+        // Avg hours/day — across present rows only (absent/on_leave have null).
+        const [{ avgHours }] = await tx
+            .select({ avgHours: sql<string>`COALESCE(AVG(${attendanceRecords.hoursWorked}), 0)` })
+            .from(attendanceRecords)
+            .where(and(baseWhere, sql`${attendanceRecords.hoursWorked} IS NOT NULL`))
+
+        // Monthly trend — last 12 months attendance rate. Postgres' DATE_TRUNC
+        // is fine here; we don't need a calendar fan-out.
+        const trendRows = await tx
+            .select({
+                month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${attendanceRecords.date}), 'Mon YYYY')`,
+                bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${attendanceRecords.date}), 'YYYY-MM')`,
+                present: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} IN ('present','late','half_day','wfh'))`,
+                late: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'late')`,
+                absent: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'absent')`,
+                total: count(),
+            })
+            .from(attendanceRecords)
+            .where(baseWhere)
+            .groupBy(sql`DATE_TRUNC('month', ${attendanceRecords.date})`)
+            .orderBy(sql`DATE_TRUNC('month', ${attendanceRecords.date})`)
+        const trend = trendRows.map((r) => {
+            const p = Number(r.present), t = Number(r.total)
+            return {
+                period: r.month,
+                bucket: r.bucket,
+                present: p,
+                late: Number(r.late),
+                absent: Number(r.absent),
+                rate: t > 0 ? Math.round((p / t) * 1000) / 10 : 0,
+            }
+        })
+
+        // By-department breakdown. Joining on employees gives us the leaf
+        // department name; we don't walk the org tree here — the FE renders
+        // whatever string the backend returns.
+        const deptRows = await tx
+            .select({
+                department: employees.department,
+                present: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} IN ('present','late','half_day','wfh'))`,
+                late: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'late')`,
+                absent: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'absent')`,
+                total: count(),
+            })
+            .from(attendanceRecords)
+            .innerJoin(employees, eq(employees.id, attendanceRecords.employeeId))
+            .where(baseWhere)
+            .groupBy(employees.department)
+            .orderBy(desc(count()))
+        const byDepartment = deptRows.map((r) => {
+            const p = Number(r.present), t = Number(r.total)
+            return {
+                department: r.department ?? 'Unassigned',
+                present: p,
+                late: Number(r.late),
+                absent: Number(r.absent),
+                rate: t > 0 ? Math.round((p / t) * 1000) / 10 : 0,
+            }
+        })
+
+        // Top-10 late arrivals.
+        const lateRows = await tx
+            .select({
+                employeeId: employees.id,
+                employeeNo: employees.employeeNo,
+                fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+                department: employees.department,
+                designation: employees.designation,
+                lateCount: count(),
+            })
+            .from(attendanceRecords)
+            .innerJoin(employees, eq(employees.id, attendanceRecords.employeeId))
+            .where(and(baseWhere, eq(attendanceRecords.status, 'late')))
+            .groupBy(employees.id, employees.employeeNo, employees.firstName, employees.lastName, employees.department, employees.designation)
+            .orderBy(desc(count()))
+            .limit(10)
+        const lateLeaderboard = lateRows.map((r) => ({
+            employeeId: r.employeeId,
+            employeeNo: r.employeeNo,
+            fullName: r.fullName,
+            department: r.department,
+            designation: r.designation,
+            lateCount: Number(r.lateCount),
+        }))
+
+        return {
+            windowDays: days,
+            present,
+            late,
+            absent,
+            onLeave,
+            attendanceRate,
+            avgHoursPerDay: Math.round(Number(avgHours) * 100) / 100,
+            trend,
+            byDepartment,
+            lateLeaderboard,
+        }
+    })
+}
+
+// ─── Leave Summary ───────────────────────────────────────────────────────
+//
+// Year-to-date breakdown of `leave_requests`. KPIs cover request counts +
+// total approved days; breakdowns surface leave-type distribution + per-
+// department days taken + top-10 takers. Excludes soft-deleted rows.
+
+export async function getLeaveSummaryReport(tenantId: string, year?: number) {
+    return withLongTimeout(async (tx) => {
+        const targetYear = year ?? new Date().getFullYear()
+        const yearStart = `${targetYear}-01-01`
+        const yearEnd = `${targetYear}-12-31`
+        const baseWhere = and(
+            eq(leaveRequests.tenantId, tenantId),
+            sql`${leaveRequests.deletedAt} IS NULL`,
+            gte(leaveRequests.startDate, yearStart),
+            lte(leaveRequests.startDate, yearEnd),
+        )
+
+        const statusRows = await tx
+            .select({
+                status: leaveRequests.status,
+                count: count(),
+                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+            })
+            .from(leaveRequests)
+            .where(baseWhere)
+            .groupBy(leaveRequests.status)
+        const byStatus: Record<string, { count: number; days: number }> = {}
+        for (const r of statusRows) byStatus[r.status ?? 'unknown'] = { count: Number(r.count), days: Number(r.days) }
+
+        const typeRows = await tx
+            .select({
+                leaveType: leaveRequests.leaveType,
+                requests: count(),
+                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+            })
+            .from(leaveRequests)
+            .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
+            .groupBy(leaveRequests.leaveType)
+            .orderBy(desc(sql`SUM(${leaveRequests.days})`))
+        const byType = typeRows.map((r) => ({
+            leaveType: r.leaveType,
+            requests: Number(r.requests),
+            days: Number(r.days),
+        }))
+
+        // Per-department approved days.
+        const deptRows = await tx
+            .select({
+                department: employees.department,
+                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+                requests: count(),
+            })
+            .from(leaveRequests)
+            .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
+            .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
+            .groupBy(employees.department)
+            .orderBy(desc(sql`SUM(${leaveRequests.days})`))
+            .limit(15)
+        const byDepartment = deptRows.map((r) => ({
+            department: r.department ?? 'Unassigned',
+            days: Number(r.days),
+            requests: Number(r.requests),
+        }))
+
+        // Top-10 takers.
+        const takerRows = await tx
+            .select({
+                employeeId: employees.id,
+                employeeNo: employees.employeeNo,
+                fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+                department: employees.department,
+                designation: employees.designation,
+                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+                requests: count(),
+            })
+            .from(leaveRequests)
+            .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
+            .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
+            .groupBy(employees.id, employees.employeeNo, employees.firstName, employees.lastName, employees.department, employees.designation)
+            .orderBy(desc(sql`SUM(${leaveRequests.days})`))
+            .limit(10)
+        const topTakers = takerRows.map((r) => ({
+            employeeId: r.employeeId,
+            employeeNo: r.employeeNo,
+            fullName: r.fullName,
+            department: r.department,
+            designation: r.designation,
+            days: Number(r.days),
+            requests: Number(r.requests),
+        }))
+
+        return {
+            year: targetYear,
+            approvedRequests: byStatus.approved?.count ?? 0,
+            approvedDays: byStatus.approved?.days ?? 0,
+            pendingRequests: byStatus.pending?.count ?? 0,
+            pendingDays: byStatus.pending?.days ?? 0,
+            rejectedRequests: byStatus.rejected?.count ?? 0,
+            cancelledRequests: byStatus.cancelled?.count ?? 0,
+            byType,
+            byDepartment,
+            topTakers,
+        }
+    })
+}
+
+// ─── Turnover & Attrition ───────────────────────────────────────────────
+//
+// Joins vs exits over the last `months` (default 12), turnover rate %,
+// per-department breakdown, and tenure distribution of the current
+// workforce. Turnover rate uses the standard formula:
+//   exits / avg(headcount) over the period × 100
+//
+// Joins come from `employees.joinDate` (everyone, regardless of current
+// status). Exits come from `exit_requests.lastWorkingDay` where the
+// request is approved or completed — pending/rejected ones don't count
+// as real exits yet.
+
+export async function getTurnoverReport(tenantId: string, months = 12) {
+    return withLongTimeout(async (tx) => {
+        const now = new Date()
+        const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1)
+        const startIso = start.toISOString().slice(0, 10)
+        const todayIso = now.toISOString().slice(0, 10)
+
+        const baseEmpWhere = and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+        )
+
+        // ── Joins per month
+        const joinRows = await tx
+            .select({
+                month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${employees.joinDate}), 'Mon YYYY')`,
+                bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${employees.joinDate}), 'YYYY-MM')`,
+                count: count(),
+            })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                gte(employees.joinDate, startIso),
+            ))
+            .groupBy(sql`DATE_TRUNC('month', ${employees.joinDate})`)
+            .orderBy(sql`DATE_TRUNC('month', ${employees.joinDate})`)
+
+        // ── Exits per month (approved or completed only)
+        const exitRows = await tx
+            .select({
+                month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${exitRequests.lastWorkingDay}), 'Mon YYYY')`,
+                bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${exitRequests.lastWorkingDay}), 'YYYY-MM')`,
+                count: count(),
+            })
+            .from(exitRequests)
+            .where(and(
+                eq(exitRequests.tenantId, tenantId),
+                gte(exitRequests.lastWorkingDay, startIso),
+                inArray(exitRequests.status, ['approved', 'completed']),
+            ))
+            .groupBy(sql`DATE_TRUNC('month', ${exitRequests.lastWorkingDay})`)
+            .orderBy(sql`DATE_TRUNC('month', ${exitRequests.lastWorkingDay})`)
+
+        // Merge joins+exits into a single trend keyed by bucket so the FE
+        // can render one chart with two series.
+        const trendMap = new Map<string, { period: string; bucket: string; joins: number; exits: number }>()
+        for (const r of joinRows) trendMap.set(r.bucket, { period: r.month, bucket: r.bucket, joins: Number(r.count), exits: 0 })
+        for (const r of exitRows) {
+            const existing = trendMap.get(r.bucket) ?? { period: r.month, bucket: r.bucket, joins: 0, exits: 0 }
+            existing.exits = Number(r.count)
+            trendMap.set(r.bucket, existing)
+        }
+        const trend = Array.from(trendMap.values()).sort((a, b) => a.bucket.localeCompare(b.bucket))
+
+        const totalJoins = trend.reduce((s, r) => s + r.joins, 0)
+        const totalExits = trend.reduce((s, r) => s + r.exits, 0)
+
+        // Current headcount as the denominator floor for turnover rate.
+        const [{ headcount }] = await tx
+            .select({ headcount: count() })
+            .from(employees)
+            .where(baseEmpWhere)
+        const denom = Math.max(1, Number(headcount))
+        const turnoverRate = Math.round((totalExits / denom) * 1000) / 10
+
+        // Per-department turnover (exits in window, by leaf department name).
+        const deptRows = await tx
+            .select({ department: employees.department, exits: count() })
+            .from(exitRequests)
+            .innerJoin(employees, eq(employees.id, exitRequests.employeeId))
+            .where(and(
+                eq(exitRequests.tenantId, tenantId),
+                gte(exitRequests.lastWorkingDay, startIso),
+                inArray(exitRequests.status, ['approved', 'completed']),
+            ))
+            .groupBy(employees.department)
+            .orderBy(desc(count()))
+            .limit(15)
+        const byDepartment = deptRows.map((r) => ({ department: r.department ?? 'Unassigned', exits: Number(r.exits) }))
+
+        // Tenure distribution of the *current* workforce.
+        const tenureRows = await tx
+            .select({
+                joinDate: employees.joinDate,
+                department: employees.department,
+            })
+            .from(employees)
+            .where(baseEmpWhere)
+        const buckets = { '<1y': 0, '1–3y': 0, '3–5y': 0, '5y+': 0 } as Record<string, number>
+        for (const r of tenureRows) {
+            if (!r.joinDate) continue
+            const years = (Date.now() - new Date(r.joinDate).getTime()) / (365 * 86_400_000)
+            if (years < 1) buckets['<1y']++
+            else if (years < 3) buckets['1–3y']++
+            else if (years < 5) buckets['3–5y']++
+            else buckets['5y+']++
+        }
+        const tenureDistribution = Object.entries(buckets).map(([label, count]) => ({ label, count }))
+
+        // Exit type breakdown.
+        const exitTypeRows = await tx
+            .select({ exitType: exitRequests.exitType, count: count() })
+            .from(exitRequests)
+            .where(and(
+                eq(exitRequests.tenantId, tenantId),
+                gte(exitRequests.lastWorkingDay, startIso),
+                inArray(exitRequests.status, ['approved', 'completed']),
+            ))
+            .groupBy(exitRequests.exitType)
+        const byExitType = exitTypeRows.map((r) => ({ label: r.exitType ?? 'unknown', count: Number(r.count) }))
+
+        return {
+            windowMonths: months,
+            totalJoins,
+            totalExits,
+            currentHeadcount: Number(headcount),
+            turnoverRate,
+            netChange: totalJoins - totalExits,
+            trend,
+            byDepartment,
+            tenureDistribution,
+            byExitType,
+            windowStart: startIso,
+            windowEnd: todayIso,
+        }
+    })
+}
+
+// ─── Onboarding Completion ──────────────────────────────────────────────
+//
+// Snapshot of every onboarding checklist for the tenant: how many are
+// in progress / completed, which are stalled (no movement >30 days), and
+// the average days-to-complete for the ones that finished. Drives the
+// "Onboarding" tab on the reports page.
+
+export async function getOnboardingReport(tenantId: string) {
+    return withLongTimeout(async (tx) => {
+        const checklists = await tx
+            .select({
+                id: onboardingChecklists.id,
+                employeeId: onboardingChecklists.employeeId,
+                progress: onboardingChecklists.progress,
+                startDate: onboardingChecklists.startDate,
+                dueDate: onboardingChecklists.dueDate,
+                createdAt: onboardingChecklists.createdAt,
+                updatedAt: onboardingChecklists.updatedAt,
+                employeeNo: employees.employeeNo,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                department: employees.department,
+                designation: employees.designation,
+            })
+            .from(onboardingChecklists)
+            .innerJoin(employees, eq(employees.id, onboardingChecklists.employeeId))
+            .where(eq(onboardingChecklists.tenantId, tenantId))
+
+        const now = Date.now()
+        const STALL_MS = 30 * 86_400_000
+
+        let inProgress = 0, completed = 0, stalled = 0, overdue = 0
+        const completionDays: number[] = []
+        const stalledList: Array<{
+            id: string
+            employeeId: string
+            employeeNo: string | null
+            fullName: string
+            department: string | null
+            designation: string | null
+            progress: number
+            stalledDays: number
+            dueDate: string | null
+        }> = []
+        const byDepartmentMap = new Map<string, { total: number; completed: number; inProgress: number }>()
+
+        for (const c of checklists) {
+            const dep = c.department ?? 'Unassigned'
+            const slot = byDepartmentMap.get(dep) ?? { total: 0, completed: 0, inProgress: 0 }
+            slot.total++
+
+            if (c.progress >= 100) {
+                completed++
+                slot.completed++
+                if (c.startDate && c.updatedAt) {
+                    const days = (new Date(c.updatedAt).getTime() - new Date(c.startDate).getTime()) / 86_400_000
+                    if (days >= 0 && days < 365) completionDays.push(days)
+                }
+            } else {
+                inProgress++
+                slot.inProgress++
+                const sinceUpdate = now - new Date(c.updatedAt).getTime()
+                if (sinceUpdate > STALL_MS) {
+                    stalled++
+                    stalledList.push({
+                        id: c.id,
+                        employeeId: c.employeeId,
+                        employeeNo: c.employeeNo,
+                        fullName: `${c.firstName} ${c.lastName}`,
+                        department: c.department,
+                        designation: c.designation,
+                        progress: c.progress,
+                        stalledDays: Math.floor(sinceUpdate / 86_400_000),
+                        dueDate: c.dueDate,
+                    })
+                }
+                if (c.dueDate && c.dueDate < new Date().toISOString().slice(0, 10)) overdue++
+            }
+            byDepartmentMap.set(dep, slot)
+        }
+
+        const total = checklists.length
+        const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
+        const avgDaysToComplete = completionDays.length > 0
+            ? Math.round((completionDays.reduce((s, d) => s + d, 0) / completionDays.length) * 10) / 10
+            : 0
+
+        stalledList.sort((a, b) => b.stalledDays - a.stalledDays)
+
+        const byDepartment = Array.from(byDepartmentMap.entries())
+            .map(([department, v]) => ({
+                department,
+                total: v.total,
+                completed: v.completed,
+                inProgress: v.inProgress,
+                completionRate: v.total > 0 ? Math.round((v.completed / v.total) * 1000) / 10 : 0,
+            }))
+            .sort((a, b) => b.total - a.total)
+
+        return {
+            total,
+            completed,
+            inProgress,
+            stalled,
+            overdue,
+            completionRate,
+            avgDaysToComplete,
+            stalledList: stalledList.slice(0, 10),
+            byDepartment,
+        }
+    })
+}
+
+// ─── Performance Review Summary ─────────────────────────────────────────
+//
+// Counts by status, average rating, distribution across the 1-5 scale,
+// per-department average ratings, and the 10 most recent submitted /
+// completed reviews. Excludes soft-deleted rows.
+
+export async function getPerformanceReport(tenantId: string) {
+    return withLongTimeout(async (tx) => {
+        const baseWhere = and(
+            eq(performanceReviews.tenantId, tenantId),
+            isNull(performanceReviews.deletedAt),
+        )
+
+        const statusRows = await tx
+            .select({ status: performanceReviews.status, count: count() })
+            .from(performanceReviews)
+            .where(baseWhere)
+            .groupBy(performanceReviews.status)
+        const byStatus: Record<string, number> = {}
+        for (const r of statusRows) byStatus[r.status ?? 'unknown'] = Number(r.count)
+
+        const total = Object.values(byStatus).reduce((s, n) => s + n, 0)
+        const completed = (byStatus.completed ?? 0) + (byStatus.acknowledged ?? 0)
+        const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
+
+        // Rating distribution (1-5) across non-draft reviews.
+        const ratingRows = await tx
+            .select({ rating: performanceReviews.overallRating, count: count() })
+            .from(performanceReviews)
+            .where(and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`))
+            .groupBy(performanceReviews.overallRating)
+            .orderBy(performanceReviews.overallRating)
+        const ratingDistribution = ratingRows.map((r) => ({
+            rating: Number(r.rating),
+            count: Number(r.count),
+        }))
+
+        const [{ avg }] = await tx
+            .select({ avg: sql<string>`COALESCE(AVG(${performanceReviews.overallRating}), 0)` })
+            .from(performanceReviews)
+            .where(and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`))
+        const avgRating = Math.round(Number(avg) * 100) / 100
+
+        // Per-department average + count.
+        const deptRows = await tx
+            .select({
+                department: employees.department,
+                avgRating: sql<string>`COALESCE(AVG(${performanceReviews.overallRating}), 0)`,
+                count: count(),
+            })
+            .from(performanceReviews)
+            .innerJoin(employees, eq(employees.id, performanceReviews.employeeId))
+            .where(and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`))
+            .groupBy(employees.department)
+            .orderBy(desc(count()))
+            .limit(15)
+        const byDepartment = deptRows.map((r) => ({
+            department: r.department ?? 'Unassigned',
+            avgRating: Math.round(Number(r.avgRating) * 100) / 100,
+            count: Number(r.count),
+        }))
+
+        // Recent reviews (last 10 non-draft).
+        const recentRows = await tx
+            .select({
+                id: performanceReviews.id,
+                employeeId: performanceReviews.employeeId,
+                period: performanceReviews.period,
+                status: performanceReviews.status,
+                overallRating: performanceReviews.overallRating,
+                reviewDate: performanceReviews.reviewDate,
+                employeeNo: employees.employeeNo,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                department: employees.department,
+                designation: employees.designation,
+            })
+            .from(performanceReviews)
+            .innerJoin(employees, eq(employees.id, performanceReviews.employeeId))
+            .where(and(
+                baseWhere,
+                inArray(performanceReviews.status, ['submitted', 'acknowledged', 'completed']),
+            ))
+            .orderBy(desc(performanceReviews.updatedAt))
+            .limit(10)
+        const recent = recentRows.map((r) => ({
+            id: r.id,
+            employeeId: r.employeeId,
+            employeeNo: r.employeeNo,
+            fullName: `${r.firstName} ${r.lastName}`,
+            department: r.department,
+            designation: r.designation,
+            period: r.period,
+            status: r.status,
+            overallRating: r.overallRating,
+            reviewDate: r.reviewDate,
+        }))
+
+        return {
+            total,
+            completed,
+            inProgress: (byStatus.submitted ?? 0) + (byStatus.acknowledged ?? 0),
+            draft: byStatus.draft ?? 0,
+            completionRate,
+            avgRating,
+            ratingDistribution,
+            byDepartment,
+            recent,
+        }
+    })
+}
+
+// ─── Document Expiry (unified) ──────────────────────────────────────────
+//
+// Single roll-up across every document the tenant tracks expiry for:
+//   visa · passport · emirates_id · labour_card · contract
+//
+// Replaces the standalone visa-expiry report on the frontend (still
+// exposed for legacy callers). Each expiring document becomes one row
+// with a `docType` discriminator + the same urgency bucketing as visa
+// (expired / critical ≤30d / urgent 31-60d / normal 61+d). Totals are
+// pre-computed per `docType` and per `urgency` so the FE doesn't have
+// to recompute them per render.
+
+type DocType = 'visa' | 'passport' | 'emirates_id' | 'labour_card' | 'contract'
+
+interface DocExpiryRow {
+    employeeId: string
+    employeeNo: string | null
+    fullName: string
+    avatarUrl: string | null
+    department: string | null
+    designation: string | null
+    nationality: string | null
+    docType: DocType
+    docNumber: string | null
+    expiryDate: string
+    daysLeft: number
+    urgency: 'expired' | 'critical' | 'urgent' | 'normal'
+}
+
+export async function getDocumentExpiryReport(tenantId: string, days = 90) {
+    return withLongTimeout(async (tx) => {
+        const today = new Date().toISOString().slice(0, 10)
+        const cutoff = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+
+        // Pull every employee with at least one expiry that lands in-window
+        // OR is already expired. Done in a single query — cheaper than five
+        // separate calls and gives us the row data once for each employee.
+        const rows = await tx
+            .select({
+                id: employees.id,
+                employeeNo: employees.employeeNo,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                avatarUrl: employees.avatarUrl,
+                department: employees.department,
+                designation: employees.designation,
+                nationality: employees.nationality,
+                visaExpiry: employees.visaExpiry,
+                visaType: employees.visaType,
+                passportNo: employees.passportNo,
+                passportExpiry: employees.passportExpiry,
+                emiratesId: employees.emiratesId,
+                emiratesIdExpiry: employees.emiratesIdExpiry,
+                labourCardNumber: employees.labourCardNumber,
+                labourCardExpiry: employees.labourCardExpiry,
+                contractEndDate: employees.contractEndDate,
+            })
+            .from(employees)
+            .where(and(
+                eq(employees.tenantId, tenantId),
+                eq(employees.isArchived, false),
+                sql`(
+                    ${employees.visaExpiry}      <= ${cutoff} OR
+                    ${employees.passportExpiry}  <= ${cutoff} OR
+                    ${employees.emiratesIdExpiry}<= ${cutoff} OR
+                    ${employees.labourCardExpiry}<= ${cutoff} OR
+                    ${employees.contractEndDate} <= ${cutoff}
+                )`,
+            ))
+
+        // Flatten each employee into one row per expiring document.
+        const flat: DocExpiryRow[] = []
+        const pushIfExpiring = (
+            base: Omit<DocExpiryRow, 'docType' | 'docNumber' | 'expiryDate' | 'daysLeft' | 'urgency'>,
+            docType: DocType,
+            docNumber: string | null,
+            expiry: string | null,
+        ) => {
+            if (!expiry) return
+            if (expiry > cutoff) return
+            const daysLeft = Math.ceil((new Date(expiry).getTime() - Date.now()) / 86_400_000)
+            const urgency: DocExpiryRow['urgency'] =
+                expiry < today ? 'expired' : daysLeft <= 30 ? 'critical' : daysLeft <= 60 ? 'urgent' : 'normal'
+            flat.push({ ...base, docType, docNumber, expiryDate: expiry, daysLeft, urgency })
+        }
+        for (const r of rows) {
+            const base = {
+                employeeId: r.id,
+                employeeNo: r.employeeNo,
+                fullName: `${r.firstName} ${r.lastName}`,
+                avatarUrl: r.avatarUrl,
+                department: r.department,
+                designation: r.designation,
+                nationality: r.nationality,
+            }
+            pushIfExpiring(base, 'visa',         r.visaType ?? null,            r.visaExpiry)
+            pushIfExpiring(base, 'passport',     r.passportNo ?? null,          r.passportExpiry)
+            pushIfExpiring(base, 'emirates_id',  r.emiratesId ?? null,          r.emiratesIdExpiry)
+            pushIfExpiring(base, 'labour_card',  r.labourCardNumber ?? null,    r.labourCardExpiry)
+            pushIfExpiring(base, 'contract',     null,                          r.contractEndDate)
+        }
+        // Sort by closest expiry first.
+        flat.sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
+
+        // Aggregate by docType + urgency.
+        const initBucket = () => ({ total: 0, expired: 0, critical: 0, urgent: 0, normal: 0 })
+        type BucketKey = DocType | 'total'
+        const byType: Record<BucketKey, ReturnType<typeof initBucket>> = {
+            total: initBucket(),
+            visa: initBucket(),
+            passport: initBucket(),
+            emirates_id: initBucket(),
+            labour_card: initBucket(),
+            contract: initBucket(),
+        }
+        for (const row of flat) {
+            byType[row.docType].total++
+            byType[row.docType][row.urgency]++
+            byType.total.total++
+            byType.total[row.urgency]++
+        }
+
+        // Resolve avatars in parallel — same pattern as the visa report.
+        const documents = await Promise.all(flat.map(async (row) => ({
+            ...row,
+            avatarUrl: await resolveAvatarUrl(row.avatarUrl),
+        })))
+
+        return {
+            windowDays: days,
+            byType,
+            documents,
+        }
+    })
 }
