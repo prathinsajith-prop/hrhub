@@ -62,8 +62,9 @@ function cacheSet(key: string, value: string | null): void {
 
 // Build a short, useful label from the address parts. Nominatim's full
 // `display_name` includes postcode + every admin level, which is too
-// noisy for a punch row.
-function pickLabel(payload: NominatimResponse): string | null {
+// noisy for a punch row. Exported so the label-formatting rules can
+// be unit-tested without making a live Nominatim call.
+export function pickLabel(payload: NominatimResponse): string | null {
     const a = payload.address ?? {}
     const parts: string[] = []
     const poi = a.building ?? a.amenity ?? a.office ?? a.shop ?? null

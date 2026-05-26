@@ -86,7 +86,9 @@ function cacheSet(key: string, value: string | null): void {
  * including postcode) so we synthesise our own shorter label from the
  * `address` parts.
  */
-function pickLabel(payload: NominatimResponse): string | null {
+// Exported so the label-formatting rules can be unit-tested without
+// making a live Nominatim call. Mirrors the main backend.
+export function pickLabel(payload: NominatimResponse): string | null {
     const a = payload.address ?? {}
     const parts: string[] = []
 

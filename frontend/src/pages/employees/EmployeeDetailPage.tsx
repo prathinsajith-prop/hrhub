@@ -1635,15 +1635,10 @@ export function EmployeeDetailPage() {
                       <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
                     </div>
                   ) : (
-                    // Dependents table.
-                    // Was 10 columns wide (Reference / Name / Birth / Relation /
-                    // Nationality / Visa / Medical / Created-by / Created / Actions)
-                    // which forced horizontal scroll on every viewport under
-                    // ~1400px. Condensed to 7 columns: the Reference is now a
-                    // mono sub-line under Name, and the audit metadata
-                    // (Created-by + Created) moved to a row tooltip — HR can
-                    // still get to it on hover but it no longer competes with
-                    // the data they actually scan.
+                    /* Dependents table — condensed from 10 columns to 7. The
+                       Reference is now a mono sub-line under Name, and the
+                       audit metadata (Created-by + Created) moved to a row
+                       tooltip so the data HR actually scans gets the focus. */
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>

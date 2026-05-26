@@ -2310,7 +2310,13 @@ function PunchLocationDialog({
                     </div>
                 )}
 
-                {/* Map (iframe — no API key, no JS SDK, no tracking script). */}
+                {/* Map (iframe — no API key, no JS SDK, no tracking script).
+                    `sandbox` restricts the embed to running scripts + same-
+                    origin requests it actually needs (OSM's map JS) and
+                    nothing else — no top-level navigation, no popups, no
+                    form posts back through us. `referrerPolicy="no-referrer"`
+                    prevents the precise punch coordinates from leaking to
+                    OSM via the HTTP Referer header. */}
                 <div className="relative bg-muted/20" style={{ aspectRatio: '16 / 10' }}>
                     {hasCoords && mapSrc ? (
                         <iframe
@@ -2319,6 +2325,8 @@ function PunchLocationDialog({
                             src={mapSrc}
                             className="absolute inset-0 size-full border-0"
                             loading="lazy"
+                            sandbox="allow-scripts allow-same-origin"
+                            referrerPolicy="no-referrer"
                         />
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">

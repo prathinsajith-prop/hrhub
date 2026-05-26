@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type KeyboardEvent } from 'react'
 import {
     Users, Plus, CheckCircle2, Shield, ShieldOff, ShieldCheck,
     Search, MailCheck, UserPlus, Check, Mail, Clock,
@@ -139,11 +139,20 @@ function RoleChipToggleRow({
         try {
             await updateUser.mutateAsync({ id: user.id, roles: next, role: next[0] })
             // Errors get auto-toasted via the global MutationCache; success
-            // toasts must be explicit so HR sees the action landed.
+            // toasts must be explicit so HR sees the action landed. The
+            // user's name goes in the toast title and the role in the body
+            // so HR knows immediately *who* was changed and *what*.
+            const userName = user.name || user.email
             toast.success(
                 isActive
-                    ? t('settingsDetail.users.roleRemoved', { role: optLabel, defaultValue: `${optLabel} removed` })
-                    : t('settingsDetail.users.roleAssigned', { role: optLabel, defaultValue: `${optLabel} assigned` }),
+                    ? t('settingsDetail.users.roleRemovedTitle', {
+                        name: userName, role: optLabel,
+                        defaultValue: `${optLabel} removed from ${userName}`,
+                    })
+                    : t('settingsDetail.users.roleAssignedTitle', {
+                        name: userName, role: optLabel,
+                        defaultValue: `${optLabel} assigned to ${userName}`,
+                    }),
             )
         } catch {
             // No-op — the MutationCache handler already surfaced the error.
@@ -847,23 +856,31 @@ export function UsersPage() {
                                 // only fires from "dead space".
                                 const rowClickable = canManageUsers && !isSelf
                                 const openAccess = () => { if (rowClickable) setAccessTarget(u) }
+                                // Only wire interactive props when the row is
+                                // clickable. Always-on handlers tripped the
+                                // `no-static-element-interactions` lint even though
+                                // they short-circuited internally — and conceptually,
+                                // a non-clickable row shouldn't claim keyboard /
+                                // mouse semantics at all.
+                                const interactiveProps = rowClickable ? {
+                                    role: 'button' as const,
+                                    tabIndex: 0,
+                                    onClick: openAccess,
+                                    onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            // Skip when focus is inside an interactive
+                                            // child (chip / button / link) — let that
+                                            // element own the key event.
+                                            if (e.target !== e.currentTarget) return
+                                            e.preventDefault()
+                                            openAccess()
+                                        }
+                                    },
+                                } : {}
                                 return (
                                     <div
                                         key={u.id}
-                                        role={rowClickable ? 'button' : undefined}
-                                        tabIndex={rowClickable ? 0 : undefined}
-                                        onClick={openAccess}
-                                        onKeyDown={(e) => {
-                                            if (!rowClickable) return
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                // Skip when focus is inside an interactive
-                                                // child (chip / button / link) — let that
-                                                // element own the key event.
-                                                if (e.target !== e.currentTarget) return
-                                                e.preventDefault()
-                                                openAccess()
-                                            }
-                                        }}
+                                        {...interactiveProps}
                                         className={cn(
                                         // Three-column row: identity (left, flex) — roles (middle,
                                         // flex) — actions (right, intrinsic). The middle column
