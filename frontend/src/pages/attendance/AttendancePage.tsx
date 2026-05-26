@@ -6,7 +6,7 @@ import {
     CalendarDays, Clock, UserCheck, UserX,
     AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap, Fingerprint,
     Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, X, Check,
-    ArrowUpRight,
+    ArrowUpRight, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -918,8 +918,7 @@ export function AttendancePage() {
             <EmployeeMonthAttendanceDialog
                 state={attendanceModal}
                 onClose={() => setAttendanceModal(null)}
-                monthLabel={label}
-                calendarData={calendarData}
+                initialMonth={calendarMonth}
                 onViewProfile={(id) => {
                     setAttendanceModal(null)
                     navigate(`/employees/${id}`)
@@ -983,17 +982,46 @@ export function AttendancePage() {
 interface EmployeeMonthAttendanceDialogProps {
     state: { id: string; name: string; avatarUrl: string | null } | null
     onClose: () => void
-    monthLabel: string
-    calendarData: import('@/hooks/useAttendance').CalendarResponse | undefined
+    /** Initial month (YYYY-MM) shown when the dialog opens — taken from the
+     *  parent page's selected month. The dialog then owns its own month state
+     *  so HR can navigate prev/next without disturbing the page underneath. */
+    initialMonth: string
     onViewProfile: (id: string) => void
 }
 
 function EmployeeMonthAttendanceDialog({
-    state, onClose, monthLabel, calendarData, onViewProfile,
+    state, onClose, initialMonth, onViewProfile,
 }: EmployeeMonthAttendanceDialogProps) {
     const open = !!state
-    // Slice the calendar payload to just the chosen employee so we can reuse
-    // AttendanceCalendarGrid in its hideEmployeeColumn mode.
+
+    // ─── Dialog-local month state ──────────────────────────────────────
+    // The parent's `calendarData` carries one month at a time; if HR wants
+    // to scrub through history without leaving the dialog, we need our own
+    // month + our own fetch. State-during-render reset (CLAUDE.md pattern):
+    // when the dialog opens for a different employee, snap back to the
+    // page's current month so the first view matches the row HR clicked.
+    const [month, setMonth] = useState(initialMonth)
+    const [lastEmployeeId, setLastEmployeeId] = useState<string | null>(null)
+    const currentEmployeeId = state?.id ?? null
+    if (open && currentEmployeeId !== lastEmployeeId) {
+        setLastEmployeeId(currentEmployeeId)
+        setMonth(initialMonth)
+    } else if (!open && lastEmployeeId !== null) {
+        setLastEmployeeId(null)
+    }
+
+    // Scope the calendar fetch to this employee + the dialog's month. We
+    // pass `employeeId` so the server only returns one employee's cells,
+    // not the entire tenant — much smaller payload while the dialog is
+    // open. The hook is no-op when the dialog is closed (employeeId is
+    // null), so we don't fetch in the background.
+    const { data: calendarData, isLoading } = useAttendanceCalendar(month, {
+        employeeId: currentEmployeeId ?? undefined,
+    })
+
+    // Slice to the picked employee. The /calendar endpoint may include
+    // other employees when `employeeId` isn't passed (legacy hook
+    // signature), so we filter defensively.
     const employeeSlice = useMemo(() => {
         if (!state || !calendarData) return undefined
         const emp = calendarData.employees.find((e) => e.id === state.id)
@@ -1001,6 +1029,37 @@ function EmployeeMonthAttendanceDialog({
         return { ...calendarData, employees: [emp] }
     }, [state, calendarData])
     const employee = employeeSlice?.employees[0]
+
+    // Pretty label for the chosen month — used in the header subtitle and
+    // the section heading. Built off the YYYY-MM string so it stays in
+    // sync with whatever the user picks.
+    const monthLabel = useMemo(() => {
+        const [yStr, mStr] = month.split('-')
+        const y = Number(yStr); const m = Number(mStr)
+        if (!Number.isFinite(y) || !Number.isFinite(m)) return month
+        return new Date(y, m - 1, 1).toLocaleString('en-AE', { month: 'long', year: 'numeric' })
+    }, [month])
+
+    // Prev / next month navigation. We work in YYYY-MM space (UTC-safe,
+    // no timezone surprises) — Date math at the local boundary would shift
+    // the displayed month for users in negative-offset timezones.
+    const shiftMonth = useCallback((delta: number) => {
+        setMonth((current) => {
+            const [yStr, mStr] = current.split('-')
+            const y = Number(yStr); const m = Number(mStr)
+            if (!Number.isFinite(y) || !Number.isFinite(m)) return current
+            const d = new Date(y, m - 1 + delta, 1)
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        })
+    }, [])
+
+    // Disable "Next" once we're at the current month — we don't show
+    // future attendance and the empty calendar would be confusing.
+    const currentMonthIso = useMemo(() => {
+        const now = new Date()
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    }, [])
+    const canGoNext = month < currentMonthIso
     // Per-status counts from the same cells the grid renders — keeps the
     // summary perfectly consistent with what the user sees in the calendar.
     const counts = useMemo(() => {
@@ -1040,7 +1099,7 @@ function EmployeeMonthAttendanceDialog({
                                     {employee?.name ?? state?.name ?? '—'}
                                 </DialogTitle>
                                 <p className="text-xs text-muted-foreground truncate">
-                                    {employee?.designation ?? employee?.department ?? 'Attendance summary'} · {monthLabel}
+                                    {employee?.designation ?? employee?.department ?? 'Attendance summary'}
                                 </p>
                             </div>
                         </div>
@@ -1056,6 +1115,39 @@ function EmployeeMonthAttendanceDialog({
                             </Button>
                         ) : null}
                     </div>
+
+                    {/* Month navigator — Prev / label / Next. Lives inside the
+                        modal so HR can scrub through months without closing
+                        the dialog (and without dragging the page header
+                        underneath along with them). Disabled when there's
+                        no employee selected yet, and "Next" is gated to the
+                        current month so HR can't peek into empty future
+                        months. */}
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-2 py-1">
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            onClick={() => shiftMonth(-1)}
+                            disabled={!state}
+                            aria-label="Previous month"
+                        >
+                            <ChevronLeft className="size-4" />
+                        </Button>
+                        <span className="text-sm font-semibold tabular-nums">
+                            {monthLabel}
+                        </span>
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            onClick={() => shiftMonth(1)}
+                            disabled={!state || !canGoNext}
+                            aria-label="Next month"
+                        >
+                            <ChevronRight className="size-4" />
+                        </Button>
+                    </div>
                 </DialogHeader>
                 <div className="overflow-y-auto px-6 py-4 space-y-4">
                     {/* KPI strip */}
@@ -1070,7 +1162,7 @@ function EmployeeMonthAttendanceDialog({
                     </div>
                     {/* Original tabular grid (one row, 31 cells) in compact mode so a
                         full month fits without horizontal scroll. */}
-                    {employeeSlice ? (
+                    {employeeSlice || isLoading ? (
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1080,7 +1172,7 @@ function EmployeeMonthAttendanceDialog({
                             </div>
                             <AttendanceCalendarGrid
                                 data={employeeSlice}
-                                loading={false}
+                                loading={isLoading}
                                 hideEmployeeColumn
                                 showLegend={false}
                                 compact

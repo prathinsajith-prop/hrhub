@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { AlertModal } from '@/components/shared/AlertModal'
 import { cn } from '@/lib/utils'
 import { ROUTES } from '@/lib/routes'
 
@@ -242,26 +243,85 @@ export function EmployeeAttendancePage() {
   // blocked or device has no GPS).
   const [geo, setGeo] = useState<{ latitude: number; longitude: number } | null>(null)
   const [geoState, setGeoState] = useState<'pending' | 'ok' | 'denied'>('pending')
-  const refreshGeo = useMemo(() => async () => {
+  // Returns the latest reading so callers can chain a punch on success
+  // without waiting for a re-render. State is still updated for the UI.
+  const refreshGeo = useMemo(() => async (): Promise<{ latitude: number; longitude: number } | null> => {
     setGeoState('pending')
     const result = await readGeolocation()
     if (result) {
       setGeo(result)
       setGeoState('ok')
-    } else {
-      setGeo(null)
-      setGeoState('denied')
+      return result
     }
+    setGeo(null)
+    setGeoState('denied')
+    return null
   }, [])
   useEffect(() => {
-    if (punchAllowed) void refreshGeo()
+    if (!punchAllowed) return
+    void refreshGeo()
+
+    // Listen for permission changes — when the user toggles location at the
+    // OS / browser / site level (often in a separate window) we want the
+    // strip to flip from "off" to "on" without requiring a page reload.
+    let permStatus: PermissionStatus | null = null
+    const handlePermChange = () => { void refreshGeo() }
+    if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName })
+        .then((s) => {
+          permStatus = s
+          s.addEventListener('change', handlePermChange)
+        })
+        .catch(() => { /* Permissions API not supported — fall back to visibility */ })
+    }
+
+    // Also re-query when the tab regains focus: the user might have fixed
+    // their permission in a different tab and switched back.
+    const onVisible = () => { if (!document.hidden) void refreshGeo() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+
+    return () => {
+      permStatus?.removeEventListener('change', handlePermChange)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [punchAllowed, refreshGeo])
-  const todayInfo = useMemo(() => {
-    const t = toISODate(today)
-    return days.find((d) => d.iso === t) ?? null
-  }, [days, today])
-  const isCheckedIn = !!todayInfo?.cell?.checkIn && !todayInfo?.cell?.checkOut
-  const liveTimer = useLiveDuration(todayInfo?.cell?.checkIn, todayInfo?.cell?.checkOut)
+  // Source of truth for the check-in band — derive directly from the raw
+  // punches list for today, not from the calendar's rollup row. The rollup
+  // is a derived projection that can briefly lag a refetch; the punches list
+  // is invalidated on every mutation and updates immediately. Two wins:
+  //   - The button label flips Check-in → Check-out the moment the new punch
+  //     lands, even before the calendar query returns.
+  //   - The live timer starts ticking from the just-recorded check-in, not
+  //     from a stale rollup that might still carry yesterday's checkOut.
+  const todayPunchesQuery = usePunchesForDay(toISODate(today), employeeId)
+  const lastPunchToday = useMemo(() => {
+    const list = todayPunchesQuery.data ?? []
+    if (list.length === 0) return null
+    return list.toSorted((a, b) =>
+      new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
+    )[0]
+  }, [todayPunchesQuery.data])
+  const lastInBeforeCurrent = useMemo(() => {
+    const list = todayPunchesQuery.data ?? []
+    // Walk from the end backward to find the most recent 'in' that hasn't
+    // been closed by a later 'out' — that's the open session's start.
+    const sorted = list.toSorted((a, b) =>
+      new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
+    )
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const p = sorted[i]!
+      if (p.punchType === 'in') return p
+      if (p.punchType === 'out') return null
+    }
+    return null
+  }, [todayPunchesQuery.data])
+  const isCheckedIn = lastPunchToday?.punchType === 'in'
+  const liveTimer = useLiveDuration(
+    lastInBeforeCurrent?.recordedAt ?? null,
+    isCheckedIn ? null : lastPunchToday?.recordedAt ?? null,
+  )
 
   const shiftBand = `General [ 09:00 AM – 06:00 PM ]`
 
@@ -319,11 +379,10 @@ export function EmployeeAttendancePage() {
       </div>
 
       {/* Check-in band — only rendered when HR has not revoked self-punch.
-          Layout: two rows on small screens, one row on wide. Top row shows
-          shift name, notes input, and the action button. Bottom row gives
-          a clear "this is where your punch will be tagged" preview with
-          coords + a Maps link + refresh, so there's no surprise about
-          where the location was sampled. */}
+          When location is denied the action button no longer silently submits
+          without coordinates; clicking it pops a friendly explanation card
+          with "Enable location" and "Continue anyway" actions so the user
+          knows exactly what will happen. */}
       {punchAllowed && (
         <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
           <div className="flex flex-wrap items-stretch justify-between gap-3">
@@ -336,43 +395,26 @@ export function EmployeeAttendancePage() {
               placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
               className="flex-[2] min-w-[180px] h-9"
             />
-            {isCheckedIn ? (
-              <Button
-                onClick={() => {
-                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-                  checkOut.mutate(body, {
-                    onSuccess: () => { toast.success(t('attendance.checkOut')); setNote(''); void refreshGeo() },
-                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check out'),
-                  })
-                }}
-                loading={checkOut.isPending}
-                className="bg-rose-600 hover:bg-rose-700 text-white"
-              >
-                <LogOut className="size-4 me-2" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-xs">Check-out</span>
-                  <span className="text-xs tabular-nums">{liveTimer}</span>
-                </div>
-              </Button>
-            ) : (
-              <Button
-                onClick={() => {
-                  const body: PunchBody = { employeeId, notes: note || null, ...(geo ?? {}) }
-                  checkIn.mutate(body, {
-                    onSuccess: () => { toast.success(t('attendance.checkIn')); setNote(''); void refreshGeo() },
-                    onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not check in'),
-                  })
-                }}
-                loading={checkIn.isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                <LogIn className="size-4 me-2" />
-                <div className="flex flex-col items-start leading-tight">
-                  <span className="text-xs">Check-in</span>
-                  <span className="text-xs tabular-nums">{liveTimer}</span>
-                </div>
-              </Button>
-            )}
+            <PunchActionButton
+              isCheckedIn={isCheckedIn}
+              liveTimer={liveTimer}
+              geo={geo}
+              onPunch={(coords) => {
+                const body: PunchBody = {
+                  employeeId,
+                  notes: note || null,
+                  ...(coords ?? {}),
+                }
+                const mutation = isCheckedIn ? checkOut : checkIn
+                const successLabel = isCheckedIn ? t('attendance.checkOut') : t('attendance.checkIn')
+                mutation.mutate(body, {
+                  onSuccess: () => { toast.success(successLabel); setNote(''); void refreshGeo() },
+                  onError: (err: unknown) => toast.error((err as Error)?.message ?? `Could not ${isCheckedIn ? 'check out' : 'check in'}`),
+                })
+              }}
+              loading={checkOut.isPending || checkIn.isPending}
+              onEnableLocation={refreshGeo}
+            />
           </div>
           {/* Location strip — read-only preview of where the punch will be
               tagged. Renders coordinates as a Maps link so the employee can
@@ -385,9 +427,7 @@ export function EmployeeAttendancePage() {
               )} />
               {geoState === 'pending' && <span>Resolving your location…</span>}
               {geoState === 'denied' && (
-                <span>
-                  Location unavailable — punch will be recorded without coordinates.
-                </span>
+                <span>Location access is off — enable it to tag your punch with coordinates.</span>
               )}
               {geoState === 'ok' && geo && (
                 <>
@@ -410,7 +450,7 @@ export function EmployeeAttendancePage() {
               className="text-primary hover:underline disabled:opacity-50"
               disabled={geoState === 'pending'}
             >
-              {geoState === 'pending' ? 'Refreshing…' : 'Refresh'}
+              {geoState === 'pending' ? 'Refreshing…' : geoState === 'denied' ? 'Enable location' : 'Refresh'}
             </button>
           </div>
         </div>
@@ -651,6 +691,108 @@ function statusHero(klass: DayClassification): {
     case 'wfh':
       return { icon: LogIn, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30', title: statusLabel(klass), body: '' }
   }
+}
+
+// ─── Punch action button — SweetAlert-style modal when location is off ────
+//
+// Three states the button has to handle:
+//   1. location ok       → button submits the punch directly with coords
+//   2. location pending  → button keeps the live timer; submits without
+//                          coords if the user is impatient (strip refreshes
+//                          on the next success)
+//   3. location denied   → click opens a centered AlertModal explaining
+//                          the situation, with two paths forward:
+//                          "Enable location" (re-prompts the browser) and
+//                          "Continue without" (submits coordinate-less)
+//
+// Replaces the previous silent-submit-without-coords behaviour with
+// explicit consent.
+function PunchActionButton({
+  isCheckedIn,
+  liveTimer,
+  geo,
+  loading,
+  onPunch,
+  onEnableLocation,
+}: {
+  isCheckedIn: boolean
+  liveTimer: string
+  geo: { latitude: number; longitude: number } | null
+  loading: boolean
+  onPunch: (coords: { latitude: number; longitude: number } | null) => void
+  onEnableLocation: () => Promise<{ latitude: number; longitude: number } | null>
+}) {
+  const [alertOpen, setAlertOpen] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const label = isCheckedIn ? 'Check-out' : 'Check-in'
+  const colorClass = isCheckedIn
+    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+  const Icon = isCheckedIn ? LogOut : LogIn
+
+  // Click handling — location is REQUIRED for every punch. The flow:
+  //   1. Have coords already → submit with them.
+  //   2. Otherwise re-query the browser once (the user may have JUST
+  //      enabled location after the initial denial).
+  //   3. Still no coords → open the alert. The alert has no "submit
+  //      anyway" escape hatch any more — the only forward path is
+  //      "Try again" once the user has fixed their browser permission.
+  const handleClick = async () => {
+    if (geo) {
+      onPunch(geo)
+      return
+    }
+    setRetrying(true)
+    try {
+      const fresh = await onEnableLocation()
+      if (fresh) {
+        onPunch(fresh)
+        return
+      }
+    } finally {
+      setRetrying(false)
+    }
+    setAlertOpen(true)
+  }
+
+  return (
+    <>
+      <Button
+        onClick={handleClick}
+        loading={loading || retrying}
+        className={colorClass}
+      >
+        <Icon className="size-4 me-2" />
+        <div className="flex flex-col items-start leading-tight">
+          <span className="text-xs">{label}</span>
+          <span className="text-xs tabular-nums">{liveTimer}</span>
+        </div>
+      </Button>
+      <AlertModal
+        open={alertOpen}
+        onOpenChange={setAlertOpen}
+        variant="warning"
+        title="Location is required"
+        description={(
+          <>
+            We couldn&rsquo;t read your GPS, so we can&rsquo;t record this{' '}
+            <span className="font-medium text-foreground">{label.toLowerCase()}</span>{' '}
+            yet — every punch is tagged with where it happened.
+            <br />
+            Open your browser&rsquo;s site settings, allow location for this
+            site, then try again.
+          </>
+        )}
+        cancelLabel="Cancel"
+        onCancel={() => { /* just close */ }}
+        confirmLabel="Try again"
+        onConfirm={async () => {
+          const fresh = await onEnableLocation()
+          if (fresh) onPunch(fresh)
+        }}
+      />
+    </>
+  )
 }
 
 function DayDetailDialog({

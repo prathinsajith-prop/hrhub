@@ -12,8 +12,9 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Fingerprint, ArrowLeft, Plus, Trash2, Copy, Send, Pencil,
-    Webhook, KeyRound, Code2, Terminal, ShieldCheck,
+    Webhook, KeyRound, Code2, Terminal, ShieldCheck, Upload,
 } from 'lucide-react'
+import { BulkMappingsImportDialog } from './BulkMappingsImportDialog'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -78,6 +79,7 @@ function BiometricMappingTab() {
     const { data, isLoading } = useBiometricMappings()
     const remove = useDeleteMapping()
     const [addOpen, setAddOpen] = useState(false)
+    const [bulkOpen, setBulkOpen] = useState(false)
     const [editing, setEditing] = useState<BiometricMapping | null>(null)
     const [removing, setRemoving] = useState<BiometricMapping | null>(null)
     const rows = data ?? []
@@ -91,10 +93,16 @@ function BiometricMappingTab() {
                         {t('biometric.mapping.subtitle', 'Each row links a biometric device user (or external system ID) to an HRHub employee — so punch imports can resolve which row belongs to which person.')}
                     </p>
                 </div>
-                <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5 shrink-0">
-                    <Plus className="size-4" />
-                    {t('biometric.mapping.add', 'Add mapping')}
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} className="gap-1.5">
+                        <Upload className="size-4" />
+                        {t('biometric.mapping.bulkImport', 'Bulk import')}
+                    </Button>
+                    <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+                        <Plus className="size-4" />
+                        {t('biometric.mapping.add', 'Add mapping')}
+                    </Button>
+                </div>
             </div>
 
             <Card>
@@ -172,6 +180,7 @@ function BiometricMappingTab() {
             </Card>
 
             <AddMappingDialog open={addOpen} onOpenChange={setAddOpen} />
+            <BulkMappingsImportDialog open={bulkOpen} onOpenChange={setBulkOpen} />
             <EditMappingDialog
                 mapping={editing}
                 onClose={() => setEditing(null)}

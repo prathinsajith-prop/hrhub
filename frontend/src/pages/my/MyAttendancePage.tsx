@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom'
 import {
   Calendar, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
   CalendarDays, Filter, MoreHorizontal, X, FileClock, MonitorSmartphone,
-  LogIn, LogOut, MapPin, MapPinOff,
+  LogIn, LogOut, MapPinOff,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -32,7 +32,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, toast,
 } from '@/components/ui/overlays'
 import { Input } from '@/components/ui/input'
 import { ROUTES } from '@/lib/routes'
@@ -224,19 +224,61 @@ export function MyAttendancePage() {
   // permission is granted. Mirrors the policy on physical biometric devices
   // (you can't punch in without being at the reader). Check-out is still
   // allowed without location since the user is already on premises.
+  //
+  // We treat the Permissions API as a *hint*, not a hard gate. Some browsers
+  // (older Safari, in-app webviews, embedded WebKit) stall at `'checking'`
+  // or return `'prompt'` even when the underlying OS already granted the
+  // permission. So instead of disabling check-in until we see `'granted'`,
+  // we always attempt the geolocation read on click and react to what
+  // actually comes back.
   const geo = useGeolocationPermission()
-  const locationReady = geo.status === 'granted'
+  const locationDenied = geo.status === 'denied'
   const locationUnsupported = geo.status === 'unsupported'
 
-  const handleCheckIn = () => {
-    if (!employeeId) return
-    if (!locationReady) {
-      // Defensive — the button is disabled in this state, but a stray call
-      // shouldn't slip through.
-      void geo.request()
+  const handleCheckIn = async () => {
+    if (!employeeId) {
+      toast.error(
+        'Could not find your employee record',
+        'Refresh the page or contact HR if this keeps happening.',
+      )
       return
     }
-    checkIn.mutate(employeeId)
+    if (locationUnsupported) {
+      toast.error(
+        'Location not available',
+        'This device does not provide geolocation, so attendance check-in is unavailable here.',
+      )
+      return
+    }
+
+    // Always re-request on click. This both prompts the user when needed
+    // AND refreshes our cached position so the check-in is anchored to
+    // *now* rather than an old reading. The hook resolves with `null` on
+    // failure (denied / timeout / unavailable) — we treat that as the
+    // signal to surface a toast and bail instead of silently no-op'ing.
+    const pos = await geo.request()
+    if (!pos) {
+      if (geo.status === 'denied') {
+        toast.error(
+          'Location is blocked',
+          'Enable location for this site in your browser settings, then try again.',
+        )
+      } else {
+        toast.error(
+          'Could not read your location',
+          'Make sure location is on and try once more.',
+        )
+      }
+      return
+    }
+    checkIn.mutate(employeeId, {
+      onError: (err: unknown) => {
+        toast.error(
+          'Check-in failed',
+          err instanceof Error ? err.message : 'Please try again in a moment.',
+        )
+      },
+    })
   }
   const handleCheckOut = () => {
     if (!employeeId) return
@@ -374,11 +416,30 @@ export function MyAttendancePage() {
               <span className="text-xs leading-none tabular-nums">{liveTimer}</span>
             </div>
           </Button>
-        ) : locationReady ? (
+        ) : (
+          // The check-in button is always clickable (unless geolocation is
+          // entirely unsupported by the device). Clicking attempts a fresh
+          // geolocation read — if the browser hasn't asked yet it'll prompt,
+          // if it's denied the handler surfaces a clear toast, and if the
+          // device has no API at all the button is disabled with a hint.
+          //
+          // Previous behaviour disabled the button on `geo.status !== 'granted'`,
+          // which left the button frozen during the Permissions API's
+          // `'checking'` window AND in browsers that report `'prompt'` even
+          // when the OS-level permission is already granted. That created
+          // the "location is on but check-in is impossible" bug — fixed
+          // by trusting the click + the geolocation result, not the
+          // cached permission state.
           <Button
             onClick={handleCheckIn}
             loading={checkIn.isPending}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            disabled={locationUnsupported}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60"
+            title={locationUnsupported
+              ? 'This device does not provide geolocation, so check-in is unavailable here.'
+              : locationDenied
+                ? 'Location is blocked. We will ask you to re-enable it on click.'
+                : 'Click to check in. We will ask for location if needed.'}
           >
             <LogIn className="size-4 me-1" />
             <div className="flex flex-col items-start">
@@ -386,60 +447,18 @@ export function MyAttendancePage() {
               <span className="text-xs leading-none tabular-nums">{liveTimer}</span>
             </div>
           </Button>
-        ) : (
-          // Location not granted — block check-in and surface a primary CTA
-          // that re-requests permission. Disabled "Check-in" stays visible so
-          // users still see what they're trying to do.
-          <div className="flex items-center gap-2">
-            <Button
-              disabled
-              className="bg-emerald-600/40 text-white cursor-not-allowed"
-              title="Enable location to check in"
-            >
-              <LogIn className="size-4 me-1" />
-              <div className="flex flex-col items-start">
-                <span className="text-xs leading-none">Check-in</span>
-                <span className="text-[10px] leading-none opacity-80">Location required</span>
-              </div>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => geo.request()}
-              disabled={locationUnsupported}
-              title={locationUnsupported
-                ? 'This device does not support geolocation'
-                : geo.status === 'denied'
-                  ? 'Permission was blocked — re-enable it in your browser/OS settings'
-                  : 'Allow location access to check in'}
-              className="gap-1.5"
-            >
-              {locationUnsupported ? (
-                <MapPinOff className="size-4" />
-              ) : (
-                <MapPin className="size-4" />
-              )}
-              <span className="text-xs">
-                {locationUnsupported
-                  ? 'Not supported'
-                  : geo.status === 'denied'
-                    ? 'Unblock location'
-                    : 'Enable location'}
-              </span>
-            </Button>
-          </div>
         ))}
       </div>
-      {punchAllowed && !isCheckedIn && !locationReady && (
-        // Helper text under the widget so users understand why the action is
-        // gated. Kept short — the button title="" carries the long-form hint.
+      {punchAllowed && !isCheckedIn && (locationDenied || locationUnsupported) && (
+        // Helper text only when the situation actually needs HR / the user
+        // to do something (denied or unsupported). The `'checking'` and
+        // `'prompt'` states are silent — the button handler will prompt
+        // when it's clicked.
         <p className="mt-2 text-[11px] text-muted-foreground flex items-center gap-1.5">
           <MapPinOff className="size-3.5" />
           {locationUnsupported
-            ? 'Your device does not provide geolocation, so attendance check-in is unavailable here.'
-            : geo.status === 'denied'
-              ? 'Location is blocked. Open your browser settings and allow location for this site, then click "Unblock location".'
-              : 'Click "Enable location" so we can record where the check-in happened.'}
+            ? 'Your device does not provide geolocation, so check-in is unavailable here.'
+            : 'Location is blocked. Open your browser settings, allow location for this site, then click Check-in again.'}
         </p>
       )}
 

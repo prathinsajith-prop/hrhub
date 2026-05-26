@@ -633,6 +633,13 @@ async function handlePunch(
     const denied = await isAttendanceFlagDisabled(user.tenantId, targetEmpId, 'punch')
     if (denied) return reply.code(403).send(e403(denied))
 
+    // Location is required for every self-service punch — guards against a
+    // user spoofing a punch via devtools/curl. The portal UI already blocks
+    // submit when geo is null; this is the server-side back-stop.
+    if (typeof body.latitude !== 'number' || typeof body.longitude !== 'number') {
+        return reply.code(400).send(e400('Location is required to record a punch. Enable location and try again.'))
+    }
+
     const date = todayISO()
     const now = new Date()
 

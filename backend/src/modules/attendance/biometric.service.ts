@@ -124,22 +124,69 @@ export async function updateMapping(
     patch: UpdateMappingInput,
 ) {
     const set: Record<string, unknown> = { updatedAt: new Date() }
+    let nextMapperId: string | null = null
     if (patch.mapperId !== undefined) {
         const trimmed = patch.mapperId.trim()
-        if (!trimmed) throw Object.assign(new Error('mapperId cannot be empty'), { statusCode: 400 })
+        if (!trimmed) throw Object.assign(new Error('Mapper ID cannot be empty.'), { statusCode: 400 })
+        nextMapperId = trimmed
         set.mapperId = trimmed
     }
     if (patch.label !== undefined) set.label = patch.label ?? null
-    const [row] = await db
-        .update(biometricIdMappings)
-        .set(set as Partial<typeof biometricIdMappings.$inferInsert>)
-        .where(and(
-            eq(biometricIdMappings.tenantId, tenantId),
-            eq(biometricIdMappings.id, id),
-            isNull(biometricIdMappings.deletedAt),
-        ))
-        .returning()
-    return row ?? null
+
+    // Friendly pre-check (mirrors createMapping). The partial UNIQUE index on
+    // (tenant_id, mapper_id) WHERE deleted_at IS NULL is the source of truth —
+    // it stops races — but we always lose a 23505 error message readability
+    // contest. Catch the common case here so HR sees the employee they're
+    // colliding with, not a Postgres constraint name.
+    if (nextMapperId !== null) {
+        const [existing] = await db
+            .select({
+                id: biometricIdMappings.id,
+                employeeNo: employees.employeeNo,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+            })
+            .from(biometricIdMappings)
+            .innerJoin(employees, eq(employees.id, biometricIdMappings.employeeId))
+            .where(and(
+                eq(biometricIdMappings.tenantId, tenantId),
+                eq(biometricIdMappings.mapperId, nextMapperId),
+                isNull(biometricIdMappings.deletedAt),
+            ))
+            .limit(1)
+        if (existing && existing.id !== id) {
+            const owner = `${existing.firstName} ${existing.lastName}`.trim()
+            const owned = owner || existing.employeeNo || 'another employee'
+            throw Object.assign(
+                new Error(`Mapper ID "${nextMapperId}" is already assigned to ${owned}. Each mapping ID can only be used once.`),
+                { statusCode: 409 },
+            )
+        }
+    }
+
+    try {
+        const [row] = await db
+            .update(biometricIdMappings)
+            .set(set as Partial<typeof biometricIdMappings.$inferInsert>)
+            .where(and(
+                eq(biometricIdMappings.tenantId, tenantId),
+                eq(biometricIdMappings.id, id),
+                isNull(biometricIdMappings.deletedAt),
+            ))
+            .returning()
+        return row ?? null
+    } catch (err: unknown) {
+        // Concurrent update beat our pre-check to the unique index. Surface
+        // a friendly message instead of leaking the Postgres error string.
+        const code = (err as { code?: string } | null)?.code
+        if (code === '23505' && nextMapperId !== null) {
+            throw Object.assign(
+                new Error(`Mapper ID "${nextMapperId}" is already assigned to another employee. Each mapping ID can only be used once.`),
+                { statusCode: 409 },
+            )
+        }
+        throw err
+    }
 }
 
 export async function softDeleteMapping(tenantId: string, id: string) {
@@ -638,4 +685,247 @@ export async function exportPunches(
 function formatPunchTime(d: Date): string {
     if (!(d instanceof Date) || Number.isNaN(d.getTime())) return ''
     return d.toISOString().slice(11, 19)
+}
+
+// ─── Bulk update of biometric mappings ───────────────────────────────────────
+//
+// Three-stage flow mirroring the assets / jobs bulk import:
+//   1. listUnmappedEmployees() — every active employee in the tenant that
+//      doesn't yet have a live row in biometric_id_mappings. The template
+//      ships pre-populated with this list so HR just types device IDs.
+//   2. validateBulkMappingRowsSync() — pure shape + uniqueness check.
+//      Tested in isolation.
+//   3. bulkCreateMappings() — re-validates + inserts everything in one
+//      transaction. Drops invalid rows; only the valid ones land.
+//
+// One-to-one enforcement: even though the schema allows multiple mappings
+// per employee, *this bulk flow* enforces one-to-one as the user
+// requested — a row is rejected if (a) the mapping_id is already in the
+// DB, (b) the mapping_id appears twice in the upload, (c) the employee
+// already has a live mapping (single-create still allows multi-mapping,
+// but bulk-update doesn't).
+
+export interface UnmappedEmployee {
+    employeeId: string
+    employeeNo: string | null
+    employeeName: string
+    email: string | null
+}
+
+/**
+ * Returns every active, non-archived employee in the tenant who does NOT
+ * already have a live biometric mapping. The template generator and the
+ * bulk validator both build their employee lookup from this list — keeps
+ * the "unmapped" definition in one place.
+ */
+export async function listUnmappedEmployees(tenantId: string): Promise<UnmappedEmployee[]> {
+    // LEFT JOIN biometric_id_mappings (live rows only) and keep rows where
+    // the join didn't find anything — that's the unmapped set. One query,
+    // tenant-scoped, no per-employee fan-out.
+    const rows = await db
+        .select({
+            employeeId: employees.id,
+            employeeNo: employees.employeeNo,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            email: employees.email,
+            workEmail: employees.workEmail,
+            mappingId: biometricIdMappings.id,
+        })
+        .from(employees)
+        .leftJoin(
+            biometricIdMappings,
+            and(
+                eq(biometricIdMappings.employeeId, employees.id),
+                eq(biometricIdMappings.tenantId, tenantId),
+                isNull(biometricIdMappings.deletedAt),
+            ),
+        )
+        .where(and(
+            eq(employees.tenantId, tenantId),
+            eq(employees.isArchived, false),
+            eq(employees.status, 'active'),
+            isNull(biometricIdMappings.id),
+        ))
+        .orderBy(employees.employeeNo)
+    return rows.map((r) => ({
+        employeeId: r.employeeId,
+        employeeNo: r.employeeNo,
+        employeeName: `${r.firstName} ${r.lastName}`.trim(),
+        email: r.workEmail ?? r.email,
+    }))
+}
+
+export interface BulkMappingInputRow {
+    rowNumber: number
+    employeeNo?: string | null
+    mappingId?: string | null
+    label?: string | null
+}
+
+export interface BulkMappingRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    /** Echoed employee name when employee_no resolves — handy for preview. */
+    employeeName?: string
+    /** Echoed mapping_id (trimmed) so the preview can show the canonical form. */
+    mappingId?: string
+    /** Set when ok — payload ready for DB insert. */
+    resolved?: {
+        employeeId: string
+        mapperId: string
+        label: string | null
+    }
+}
+
+export interface BulkMappingValidationResult {
+    rows: BulkMappingRowResult[]
+    summary: { total: number; valid: number; invalid: number }
+}
+
+export interface BulkMappingLookups {
+    /** employee_no → { id, name } for unmapped employees only. Employees who
+     *  already have a live mapping are intentionally absent from this map —
+     *  bulk update refuses to re-assign. */
+    unmappedByNo: Map<string, { id: string; name: string }>
+    /** Lower-cased mapping IDs already present in this tenant's live rows. */
+    existingMapperIds: Set<string>
+}
+
+/**
+ * Pure row-validation core. Same testing pattern as the bulk-assets and
+ * bulk-jobs validators. Rules:
+ *   • employee_no required
+ *   • mapping_id required (trimmed; max 100 chars)
+ *   • employee_no must resolve to an *unmapped* employee in the tenant
+ *   • mapping_id must be unique in the upload AND not exist in the DB
+ *   • label optional (max 200 chars)
+ */
+export function validateBulkMappingRowsSync(
+    rows: BulkMappingInputRow[],
+    lookups: BulkMappingLookups,
+): BulkMappingValidationResult {
+    // Pre-pass: count how many times each mapping_id appears in the upload.
+    // Anything > 1 is flagged on every row carrying that ID so HR fixes
+    // the sheet rather than picking which row to drop.
+    const mappingIdOccurrences = new Map<string, number>()
+    for (const r of rows) {
+        const mid = (r.mappingId ?? '').trim().toLowerCase()
+        if (mid) mappingIdOccurrences.set(mid, (mappingIdOccurrences.get(mid) ?? 0) + 1)
+    }
+
+    const results: BulkMappingRowResult[] = rows.map((r) => {
+        const errors: string[] = []
+        const empNo = (r.employeeNo ?? '').trim()
+        const mappingIdRaw = (r.mappingId ?? '').trim()
+        const label = (r.label ?? '').trim() || null
+
+        if (!empNo) errors.push('employee_no is required')
+        if (!mappingIdRaw) errors.push('mapping_id is required')
+        if (mappingIdRaw.length > 100) errors.push('mapping_id must be 100 characters or fewer')
+        if (label && label.length > 200) errors.push('label must be 200 characters or fewer')
+
+        // Resolve employee → unmapped only. Two distinct errors so HR
+        // sees the right hint:
+        //   • "employee not found" → wrong employee_no / typo
+        //   • "employee already mapped" → row should be removed
+        let employee: { id: string; name: string } | undefined
+        if (empNo) {
+            employee = lookups.unmappedByNo.get(empNo)
+            if (!employee) {
+                errors.push(`employee "${empNo}" not found or already has a biometric mapping`)
+            }
+        }
+
+        // Uniqueness — file then DB.
+        if (mappingIdRaw) {
+            const lc = mappingIdRaw.toLowerCase()
+            if ((mappingIdOccurrences.get(lc) ?? 0) > 1) {
+                errors.push(`mapping_id "${mappingIdRaw}" is duplicated in this file`)
+            } else if (lookups.existingMapperIds.has(lc)) {
+                errors.push(`mapping_id "${mappingIdRaw}" is already assigned to another employee`)
+            }
+        }
+
+        const ok = errors.length === 0
+        return {
+            rowNumber: r.rowNumber,
+            ok,
+            errors,
+            employeeName: employee?.name,
+            mappingId: mappingIdRaw || undefined,
+            resolved: ok && employee
+                ? {
+                      employeeId: employee.id,
+                      mapperId: mappingIdRaw,
+                      label,
+                  }
+                : undefined,
+        }
+    })
+
+    return {
+        rows: results,
+        summary: {
+            total: results.length,
+            valid: results.filter((r) => r.ok).length,
+            invalid: results.filter((r) => !r.ok).length,
+        },
+    }
+}
+
+/**
+ * Validate a batch of rows. Loads the tenant's unmapped-employee map +
+ * existing mapper-ids in two read-only queries, then hands off to the
+ * pure sync core. Returns per-row outcome for the UI preview.
+ */
+export async function validateBulkMappingRows(
+    tenantId: string,
+    rows: BulkMappingInputRow[],
+): Promise<BulkMappingValidationResult> {
+    const unmapped = await listUnmappedEmployees(tenantId)
+    const unmappedByNo = new Map<string, { id: string; name: string }>()
+    for (const e of unmapped) {
+        if (e.employeeNo) {
+            unmappedByNo.set(e.employeeNo, { id: e.employeeId, name: e.employeeName })
+        }
+    }
+
+    const existingMapperIds = new Set<string>()
+    const live = await db
+        .select({ mapperId: biometricIdMappings.mapperId })
+        .from(biometricIdMappings)
+        .where(and(eq(biometricIdMappings.tenantId, tenantId), isNull(biometricIdMappings.deletedAt)))
+    for (const r of live) existingMapperIds.add(r.mapperId.toLowerCase())
+
+    return validateBulkMappingRowsSync(rows, { unmappedByNo, existingMapperIds })
+}
+
+/**
+ * Insert all valid rows in one transaction. Re-runs validation server-
+ * side and silently drops the invalid rows — the UI told HR which ones
+ * those were at the preview step. One bulk INSERT regardless of count.
+ */
+export async function bulkCreateMappings(
+    tenantId: string,
+    rows: BulkMappingInputRow[],
+    createdBy: string | null,
+): Promise<BulkMappingValidationResult & { created: number; skipped: number }> {
+    const validation = await validateBulkMappingRows(tenantId, rows)
+    const insertable = validation.rows.filter((r) => r.ok && r.resolved)
+    if (insertable.length === 0) {
+        return { ...validation, created: 0, skipped: validation.summary.invalid }
+    }
+    await db.transaction(async (tx) => {
+        const values = insertable.map((r) => ({
+            tenantId,
+            employeeId: r.resolved!.employeeId,
+            mapperId: r.resolved!.mapperId,
+            label: r.resolved!.label,
+            createdBy,
+        }))
+        await tx.insert(biometricIdMappings).values(values)
+    })
+    return { ...validation, created: insertable.length, skipped: validation.summary.invalid }
 }
