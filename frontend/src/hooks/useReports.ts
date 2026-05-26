@@ -298,6 +298,47 @@ export function usePerformanceReport() {
     })
 }
 
+// ─── Unified Document Expiry ────────────────────────────────────────────
+
+export type DocType = 'visa' | 'passport' | 'emirates_id' | 'labour_card' | 'contract'
+
+export interface DocExpiryRow {
+    employeeId: string
+    employeeNo: string | null
+    fullName: string
+    avatarUrl: string | null
+    department: string | null
+    designation: string | null
+    nationality: string | null
+    docType: DocType
+    docNumber: string | null
+    expiryDate: string
+    daysLeft: number
+    urgency: 'expired' | 'critical' | 'urgent' | 'normal'
+}
+
+export interface DocExpiryBucket {
+    total: number
+    expired: number
+    critical: number
+    urgent: number
+    normal: number
+}
+
+export interface DocumentExpiryReport {
+    windowDays: number
+    byType: Record<DocType | 'total', DocExpiryBucket>
+    documents: DocExpiryRow[]
+}
+
+export function useDocumentExpiryReport(days = 90) {
+    return useQuery({
+        queryKey: ['reports', 'document-expiry', days],
+        queryFn: () => api.get<{ data: DocumentExpiryReport }>(`/reports/document-expiry?days=${days}`).then((r) => r.data),
+        staleTime: 5 * 60_000,
+    })
+}
+
 // ─── Combined summary (BFF) ─────────────────────────────────────────────
 
 export interface ReportsSummary {
@@ -310,6 +351,7 @@ export interface ReportsSummary {
     turnover: TurnoverReport
     onboarding: OnboardingReport
     performance: PerformanceReport
+    documentExpiry: DocumentExpiryReport
 }
 
 export function useReportsSummary(days = 90) {

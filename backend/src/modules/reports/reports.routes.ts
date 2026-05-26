@@ -106,6 +106,19 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data })
     })
 
+    // GET /api/v1/reports/document-expiry?days=90
+    // Unified expiry view across visa, passport, EID, labour card, contract.
+    // Supersedes /reports/visa-expiry on the FE; the latter stays for legacy.
+    fastify.get('/document-expiry', {
+        schema: { tags: ['Reports'] },
+        ...reportsAuth,
+    }, async (request: any, reply: any) => {
+        const tenantId = request.user.tenantId
+        const days = Number((request.query as any).days ?? 90)
+        const data = await getDocumentExpiryReport(tenantId, days)
+        return reply.send({ data })
+    })
+
     // BFF aggregator — single round trip for the full reports page. Includes
     // every sub-report the ReportsPage needs, so the page never makes more
     // than one request on first load. All sub-reports run in parallel.
@@ -120,6 +133,7 @@ export default async function (fastify: any): Promise<void> {
             headcount, payrollSummary, visaExpiry, proCosts,
             attendanceSummary, leaveSummary,
             turnover, onboarding, performance,
+            documentExpiry,
         ] = await Promise.all([
             getHeadcountReport(tenantId),
             getPayrollSummaryReport(tenantId),
@@ -130,11 +144,13 @@ export default async function (fastify: any): Promise<void> {
             getTurnoverReport(tenantId, 12),
             getOnboardingReport(tenantId),
             getPerformanceReport(tenantId),
+            getDocumentExpiryReport(tenantId, days),
         ])
         return reply.send({
             headcount, payrollSummary, visaExpiry, proCosts,
             attendanceSummary, leaveSummary,
             turnover, onboarding, performance,
+            documentExpiry,
         })
     })
 }

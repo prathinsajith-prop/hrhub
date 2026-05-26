@@ -252,16 +252,27 @@ export function AttendancePage() {
     // `employeeId → first 'in' punch` so each row in Punch History can
     // surface "how the check-in was recorded" and "where".
     const { data: punchesData } = usePunchesForDay(historyDate, filterEmployee || undefined)
-    const firstInByEmployee = useMemo(() => {
-        const map = new Map<string, AttendancePunchEvent>()
+    // Two indexes per day: the FIRST 'in' (opens the day) and the LAST
+    // 'out' (closes the day). The Punch History row surfaces each one
+    // under its respective time cell so location follows the event it
+    // belongs to — punching in at HQ and out at the client site renders
+    // as two distinct location chips rather than a single "first punch"
+    // chip that misrepresents either half.
+    const { firstInByEmployee, lastOutByEmployee } = useMemo(() => {
+        const firstIn = new Map<string, AttendancePunchEvent>()
+        const lastOut = new Map<string, AttendancePunchEvent>()
         const list = punchesData ?? []
-        // Backend already sorts by recordedAt ASC, so the first 'in' we
-        // encounter per employee is the one that opens the day.
+        // Backend sorts ASC by recordedAt. First 'in' we see per employee
+        // is the open; we keep overwriting `lastOut` so we end up with
+        // the latest 'out'.
         for (const p of list) {
-            if (p.punchType !== 'in') continue
-            if (!map.has(p.employeeId)) map.set(p.employeeId, p)
+            if (p.punchType === 'in' && !firstIn.has(p.employeeId)) {
+                firstIn.set(p.employeeId, p)
+            } else if (p.punchType === 'out') {
+                lastOut.set(p.employeeId, p)
+            }
         }
-        return map
+        return { firstInByEmployee: firstIn, lastOutByEmployee: lastOut }
     }, [punchesData])
 
     // Map-preview modal for clicking a row's location pin. Renders an
@@ -435,22 +446,76 @@ export function AttendancePage() {
         {
             accessorKey: 'checkIn',
             header: 'Punch In',
-            cell: ({ getValue }) => (
-                <span className="font-mono text-[11px] text-green-700 dark:text-green-400">
-                    {fmtTime(getValue() as string | undefined)}
-                </span>
-            ),
-            size: 90,
+            // Three pieces per cell, vertically stacked:
+            //   row 1 — Time (bold mono) + source pill (e.g. "Web")
+            //   row 2 — Location chip (red pin + place name, clickable)
+            //
+            // Source + location both describe the same event, so they
+            // belong in the same cell as the time they annotate. Pulling
+            // them into their own columns (as we used to) made HR read
+            // left-to-right across three columns to reconstruct one fact.
+            cell: ({ row, getValue }) => {
+                const p = firstInByEmployee.get(row.original.employeeId)
+                const time = fmtTime(getValue() as string | undefined)
+                if (!time && !p) {
+                    return <span className="text-xs text-muted-foreground/60">—</span>
+                }
+                return (
+                    <div className="flex flex-col gap-1 min-w-0 py-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                                {time || '—'}
+                            </span>
+                            {p && <PunchSourceBadge source={p.source} />}
+                        </div>
+                        <PunchLocationChip
+                            punch={p}
+                            onOpen={(p) => setLocationModal({
+                                employeeName: row.original.employeeName ?? empMap.get(row.original.employeeId)?.name ?? '—',
+                                recordedAt: p.recordedAt,
+                                source: p.source,
+                                locationName: p.locationName,
+                                latitude: p.latitude,
+                                longitude: p.longitude,
+                            })}
+                        />
+                    </div>
+                )
+            },
+            size: 200,
         },
         {
             accessorKey: 'checkOut',
             header: 'Punch Out',
-            cell: ({ getValue }) => (
-                <span className="font-mono text-[11px] text-red-700 dark:text-red-400">
-                    {fmtTime(getValue() as string | undefined)}
-                </span>
-            ),
-            size: 90,
+            cell: ({ row, getValue }) => {
+                const p = lastOutByEmployee.get(row.original.employeeId)
+                const time = fmtTime(getValue() as string | undefined)
+                if (!time && !p) {
+                    return <span className="text-xs text-muted-foreground/60">—</span>
+                }
+                return (
+                    <div className="flex flex-col gap-1 min-w-0 py-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[12px] font-semibold text-rose-700 dark:text-rose-400 tabular-nums">
+                                {time || '—'}
+                            </span>
+                            {p && <PunchSourceBadge source={p.source} />}
+                        </div>
+                        <PunchLocationChip
+                            punch={p}
+                            onOpen={(p) => setLocationModal({
+                                employeeName: row.original.employeeName ?? empMap.get(row.original.employeeId)?.name ?? '—',
+                                recordedAt: p.recordedAt,
+                                source: p.source,
+                                locationName: p.locationName,
+                                latitude: p.latitude,
+                                longitude: p.longitude,
+                            })}
+                        />
+                    </div>
+                )
+            },
+            size: 200,
         },
         {
             accessorKey: 'hoursWorked',
@@ -484,70 +549,6 @@ export function AttendancePage() {
             size: 90,
         },
         {
-            id: 'source',
-            header: 'Source',
-            // Surfaces *how* the check-in was recorded: the employee tapping
-            // the web button, a mobile app, a biometric / device punch from
-            // a vendor integration, or HR back-filling the row manually.
-            // Knowing this matters when HR audits a punch — a manual entry
-            // by an HR Manager is fundamentally different from a biometric
-            // device reading at the office door.
-            cell: ({ row }) => {
-                const p = firstInByEmployee.get(row.original.employeeId)
-                return <PunchSourceBadge source={p?.source ?? null} />
-            },
-            size: 120,
-        },
-        {
-            id: 'location',
-            header: 'Location',
-            // Place name from reverse-geocoding (or the device's registered
-            // location). Click → modal with an embedded map. When no coords
-            // were captured (desktop without GPS, location permission denied,
-            // manual HR entry) we render a quiet dash so the column never
-            // looks broken.
-            cell: ({ row }) => {
-                const p = firstInByEmployee.get(row.original.employeeId)
-                if (!p) return <span className="text-xs text-muted-foreground">—</span>
-                const hasCoords = !!(p.latitude && p.longitude)
-                const label = p.locationName ?? (hasCoords ? `${p.latitude}, ${p.longitude}` : null)
-                if (!label) return <span className="text-xs text-muted-foreground">—</span>
-                return (
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            setLocationModal({
-                                employeeName: row.original.employeeName ?? empMap.get(row.original.employeeId)?.name ?? '—',
-                                recordedAt: p.recordedAt,
-                                source: p.source,
-                                locationName: p.locationName,
-                                latitude: p.latitude,
-                                longitude: p.longitude,
-                            })
-                        }}
-                        className={cn(
-                            'group flex items-center gap-1.5 text-left text-xs max-w-[220px]',
-                            hasCoords
-                                ? 'text-foreground hover:text-primary'
-                                : 'text-muted-foreground cursor-default',
-                        )}
-                        disabled={!hasCoords}
-                        title={hasCoords ? 'View on map' : 'No coordinates captured'}
-                    >
-                        <MapPin
-                            className={cn(
-                                'size-3.5 shrink-0',
-                                hasCoords ? 'text-rose-500 group-hover:text-primary' : 'text-muted-foreground/60',
-                            )}
-                        />
-                        <span className="truncate">{label}</span>
-                    </button>
-                )
-            },
-            size: 220,
-        },
-        {
             accessorKey: 'notes',
             header: 'Notes',
             cell: ({ getValue }) => (
@@ -575,7 +576,7 @@ export function AttendancePage() {
             ),
             size: 80,
         },
-    ], [empMap, orgMap, handleEdit, firstInByEmployee])
+    ], [empMap, orgMap, handleEdit, firstInByEmployee, lastOutByEmployee])
 
     return (
         <PageWrapper>
@@ -2146,30 +2147,29 @@ function normalizeImportTime(raw: string): string {
 //   Manual     → amber  (HR back-filled the row — i.e. *not* a real punch)
 //   — (null)   → grey   (no punch event recorded; the row is rollup-only)
 
-const SOURCE_META: Record<AttendancePunchEvent['source'], { label: string; icon: typeof Globe; tone: string }> = {
-    web: { label: 'Web check-in', icon: Globe, tone: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900' },
-    mobile: { label: 'Mobile', icon: Smartphone, tone: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900' },
-    biometric: { label: 'Biometric', icon: Fingerprint, tone: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900' },
-    manual: { label: 'HR Manual', icon: Hand, tone: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900' },
+// Short labels — fit inside narrow table cells without wrapping.
+// Tooltips on hover spell out the full meaning ("Web check-in",
+// "HR-back-filled punch", etc.) for anyone who wants the longer form.
+const SOURCE_META: Record<AttendancePunchEvent['source'], { label: string; tooltip: string; icon: typeof Globe; tone: string }> = {
+    web: { label: 'Web', tooltip: 'Web check-in (browser)', icon: Globe, tone: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900' },
+    mobile: { label: 'Mobile', tooltip: 'Mobile app check-in', icon: Smartphone, tone: 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900' },
+    biometric: { label: 'Device', tooltip: 'Biometric / vendor device', icon: Fingerprint, tone: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900' },
+    manual: { label: 'Manual', tooltip: 'HR back-filled this punch', icon: Hand, tone: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900' },
 }
 
 function PunchSourceBadge({ source }: { source: AttendancePunchEvent['source'] | null }) {
-    if (!source) {
-        return (
-            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                <span className="size-1 rounded-full bg-muted-foreground/40" />
-                No event
-            </span>
-        )
-    }
+    if (!source) return null
     const meta = SOURCE_META[source]
     const Icon = meta.icon
     return (
-        <span className={cn(
-            'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
-            meta.tone,
-        )}>
-            <Icon className="size-3" />
+        <span
+            title={meta.tooltip}
+            className={cn(
+                'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium ring-1 whitespace-nowrap leading-none',
+                meta.tone,
+            )}
+        >
+            <Icon className="size-2.5" />
             {meta.label}
         </span>
     )
@@ -2181,6 +2181,65 @@ function PunchSourceBadge({ source }: { source: AttendancePunchEvent['source'] |
 // what's labelled matches what's pinned. Falls back gracefully when
 // coordinates are missing — the modal still surfaces the locationName /
 // recorded time, just without the map.
+/**
+ * Small location chip rendered beneath a punch time in the Punch History
+ * table. Three visual states:
+ *
+ *   • No punch event       → nothing rendered (the daily rollup carried no
+ *                            in/out event for this slot — usually means
+ *                            it was back-filled via the rollup directly).
+ *   • Coords present       → red map-pin + place name, clickable. Opens
+ *                            the embedded-map dialog.
+ *   • No coords but punch  → muted "Location off" pill so HR knows the
+ *                            punch happened but geo wasn't captured.
+ */
+function PunchLocationChip({
+    punch,
+    onOpen,
+}: {
+    punch: AttendancePunchEvent | undefined
+    onOpen: (p: AttendancePunchEvent) => void
+}) {
+    if (!punch) return null
+    const hasCoords = !!(punch.latitude && punch.longitude)
+    const label = punch.locationName ?? (hasCoords ? `${Number(punch.latitude).toFixed(3)}, ${Number(punch.longitude).toFixed(3)}` : null)
+
+    if (!label) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 whitespace-nowrap">
+                <MapPin className="size-2.5 shrink-0 opacity-50" />
+                Location off
+            </span>
+        )
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={(e) => {
+                e.stopPropagation()
+                onOpen(punch)
+            }}
+            disabled={!hasCoords}
+            className={cn(
+                'group inline-flex items-center gap-1 text-[10px] text-left max-w-[180px] leading-tight',
+                hasCoords
+                    ? 'text-muted-foreground hover:text-primary cursor-pointer'
+                    : 'text-muted-foreground cursor-default',
+            )}
+            title={hasCoords ? `View on map · ${label}` : label}
+        >
+            <MapPin
+                className={cn(
+                    'size-2.5 shrink-0',
+                    hasCoords ? 'text-rose-500 group-hover:text-primary' : 'text-muted-foreground/50',
+                )}
+            />
+            <span className="truncate">{label}</span>
+        </button>
+    )
+}
+
 function PunchLocationDialog({
     state,
     onClose,

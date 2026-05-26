@@ -1635,41 +1635,61 @@ export function EmployeeDetailPage() {
                       <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
                     </div>
                   ) : (
+                    // Dependents table.
+                    // Was 10 columns wide (Reference / Name / Birth / Relation /
+                    // Nationality / Visa / Medical / Created-by / Created / Actions)
+                    // which forced horizontal scroll on every viewport under
+                    // ~1400px. Condensed to 7 columns: the Reference is now a
+                    // mono sub-line under Name, and the audit metadata
+                    // (Created-by + Created) moved to a row tooltip — HR can
+                    // still get to it on hover but it no longer competes with
+                    // the data they actually scan.
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b bg-muted/40">
-                            {['Reference', 'Name', 'Birth Date', 'Relation', 'Nationality', 'Visa No.', 'Medical Ins.', 'Created By', 'Created', ''].map(h => (
+                            {['Name', 'Relation', 'Birth Date', 'Nationality', 'Visa No.', 'Medical Ins.', ''].map(h => (
                               <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {dependentsData.map(dep => (
-                            <tr key={dep.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 font-mono text-[11px]">{dep.reference}</td>
-                              <td className="px-4 py-2.5 font-medium">{dep.name}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
-                              <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.createdByName ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(dep.createdAt)}</td>
-                              <td className="px-4 py-2.5">
-                                <div className="flex gap-1">
-                                  <Button size="icon" variant="ghost" className="size-6"
-                                    onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
-                                    <Edit2 className="size-3" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive"
-                                    onClick={() => deleteDependent.mutate(dep.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
-                                    <Trash2 className="size-3" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                          {dependentsData.map(dep => {
+                            const auditTooltip = `Added by ${dep.createdByName ?? 'Unknown'} on ${formatDate(dep.createdAt)}`
+                            return (
+                              <tr
+                                key={dep.id}
+                                className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                                title={auditTooltip}
+                              >
+                                <td className="px-4 py-2.5">
+                                  <div className="font-medium">{dep.name}</div>
+                                  <div className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{dep.reference}</div>
+                                </td>
+                                <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
+                                <td className="px-4 py-2.5">
+                                  <div className="flex gap-1">
+                                    <Button size="icon" variant="ghost" className="size-6"
+                                      aria-label={`Edit ${dep.name}`}
+                                      title="Edit dependent"
+                                      onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
+                                      <Edit2 className="size-3" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive"
+                                      aria-label={`Remove ${dep.name}`}
+                                      title="Remove dependent"
+                                      onClick={() => deleteDependent.mutate(dep.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
+                                      <Trash2 className="size-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -2714,6 +2734,8 @@ export function EmployeeDetailPage() {
                               )}
                             </div>
                             <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive shrink-0"
+                              aria-label="Remove warning"
+                              title="Remove warning"
                               onClick={() => deleteWarning.mutate(w.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
                               <Trash2 className="size-3" />
                             </Button>
@@ -2774,6 +2796,8 @@ export function EmployeeDetailPage() {
                             </p>
                           </div>
                           <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive shrink-0"
+                            aria-label="Delete note"
+                            title="Delete note"
                             onClick={() => deleteNote.mutate(note.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
                             <Trash2 className="size-3" />
                           </Button>

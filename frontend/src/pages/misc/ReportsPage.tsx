@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -24,27 +24,50 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { useReportsSummary } from '@/hooks/useReports'
 import { usePermissions } from '@/hooks/usePermissions'
 import type {
-    PayrollTrendRow, VisaExpiryEmployee,
+    PayrollTrendRow,
     AttendanceByDepartment, AttendanceLeader,
     LeaveTopTaker,
     StalledChecklist, OnboardingByDepartment,
     PerformanceDeptRow, RecentReview,
+    DocExpiryRow, DocType,
 } from '@/hooks/useReports'
 import { COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
-import { searchDepartments, searchNationalities } from '@/lib/filters/filter-loaders'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const URGENCY_COLORS: Record<string, string> = {
-    expired: '#ef4444',
-    critical: '#f97316',
-    urgent: '#f59e0b',
-    normal: '#10b981',
+// ─── Document Expiry — config ────────────────────────────────────────────
+// Friendly labels + per-type colour tones for the unified Expiry tab.
+// Each tone lives in `ROLE_BADGE_STYLE`-style classes so adding a new doc
+// type means adding one entry here and one to the DocType union.
+
+const DOC_TYPE_LABEL: Record<DocType, string> = {
+    visa:         'Visa',
+    passport:     'Passport',
+    emirates_id:  'Emirates ID',
+    labour_card:  'Labour Card',
+    contract:     'Contract',
+}
+
+const DOC_TYPE_TONE: Record<DocType, string> = {
+    visa:         'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+    passport:     'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900',
+    emirates_id:  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+    labour_card:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+    contract:     'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+}
+
+// Urgency tone palette — used both by the donut chart and the urgency
+// summary card on the Expiry tab.
+const URGENCY_TONE: Record<'expired' | 'critical' | 'urgent' | 'normal', { color: string; label: string }> = {
+    expired:  { color: '#ef4444', label: 'Expired' },
+    critical: { color: '#f97316', label: 'Critical (≤30d)' },
+    urgent:   { color: '#f59e0b', label: 'Urgent (31–60d)' },
+    normal:   { color: '#10b981', label: 'Normal (61–90d)' },
 }
 
 const PAYROLL_REPORT_FILTERS: FilterConfig[] = [
@@ -60,24 +83,6 @@ const PAYROLL_REPORT_FILTERS: FilterConfig[] = [
     { name: 'headcount', label: 'Employee count', type: 'number_range', field: 'headcount', min: 0 },
     { name: 'net', label: 'Net pay (AED)', type: 'number_range', field: 'net', min: 0, prefix: 'AED' },
     { name: 'gross', label: 'Gross pay (AED)', type: 'number_range', field: 'gross', min: 0, prefix: 'AED' },
-]
-
-const VISA_REPORT_FILTERS: FilterConfig[] = [
-    { name: 'fullName', label: 'Employee name', type: 'text', field: 'fullName' },
-    { name: 'department', label: 'Department', type: 'autocomplete', field: 'department', onSearch: searchDepartments, placeholder: 'Search departments…' },
-    { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
-    {
-        name: 'urgency', label: 'Urgency', type: 'select', field: 'urgency',
-        options: [
-            { value: 'expired', label: 'Expired' },
-            { value: 'critical', label: 'Critical' },
-            { value: 'urgent', label: 'Urgent' },
-            { value: 'normal', label: 'Normal' },
-        ],
-    },
-    { name: 'visaExpiry', label: 'Visa expiry', type: 'date_range', field: 'visaExpiry' },
-    { name: 'daysLeft', label: 'Days remaining', type: 'number_range', field: 'daysLeft', min: -9999, max: 365 },
-    { name: 'visaType', label: 'Visa type', type: 'text', field: 'visaType' },
 ]
 
 const EMPLOYEE_STATUS_META: Record<
@@ -104,6 +109,173 @@ function EmptyChart({ message = 'No data available' }: { message?: string }) {
     )
 }
 
+/**
+ * Doc-type filter pills for the unified Expiry tab. Renders an "All" pill
+ * plus one per doc type, each with the count of documents currently
+ * expiring in that bucket. Selected pill picks up the tone defined in
+ * `DOC_TYPE_TONE` so the active filter is colour-coded to its category.
+ */
+function ExpiryTypeFilter({
+    docTypeFilter,
+    setDocTypeFilter,
+    byType,
+    loading,
+}: {
+    docTypeFilter: DocType | 'all'
+    setDocTypeFilter: (v: DocType | 'all') => void
+    byType: Record<DocType | 'total', { total: number }> | null | undefined
+    loading: boolean
+}) {
+    if (loading) {
+        return (
+            <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-24 rounded-full" />)}
+            </div>
+        )
+    }
+    const types: Array<{ key: DocType | 'all'; label: string; tone?: string }> = [
+        { key: 'all',         label: 'All Documents' },
+        { key: 'visa',        label: DOC_TYPE_LABEL.visa,        tone: DOC_TYPE_TONE.visa },
+        { key: 'passport',    label: DOC_TYPE_LABEL.passport,    tone: DOC_TYPE_TONE.passport },
+        { key: 'emirates_id', label: DOC_TYPE_LABEL.emirates_id, tone: DOC_TYPE_TONE.emirates_id },
+        { key: 'labour_card', label: DOC_TYPE_LABEL.labour_card, tone: DOC_TYPE_TONE.labour_card },
+        { key: 'contract',    label: DOC_TYPE_LABEL.contract,    tone: DOC_TYPE_TONE.contract },
+    ]
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {types.map((t) => {
+                const count = t.key === 'all' ? byType?.total.total ?? 0 : byType?.[t.key].total ?? 0
+                const active = docTypeFilter === t.key
+                return (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setDocTypeFilter(t.key)}
+                        className={cn(
+                            'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-all',
+                            active
+                                ? cn(t.tone ?? 'bg-primary/10 border-primary/30 text-primary', 'shadow-sm')
+                                : 'border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40',
+                        )}
+                    >
+                        <span>{t.label}</span>
+                        <span className={cn(
+                            'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums',
+                            active ? 'bg-background/70' : 'bg-muted',
+                        )}>
+                            {count}
+                        </span>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/**
+ * Donut + per-urgency progress bars. Drives the "Urgency Mix" card on the
+ * Expiry tab. Works on the filtered row set so swapping doc-type pills
+ * re-paints the visual immediately.
+ */
+function ExpiryUrgencyCard({ rows, loading }: { rows: DocExpiryRow[]; loading: boolean }) {
+    const data = useMemo(() => {
+        const buckets: Record<'expired' | 'critical' | 'urgent' | 'normal', number> = { expired: 0, critical: 0, urgent: 0, normal: 0 }
+        for (const r of rows) buckets[r.urgency]++
+        return (Object.keys(buckets) as Array<keyof typeof buckets>)
+            .map((k) => ({ key: k, name: URGENCY_TONE[k].label, value: buckets[k], color: URGENCY_TONE[k].color }))
+    }, [rows])
+    const total = data.reduce((s, d) => s + d.value, 0)
+    if (loading) return <ChartSkeleton height={200} />
+    if (total === 0) {
+        return (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <CheckCircle2 className="size-8 text-emerald-400" />
+                <p className="text-sm text-muted-foreground">Nothing expiring in this slice</p>
+            </div>
+        )
+    }
+    return (
+        <div className="space-y-4">
+            <ResponsiveContainer width="100%" height={140}>
+                <PieChart>
+                    <Pie data={data.filter((d) => d.value > 0)} cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value">
+                        {data.filter((d) => d.value > 0).map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: unknown, name: unknown) => [Number(v ?? 0), String(name ?? '')]} />
+                </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-2">
+                {data.map((d) => {
+                    const pct = total > 0 ? (d.value / total) * 100 : 0
+                    return (
+                        <div key={d.key} className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="size-2 rounded-full" style={{ background: d.color }} />
+                                    <span className="font-medium">{d.name}</span>
+                                </div>
+                                <span className="tabular-nums text-muted-foreground">{d.value} · {pct.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: d.color }} />
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+/**
+ * Per-department breakdown for the active doc-type filter. Sorted DESC
+ * by exposure so the riskiest department lands at the top. Capped at 8
+ * rows; an overflow row shows "+N more" so HR can still see the magnitude.
+ */
+function ExpiryByDepartmentCard({ rows, loading }: { rows: DocExpiryRow[]; loading: boolean }) {
+    const stats = useMemo(() => {
+        const m = new Map<string, { expired: number; critical: number; urgent: number; normal: number; total: number }>()
+        for (const r of rows) {
+            const key = r.department ?? 'Unassigned'
+            const s = m.get(key) ?? { expired: 0, critical: 0, urgent: 0, normal: 0, total: 0 }
+            s[r.urgency]++
+            s.total++
+            m.set(key, s)
+        }
+        return Array.from(m.entries())
+            .map(([department, v]) => ({ department, ...v }))
+            .sort((a, b) => b.total - a.total)
+    }, [rows])
+    if (loading) return <ChartSkeleton height={200} />
+    if (stats.length === 0) return <EmptyChart message="No expiring documents in this slice" />
+    const top = stats.slice(0, 8)
+    const overflow = stats.length - top.length
+    const maxTotal = Math.max(1, ...top.map((s) => s.total))
+    return (
+        <div className="space-y-2.5">
+            {top.map((s) => (
+                <div key={s.department} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium truncate pe-2">{s.department}</span>
+                        <span className="tabular-nums text-muted-foreground shrink-0">{s.total}</span>
+                    </div>
+                    {/* Stacked bar so HR sees expired vs critical vs urgent vs
+                        normal proportions per dept at a glance. */}
+                    <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden flex">
+                        {(['expired', 'critical', 'urgent', 'normal'] as const).map((u) => {
+                            const w = s[u] === 0 ? 0 : (s[u] / maxTotal) * 100
+                            return w > 0 ? <div key={u} className="h-full" style={{ width: `${w}%`, background: URGENCY_TONE[u].color }} title={`${URGENCY_TONE[u].label}: ${s[u]}`} /> : null
+                        })}
+                    </div>
+                </div>
+            ))}
+            {overflow > 0 && (
+                <p className="text-[11px] text-muted-foreground pt-1">+ {overflow} more department{overflow === 1 ? '' : 's'}</p>
+            )}
+        </div>
+    )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export function ReportsPage() {
@@ -116,13 +288,13 @@ export function ReportsPage() {
     const { data: reportsSummary, isLoading: summaryLoading, isFetching: summaryFetching, refetch: refetchSummary } = useReportsSummary(90)
     const headcount = reportsSummary?.headcount
     const payrollSummary = reportsSummary?.payrollSummary
-    const visaExpiry = reportsSummary?.visaExpiry
     const proCosts = reportsSummary?.proCosts
     const attendanceSummary = reportsSummary?.attendanceSummary
     const leaveSummary = reportsSummary?.leaveSummary
     const turnover = reportsSummary?.turnover
     const onboarding = reportsSummary?.onboarding
     const performance = reportsSummary?.performance
+    const documentExpiry = reportsSummary?.documentExpiry
     const isLoading = summaryLoading
     const isRefreshing = summaryFetching
 
@@ -136,17 +308,15 @@ export function ReportsPage() {
     const canViewOnboarding = can('view_employees')
     const canViewPerformance = can('view_employees')
 
+    // Active filter for the unified Expiry tab — drives both the table
+    // data slice and which pill is highlighted. 'all' shows every doc.
+    const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
+
     const payrollSearch = useSearchFilters({
         storageKey: 'hrhub.reports.payroll.searchHistory',
         availableFilters: PAYROLL_REPORT_FILTERS,
     })
-    const visaReportSearch = useSearchFilters({
-        storageKey: 'hrhub.reports.visa.searchHistory',
-        availableFilters: VISA_REPORT_FILTERS,
-    })
-
     const payrollTrend = useMemo<PayrollTrendRow[]>(() => payrollSummary?.trend ?? [], [payrollSummary?.trend])
-    const visaEmployees = useMemo<VisaExpiryEmployee[]>(() => visaExpiry?.employees ?? [], [visaExpiry?.employees])
 
     const payrollRows = useMemo(
         () => applyClientFilters(payrollTrend as unknown as Record<string, unknown>[], {
@@ -156,14 +326,14 @@ export function ReportsPage() {
         }),
         [payrollTrend, payrollSearch.appliedFilters, payrollSearch.searchInput],
     )
-    const visaReportRows = useMemo(
-        () => applyClientFilters(visaEmployees as unknown as Record<string, unknown>[], {
-            searchInput: visaReportSearch.searchInput,
-            appliedFilters: visaReportSearch.appliedFilters,
-            searchFields: ['fullName', 'employeeNo', 'department', 'visaType'],
-        }),
-        [visaEmployees, visaReportSearch.appliedFilters, visaReportSearch.searchInput],
-    )
+
+    // Slice the unified expiry roll-up by the active doc-type filter. The
+    // backend already returns rows sorted by `expiryDate` ASC, so the most
+    // urgent docs naturally sit at the top.
+    const docRows = useMemo<DocExpiryRow[]>(() => {
+        const list = documentExpiry?.documents ?? []
+        return docTypeFilter === 'all' ? list : list.filter((d) => d.docType === docTypeFilter)
+    }, [documentExpiry?.documents, docTypeFilter])
 
     // Derived chart data
     const deptChartData = useMemo(
@@ -187,12 +357,6 @@ export function ReportsPage() {
         })),
         [payrollTrend],
     )
-    const visaUrgencyData = useMemo(() => [
-        { name: 'Expired', value: visaExpiry?.expired ?? 0, color: URGENCY_COLORS.expired },
-        { name: 'Critical', value: visaExpiry?.critical ?? 0, color: URGENCY_COLORS.critical },
-        { name: 'Urgent', value: visaExpiry?.urgent ?? 0, color: URGENCY_COLORS.urgent },
-        { name: 'Normal', value: visaExpiry?.normal ?? 0, color: URGENCY_COLORS.normal },
-    ].filter(d => d.value > 0), [visaExpiry])
     const proCatData = useMemo(
         () => (proCosts?.byCategory ?? []).map(c => ({
             name: COST_CATEGORY_LABELS[c.label as keyof typeof COST_CATEGORY_LABELS] ?? c.label,
@@ -256,7 +420,7 @@ export function ReportsPage() {
                         { value: 'attendance',  label: 'Attendance',      icon: CalendarCheck,    category: 'time',       visible: canViewAttendance },
                         { value: 'leave',       label: 'Leave',           icon: Plane,            category: 'time',       visible: canViewLeave },
                         { value: 'payroll',     label: 'Payroll',         icon: BarChart3,        category: 'comp',       visible: canViewPayroll },
-                        { value: 'visa',        label: 'Visa Expiry',     icon: Shield,           category: 'compliance', visible: canViewVisa },
+                        { value: 'expiry',      label: 'Expiry',          icon: Shield,           category: 'compliance', visible: canViewVisa },
                         { value: 'pro-costs',   label: 'PRO Costs',       icon: Receipt,          category: 'compliance', visible: canViewPayroll },
                     ]
                     return (
@@ -909,88 +1073,49 @@ export function ReportsPage() {
                 </TabsContent>
 
                 {/* ── Visa Expiry ── */}
-                <TabsContent value="visa" className="space-y-4">
+                <TabsContent value="expiry" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <KpiCardCompact label="Expired" value={visaExpiry?.expired ?? 0} icon={XCircle} color="red" loading={isLoading} />
-                        <KpiCardCompact label="Critical (≤30d)" value={visaExpiry?.critical ?? 0} icon={Shield} color="red" loading={isLoading} />
-                        <KpiCardCompact label="Urgent (31–60d)" value={visaExpiry?.urgent ?? 0} icon={Clock} color="amber" loading={isLoading} />
-                        <KpiCardCompact label="Normal (61–90d)" value={visaExpiry?.normal ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
+                        <KpiCardCompact label="Expired" value={documentExpiry?.byType.total.expired ?? 0} icon={XCircle} color="red" loading={isLoading} />
+                        <KpiCardCompact label="Critical (≤30d)" value={documentExpiry?.byType.total.critical ?? 0} icon={Shield} color="red" loading={isLoading} />
+                        <KpiCardCompact label="Urgent (31–60d)" value={documentExpiry?.byType.total.urgent ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                        <KpiCardCompact label="Normal (61–90d)" value={documentExpiry?.byType.total.normal ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        {/* Urgency donut */}
-                        <Card className="p-4">
-                            <h3 className="font-semibold text-sm mb-4">Urgency Breakdown</h3>
-                            {isLoading ? <ChartSkeleton height={200} /> : visaUrgencyData.length === 0 ? (
-                                <div className="flex flex-col items-center gap-2 py-10 text-center">
-                                    <CheckCircle2 className="size-8 text-emerald-400" />
-                                    <p className="text-sm text-muted-foreground">No visas expiring soon</p>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center gap-3">
-                                    <ResponsiveContainer width="100%" height={160}>
-                                        <PieChart>
-                                            <Pie data={visaUrgencyData} cx="50%" cy="50%" innerRadius={44} outerRadius={68}
-                                                paddingAngle={3} dataKey="value">
-                                                {visaUrgencyData.map((d, i) => (
-                                                    <Cell key={i} fill={d.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div className="space-y-1.5 w-full">
-                                        {visaUrgencyData.map(d => (
-                                            <div key={d.name} className="flex items-center justify-between text-xs">
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className="size-2.5 rounded-full" style={{ background: d.color }} />
-                                                    <span className="text-muted-foreground">{d.name}</span>
-                                                </div>
-                                                <span className="font-semibold">{d.value}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </Card>
+                    {/* Document-type filter pills — each shows the count for
+                        its type so HR can scan exposure across doc types
+                        before drilling in. "All" stays selected by default. */}
+                    <ExpiryTypeFilter
+                        docTypeFilter={docTypeFilter}
+                        setDocTypeFilter={setDocTypeFilter}
+                        byType={documentExpiry?.byType}
+                        loading={isLoading}
+                    />
 
-                        {/* Days-left distribution horizontal bar */}
+                    {/* Two-card summary row — urgency mix (donut + per-urgency
+                        bar) and a per-department "where's the risk?" view.
+                        Both react to the active doc-type filter so HR can
+                        slice the picture without losing context. */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
                         <Card className="lg:col-span-2 p-4">
-                            <h3 className="font-semibold text-sm mb-4">Expiry Risk Summary</h3>
-                            {isLoading ? <ChartSkeleton height={200} /> : visaUrgencyData.length === 0 ? <EmptyChart message="No expiring visas within 90 days" /> : (
-                                <div className="space-y-4">
-                                    {visaUrgencyData.map(d => {
-                                        const total = visaUrgencyData.reduce((s, x) => s + x.value, 0)
-                                        const pct = total > 0 ? (d.value / total) * 100 : 0
-                                        return (
-                                            <div key={d.name} className="space-y-1.5">
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className="size-2.5 rounded-full" style={{ background: d.color }} />
-                                                        <span className="font-medium">{d.name}</span>
-                                                    </div>
-                                                    <span className="text-muted-foreground tabular-nums">{d.value} employee{d.value !== 1 ? 's' : ''} · {pct.toFixed(0)}%</span>
-                                                </div>
-                                                <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
-                                                    <div
-                                                        className="h-full rounded-full transition-all"
-                                                        style={{ width: `${pct}%`, background: d.color }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
+                            <h3 className="font-semibold text-sm mb-4">Urgency Mix</h3>
+                            <ExpiryUrgencyCard rows={docRows} loading={isLoading} />
+                        </Card>
+                        <Card className="lg:col-span-3 p-4">
+                            <h3 className="font-semibold text-sm mb-4">By Department</h3>
+                            <ExpiryByDepartmentCard rows={docRows} loading={isLoading} />
                         </Card>
                     </div>
 
-                    {/* Employee table */}
+                    {/* Unified expiring-documents table — one row per
+                        document, filtered by the active doc-type pill. */}
                     <Card className="p-4">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-sm">Expiring within 90 days</h3>
+                            <h3 className="font-semibold text-sm">
+                                {docTypeFilter === 'all' ? 'All Expiring Documents' : `${DOC_TYPE_LABEL[docTypeFilter]} Expiring`}
+                                <span className="ml-2 text-xs text-muted-foreground font-normal">within {documentExpiry?.windowDays ?? 90} days</span>
+                            </h3>
                             <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
-                                onClick={() => exportCsv(visaExpiry?.employees ?? [], 'visa-expiry.csv')}>
+                                onClick={() => exportCsv(docRows, `expiry-${docTypeFilter}.csv`)}>
                                 Export CSV
                             </Button>
                         </div>
@@ -1001,27 +1126,36 @@ export function ReportsPage() {
                                     id: 'employee',
                                     accessorKey: 'fullName',
                                     header: 'Employee',
-                                    cell: ({ row: { original: e } }: CellContext<VisaExpiryEmployee, unknown>) => (
+                                    cell: ({ row: { original: e } }: CellContext<DocExpiryRow, unknown>) => (
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <InitialsAvatar name={e.fullName || '—'} size="sm" />
                                             <div className="min-w-0">
-                                                <EmployeeLink id={e.id} name={e.fullName || '—'} className="text-sm font-medium truncate block" />
-                                                <p className="text-[11px] text-muted-foreground truncate">{e.designation}</p>
+                                                <EmployeeLink id={e.employeeId} name={e.fullName || '—'} className="text-sm font-medium truncate block" />
+                                                <p className="text-[11px] text-muted-foreground truncate">{e.designation ?? '—'}</p>
                                             </div>
                                         </div>
                                     ),
                                 },
-                                { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
-                                { accessorKey: 'nationality', header: 'Nationality', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
-                                { accessorKey: 'visaExpiry', header: 'Visa Expiry', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
+                                { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
+                                {
+                                    accessorKey: 'docType', header: 'Document',
+                                    cell: ({ row: { original: e } }: CellContext<DocExpiryRow, unknown>) => (
+                                        <div className="flex flex-col">
+                                            <Badge variant="secondary" className={cn('text-[10px] w-fit', DOC_TYPE_TONE[e.docType])}>
+                                                {DOC_TYPE_LABEL[e.docType]}
+                                            </Badge>
+                                            {e.docNumber && <span className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{e.docNumber}</span>}
+                                        </div>
+                                    ),
+                                },
+                                { accessorKey: 'expiryDate', header: 'Expiry', cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => <span className="text-sm tabular-nums">{formatDate(getValue() as string)}</span> },
                                 {
                                     accessorKey: 'daysLeft', header: 'Days Left',
-                                    cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
-                                        const d = getValue() as number | null
-                                        if (d === null) return <span className="text-muted-foreground text-sm">—</span>
+                                    cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => {
+                                        const d = getValue() as number
                                         return (
                                             <span className={cn('text-sm font-semibold',
-                                                d < 0 ? 'text-destructive' : d <= 30 ? 'text-destructive' : d <= 60 ? 'text-warning' : 'text-success'
+                                                d < 0 ? 'text-destructive' : d <= 30 ? 'text-destructive' : d <= 60 ? 'text-warning' : 'text-success',
                                             )}>
                                                 {d < 0 ? 'Expired' : `${d}d`}
                                             </span>
@@ -1030,21 +1164,16 @@ export function ReportsPage() {
                                 },
                                 {
                                     accessorKey: 'urgency', header: 'Urgency',
-                                    cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
+                                    cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => {
                                         const u = getValue() as string
                                         const v: 'destructive' | 'warning' | 'success' = u === 'expired' ? 'destructive' : u === 'critical' ? 'destructive' : u === 'urgent' ? 'warning' : 'success'
                                         return <Badge variant={v} className="text-[11px]">{labelFor(u)}</Badge>
                                     },
                                 },
                             ]}
-                            data={visaReportRows as unknown as VisaExpiryEmployee[]}
+                            data={docRows}
                             pageSize={10}
-                            onRowClick={(row) => navigate(`/employees/${row.id}`)}
-                            advancedFilter={{
-                                search: visaReportSearch,
-                                filters: VISA_REPORT_FILTERS,
-                                placeholder: 'Search employees…',
-                            }}
+                            onRowClick={(row) => navigate(`/employees/${row.employeeId}`)}
                         />
                     </Card>
                 </TabsContent>
