@@ -1,75 +1,12 @@
 import { useState, type KeyboardEvent } from 'react'
-import { Info, LogIn, LogOut } from 'lucide-react'
+import { LogIn, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { CalendarCell, CalendarResponse } from '@/hooks/useAttendance'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-
-// ─── Code → tone metadata (single source for the whole-month view) ───────
-//
-// Mirrors the row-grid component's palette so the legend reads the same. The
-// `tone` controls the cell background; the `text` colors apply to the day
-// number and code together.
-
-interface CodeMeta {
-    label: string
-    short: string
-    bg: string
-    text: string
-    /** When true, the whole cell wears the tone; otherwise just a small chip. */
-    fill: boolean
-}
-
-// Palette mirrors the admin HR Manager attendance grid so the same status
-// reads the same colour on every attendance surface. Each row of the legend
-// gets a distinct hue family — green = present, orange/amber = degraded-
-// present (late/short), red-solid = hard absence, sky/red/pink/indigo/
-// stone/violet = leave variants, cyan/teal = working-away, yellow = excuse,
-// fuchsia-solid = holiday, neutrals = calendar markers.
-const CODE_META: Record<string, CodeMeta> = {
-    // Present (green family)
-    P:         { label: 'Present',       short: 'P',  bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-800 dark:text-emerald-100', fill: true },
-    'P-late':  { label: 'Late',          short: 'P',  bg: 'bg-orange-100 dark:bg-orange-950/40',   text: 'text-orange-800 dark:text-orange-200',   fill: true },
-    'P-short': { label: 'Short Hours',   short: 'P',  bg: 'bg-amber-100 dark:bg-amber-950/40',     text: 'text-amber-800 dark:text-amber-200',     fill: true },
-
-    // Hard absence (filled red)
-    A:         { label: 'Absent',        short: 'A',  bg: 'bg-rose-600',                           text: 'text-white',                              fill: true },
-
-    // Leaves (each a distinct hue)
-    AL:        { label: 'Annual Leave',     short: 'AL', bg: 'bg-sky-100 dark:bg-sky-950/40',       text: 'text-sky-800 dark:text-sky-200',          fill: true },
-    SL:        { label: 'Sick Leave',       short: 'SL', bg: 'bg-red-100 dark:bg-red-950/40',       text: 'text-red-800 dark:text-red-200',          fill: true },
-    ML:        { label: 'Maternity Leave',  short: 'ML', bg: 'bg-pink-100 dark:bg-pink-950/40',     text: 'text-pink-800 dark:text-pink-200',        fill: true },
-    PL:        { label: 'Paternity Leave',  short: 'PL', bg: 'bg-indigo-100 dark:bg-indigo-950/40', text: 'text-indigo-800 dark:text-indigo-200',    fill: true },
-    BL:        { label: 'Bereavement Leave',short: 'BL', bg: 'bg-stone-200 dark:bg-stone-800/60',   text: 'text-stone-800 dark:text-stone-200',      fill: true },
-    HJ:        { label: 'Hajj Leave',       short: 'HJ', bg: 'bg-violet-100 dark:bg-violet-950/40', text: 'text-violet-800 dark:text-violet-200',    fill: true },
-
-    // Working away from the office (cool tints)
-    BT:        { label: 'Business Trip',    short: 'BT', bg: 'bg-cyan-100 dark:bg-cyan-950/40',     text: 'text-cyan-800 dark:text-cyan-200',        fill: true },
-    WFH:       { label: 'Work From Home',   short: 'WFH',bg: 'bg-teal-100 dark:bg-teal-950/40',     text: 'text-teal-800 dark:text-teal-200',        fill: true },
-    E:         { label: 'Excuse',           short: 'E',  bg: 'bg-yellow-100 dark:bg-yellow-950/40', text: 'text-yellow-800 dark:text-yellow-200',    fill: true },
-
-    // Calendar markers (filled fuchsia for holidays, neutral grays)
-    H:         { label: 'Holiday',          short: 'H',  bg: 'bg-fuchsia-600',                      text: 'text-white',                              fill: true },
-    WO:        { label: 'Week Off',         short: 'WO', bg: 'bg-zinc-200 dark:bg-zinc-800/60',     text: 'text-zinc-700 dark:text-zinc-300',        fill: true },
-    OS:        { label: 'Offset',           short: 'OS', bg: 'bg-neutral-200 dark:bg-neutral-800/60', text: 'text-neutral-700 dark:text-neutral-300',fill: true },
-    'N/A':     { label: 'New Employees',    short: 'N/A',bg: 'bg-slate-200 dark:bg-slate-800',      text: 'text-slate-700 dark:text-slate-300',      fill: true },
-}
-
-const LEGEND_ORDER = ['P', 'P-late', 'P-short', 'A', 'AL', 'SL', 'ML', 'PL', 'BL', 'HJ', 'BT', 'WFH', 'E', 'H', 'WO', 'OS', 'N/A']
+import { CODE_META, AttendanceLegendPopover, type CodeMeta } from '@/components/shared/AttendanceLegend'
+import { formatTime } from '@/lib/datetime'
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-function formatTime(iso: string | null): string | null {
-    if (!iso) return null
-    try {
-        const d = new Date(iso)
-        if (Number.isNaN(d.getTime())) return null
-        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true })
-    } catch {
-        return null
-    }
-}
 
 interface Props {
     data: CalendarResponse | undefined
@@ -134,7 +71,7 @@ export function AttendanceMonthCalendar({ data, loading }: Props) {
                 under the trigger and aligns to the right edge — works on
                 narrow screens too. */}
             <div className="flex justify-end">
-                <Legend />
+                <AttendanceLegendPopover width={320} />
             </div>
 
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -190,7 +127,7 @@ function DayCell({ day, cell, isToday }: { day: number; cell: CalendarCell; isTo
                 onKeyDown={onKeyDown}
                 className={cn(
                     'relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-center transition-shadow',
-                    meta?.fill ? `${meta.bg} ${meta.text} border-transparent` : 'border-border bg-card/40',
+                    meta?.weight === 'badge' ? `${meta.bg} ${meta.text} border-transparent` : 'border-border bg-card/40',
                     isToday && 'ring-1 ring-primary ring-offset-1 ring-offset-background',
                     'cursor-help hover:shadow-sm',
                 )}
@@ -206,7 +143,7 @@ function DayCell({ day, cell, isToday }: { day: number; cell: CalendarCell; isTo
         <div
             className={cn(
                 'relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-center',
-                meta?.fill ? `${meta.bg} ${meta.text} border-transparent` : 'border-border bg-card/40',
+                meta?.weight === 'badge' ? `${meta.bg} ${meta.text} border-transparent` : 'border-border bg-card/40',
                 isToday && 'ring-1 ring-primary ring-offset-1 ring-offset-background',
             )}
         >
@@ -218,7 +155,7 @@ function DayCell({ day, cell, isToday }: { day: number; cell: CalendarCell; isTo
 function CellBody({ day, meta }: { day: number; meta: CodeMeta | null }) {
     return (
         <>
-            <span className={cn('text-[11px] font-semibold tabular-figures leading-none', !meta?.fill && 'text-foreground')}>
+            <span className={cn('text-[11px] font-semibold tabular-figures leading-none', meta?.weight !== 'badge' && 'text-foreground')}>
                 {day}
             </span>
             {meta ? (
@@ -236,8 +173,8 @@ function CellTooltip({
     checkOutLabel,
 }: {
     cell: CalendarCell
-    checkInLabel: string | null
-    checkOutLabel: string | null
+    checkInLabel: string
+    checkOutLabel: string
 }) {
     // Tooltip renders ABOVE the day cell so it stays clear of the
     // dialog / page bottom edge — the old "below" placement clipped
@@ -254,7 +191,7 @@ function CellTooltip({
                             Time In
                         </span>
                         <span className="text-xs font-semibold tabular-figures text-foreground">
-                            {checkInLabel ?? '—'}
+                            {checkInLabel || '—'}
                         </span>
                     </div>
                     <div className="flex items-center justify-between gap-4">
@@ -263,7 +200,7 @@ function CellTooltip({
                             Time Out
                         </span>
                         <span className="text-xs font-semibold tabular-figures text-foreground">
-                            {checkOutLabel ?? '—'}
+                            {checkOutLabel || '—'}
                         </span>
                     </div>
                 </div>
@@ -276,45 +213,3 @@ function CellTooltip({
     )
 }
 
-// Popover-backed legend (replaces the old inline horizontal strip that
-// crowded the month view). Click "Legend" to reveal the full status-code
-// key in a focused two-column grid.
-function Legend() {
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                    <Info className="size-3.5" />
-                    Legend
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[320px] p-4">
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Status codes
-                </p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
-                    {LEGEND_ORDER.map((code) => {
-                        const meta = CODE_META[code]
-                        if (!meta) return null
-                        return (
-                            <span key={code} className="inline-flex items-center gap-2 min-w-0">
-                                <span
-                                    className={cn(
-                                        'flex h-5 min-w-[1.75rem] items-center justify-center rounded px-1 text-[10px] font-semibold shrink-0',
-                                        meta.bg,
-                                        meta.text,
-                                    )}
-                                >
-                                    {meta.short}
-                                </span>
-                                <span className="text-muted-foreground truncate" title={meta.label}>
-                                    {meta.label}
-                                </span>
-                            </span>
-                        )
-                    })}
-                </div>
-            </PopoverContent>
-        </Popover>
-    )
-}

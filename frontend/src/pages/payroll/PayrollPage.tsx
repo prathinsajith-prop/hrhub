@@ -596,7 +596,11 @@ function PayslipsSheet({ run, open, onClose }: { run: PayrollRun | null; open: b
               <p className="mt-0.5 text-xs text-muted-foreground">Payroll run — {headerKpis.count} payslips</p>
             </div>
             {payslips.length > 0 && (
-              <div className="grid grid-cols-3 gap-3 sm:gap-5">
+              // 1 col below 420px, 3 cols once we have room. The previous
+              // hard `grid-cols-3` jammed three currency strings together
+              // inside a side sheet that shrinks on small viewports — at
+              // ~420px and below "Total Gross"/"Total Net" collided.
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
                 <SheetStat label="Employees" value={String(headerKpis.count)} tone="muted" />
                 <SheetStat label="Total Gross" value={formatCurrency(headerKpis.totalGross)} tone="blue" />
                 <SheetStat label="Total Net" value={formatCurrency(headerKpis.totalNet)} tone="emerald" prominent />

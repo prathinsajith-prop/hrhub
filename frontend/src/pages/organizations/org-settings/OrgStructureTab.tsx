@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn, onActivate } from '@/lib/utils'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import {
@@ -396,7 +397,7 @@ function ManageTeamDialog({ team, open, onClose, onAddMembers }: {
 
                         <div className="rounded-lg border max-h-72 overflow-y-auto">
                             {isLoading ? (
-                                <div className="p-3 space-y-2">{[1, 2, 3].map(i => <div key={`div-${i}`} className="h-9 rounded bg-muted animate-pulse" />)}</div>
+                                <div className="p-3 space-y-2">{[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-9 rounded" />)}</div>
                             ) : members.length === 0 ? (
                                 <div className="text-center py-8 text-muted-foreground">
                                     <Users className="size-7 mx-auto mb-1.5 opacity-30" />
@@ -966,7 +967,7 @@ export function OrgStructureTab() {
             {isLoading ? (
                 <div className="space-y-2">
                     {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-11 rounded-lg bg-muted animate-pulse" />
+                        <Skeleton key={i} className="h-11 rounded-lg" />
                     ))}
                 </div>
             ) : roots.length === 0 ? (

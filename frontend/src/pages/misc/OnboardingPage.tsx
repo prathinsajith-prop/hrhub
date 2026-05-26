@@ -11,6 +11,8 @@ import { Badge, Card, Progress } from '@/components/ui/primitives'
 import { toast, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, DialogClose } from '@/components/ui/overlays'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { DatePicker } from '@/components/ui/date-picker'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { cn, formatDate, onActivate } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -209,22 +211,22 @@ function RowSkeleton() {
     return (
         <div
             className={cn(
-                'grid items-center gap-x-6 pl-4 pr-3 py-3 border-b border-border/50 last:border-b-0 animate-pulse',
+                'grid items-center gap-x-6 pl-4 pr-3 py-3 border-b border-border/50 last:border-b-0',
                 'grid-cols-[2rem_minmax(0,1fr)_5rem]',
                 'sm:grid-cols-[2rem_minmax(0,1fr)_7rem_5rem]',
                 'md:grid-cols-[2rem_minmax(0,1fr)_9rem_7rem_5rem]',
                 'lg:grid-cols-[2rem_minmax(0,1fr)_9rem_8rem_7rem_5rem]',
             )}
         >
-            <div className="size-8 rounded-full bg-muted" />
+            <Skeleton className="size-8 rounded-full" />
             <div className="space-y-1.5">
-                <div className="h-3 bg-muted rounded w-32" />
-                <div className="h-2.5 bg-muted rounded w-24" />
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-2.5 w-24" />
             </div>
-            <div className="hidden md:block h-2 bg-muted rounded-full" />
-            <div className="hidden lg:block h-2.5 bg-muted rounded w-24" />
-            <div className="hidden sm:block h-5 w-20 bg-muted rounded-full" />
-            <div className="size-7 bg-muted rounded-md justify-self-end" />
+            <Skeleton className="hidden md:block h-2 rounded-full" />
+            <Skeleton className="hidden lg:block h-2.5 w-24" />
+            <Skeleton className="hidden sm:block h-5 w-20 rounded-full" />
+            <Skeleton className="size-7 rounded-md justify-self-end" />
         </div>
     )
 }
@@ -439,28 +441,29 @@ export function OnboardingPage() {
                     {[...Array(PAGE_SIZE)].map((_, i) => <RowSkeleton key={`rowskeleton-${i}`} />)}
                 </Card>
             ) : enriched.length === 0 ? (
-                <Card className="flex flex-col items-center justify-center py-16 text-center gap-3">
-                    <div className="size-12 rounded-full bg-muted flex items-center justify-center">
-                        <UserPlus className="size-6 text-muted-foreground" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-medium">No onboarding checklists yet</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            New employees with status "onboarding" appear here automatically.
-                        </p>
-                    </div>
-                    <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setNewOpen(true)}>
-                        New Onboarding
-                    </Button>
-                </Card>
+                <EmptyState
+                    icon={UserPlus}
+                    title="No onboarding checklists yet"
+                    description="New employees with status &quot;onboarding&quot; appear here automatically."
+                    variant="card"
+                    size="lg"
+                    action={(
+                        <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={() => setNewOpen(true)}>
+                            New Onboarding
+                        </Button>
+                    )}
+                />
             ) : filtered.length === 0 ? (
-                <Card className="flex flex-col items-center justify-center py-12 text-center gap-2">
-                    <Search className="size-8 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">No checklists match your filters.</p>
-                    <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter('all') }}>
-                        Clear filters
-                    </Button>
-                </Card>
+                <EmptyState
+                    icon={Search}
+                    title="No checklists match your filters."
+                    variant="card"
+                    action={(
+                        <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter('all') }}>
+                            Clear filters
+                        </Button>
+                    )}
+                />
             ) : (
                 <>
                     <Card className="overflow-hidden">

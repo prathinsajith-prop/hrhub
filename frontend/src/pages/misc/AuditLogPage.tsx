@@ -5,6 +5,7 @@ import { AUDIT_ACTION_OPTIONS, AUDIT_ENTITY_TYPE_OPTIONS, ROLE_OPTIONS } from '@
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
@@ -323,7 +324,7 @@ export function AuditLogPage() {
             {isLoading ? (
                 <div className="space-y-3">
                     {[1, 2, 3, 4, 5].map(i => (
-                        <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />
+                        <Skeleton key={i} className="h-20 rounded-xl" />
                     ))}
                 </div>
             ) : filtered.length === 0 ? (

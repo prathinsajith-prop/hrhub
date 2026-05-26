@@ -51,6 +51,7 @@ import { ExpiryStatus } from '@/components/shared/ExpiryStatus'
 import { useEmployeeAssets } from '@/hooks/useAssets'
 import { useAttendance, useAttendanceCalendar } from '@/hooks/useAttendance'
 import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
 import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
@@ -1634,41 +1635,56 @@ export function EmployeeDetailPage() {
                       <p className="text-xs mt-1">Add a spouse, child, or other family member.</p>
                     </div>
                   ) : (
+                    /* Dependents table — condensed from 10 columns to 7. The
+                       Reference is now a mono sub-line under Name, and the
+                       audit metadata (Created-by + Created) moved to a row
+                       tooltip so the data HR actually scans gets the focus. */
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b bg-muted/40">
-                            {['Reference', 'Name', 'Birth Date', 'Relation', 'Nationality', 'Visa No.', 'Medical Ins.', 'Created By', 'Created', ''].map(h => (
+                            {['Name', 'Relation', 'Birth Date', 'Nationality', 'Visa No.', 'Medical Ins.', ''].map(h => (
                               <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {dependentsData.map(dep => (
-                            <tr key={dep.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 font-mono text-[11px]">{dep.reference}</td>
-                              <td className="px-4 py-2.5 font-medium">{dep.name}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
-                              <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground">{dep.createdByName ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(dep.createdAt)}</td>
-                              <td className="px-4 py-2.5">
-                                <div className="flex gap-1">
-                                  <Button size="icon" variant="ghost" className="size-6"
-                                    onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
-                                    <Edit2 className="size-3" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive"
-                                    onClick={() => deleteDependent.mutate(dep.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
-                                    <Trash2 className="size-3" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                          {dependentsData.map(dep => {
+                            const auditTooltip = `Added by ${dep.createdByName ?? 'Unknown'} on ${formatDate(dep.createdAt)}`
+                            return (
+                              <tr
+                                key={dep.id}
+                                className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                                title={auditTooltip}
+                              >
+                                <td className="px-4 py-2.5">
+                                  <div className="font-medium">{dep.name}</div>
+                                  <div className="font-mono text-[10px] text-muted-foreground/70 tabular-nums">{dep.reference}</div>
+                                </td>
+                                <td className="px-4 py-2.5 capitalize">{dep.relation}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{dep.birthDate ? formatDate(dep.birthDate) : '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{dep.nationality ?? '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{dep.visaNumber ?? '—'}</td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{dep.medicalInsurance ?? '—'}</td>
+                                <td className="px-4 py-2.5">
+                                  <div className="flex gap-1">
+                                    <Button size="icon" variant="ghost" className="size-6"
+                                      aria-label={`Edit ${dep.name}`}
+                                      title="Edit dependent"
+                                      onClick={() => { setEditingDependent(dep); setDependentDialogOpen(true) }}>
+                                      <Edit2 className="size-3" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive"
+                                      aria-label={`Remove ${dep.name}`}
+                                      title="Remove dependent"
+                                      onClick={() => deleteDependent.mutate(dep.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
+                                      <Trash2 className="size-3" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -2155,24 +2171,27 @@ export function EmployeeDetailPage() {
                   </div>
 
                 ) : docs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-                    <div className="size-14 rounded-2xl bg-muted/60 border border-border flex items-center justify-center mb-4">
-                      <FolderOpen className="size-7 text-muted-foreground/40" />
-                    </div>
-                    <p className="text-sm font-semibold text-foreground">No documents yet</p>
-                    <p className="text-xs text-muted-foreground mt-1 max-w-xs">Upload passports, visas, contracts, qualifications and other compliance files for this employee.</p>
-                    <Button size="sm" variant="outline" className="mt-5" leftIcon={<Plus className="size-3.5" />} onClick={() => setAddDocOpen(true)}>
-                      Add First Document
-                    </Button>
-                  </div>
+                  <EmptyState
+                    icon={FolderOpen}
+                    title="No documents yet"
+                    description="Upload passports, visas, contracts, qualifications and other compliance files for this employee."
+                    size="lg"
+                    action={(
+                      <Button size="sm" variant="outline" leftIcon={<Plus className="size-3.5" />} onClick={() => setAddDocOpen(true)}>
+                        Add First Document
+                      </Button>
+                    )}
+                  />
 
                 ) : filteredDocs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
-                    <Search className="size-9 text-muted-foreground/25 mb-3" />
-                    <p className="text-sm font-medium text-foreground">No results for "{docSearch}"</p>
-                    <p className="text-xs text-muted-foreground mt-1">Try a different name or category</p>
-                    <button onClick={() => setDocSearch('')} className="text-xs text-primary mt-3 hover:underline font-medium">Clear search</button>
-                  </div>
+                  <EmptyState
+                    icon={Search}
+                    title={`No results for "${docSearch}"`}
+                    description="Try a different name or category"
+                    action={(
+                      <button onClick={() => setDocSearch('')} className="text-xs text-primary hover:underline font-medium">Clear search</button>
+                    )}
+                  />
 
                 ) : (
                   <div className="p-6 space-y-8">
@@ -2710,6 +2729,8 @@ export function EmployeeDetailPage() {
                               )}
                             </div>
                             <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive shrink-0"
+                              aria-label="Remove warning"
+                              title="Remove warning"
                               onClick={() => deleteWarning.mutate(w.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
                               <Trash2 className="size-3" />
                             </Button>
@@ -2770,6 +2791,8 @@ export function EmployeeDetailPage() {
                             </p>
                           </div>
                           <Button size="icon" variant="ghost" className="size-6 text-destructive hover:text-destructive shrink-0"
+                            aria-label="Delete note"
+                            title="Delete note"
                             onClick={() => deleteNote.mutate(note.id, { onError: (err: Error) => toast.error('Failed', err.message) })}>
                             <Trash2 className="size-3" />
                           </Button>

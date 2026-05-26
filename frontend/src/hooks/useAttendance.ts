@@ -49,10 +49,31 @@ export function useAttendance(params: {
     })
 }
 
+/**
+ * Punch payload accepted by /attendance/check-in and /attendance/check-out.
+ * Callers can pass just the employee ID (back-compat) or an object with
+ * geolocation + notes — the route stores whatever it receives. Coords are
+ * optional from the backend's perspective but, if the caller asks the
+ * browser for them, we want them on the wire so the punch is geo-tagged.
+ */
+export interface PunchInput {
+    employeeId: string
+    latitude?: number | null
+    longitude?: number | null
+    locationName?: string | null
+    notes?: string | null
+    deviceId?: string | null
+}
+
+function normalizePunch(input: string | PunchInput): PunchInput {
+    return typeof input === 'string' ? { employeeId: input } : input
+}
+
 export function useCheckIn() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (employeeId: string) => api.post('/attendance/check-in', { employeeId }),
+        mutationFn: (input: string | PunchInput) =>
+            api.post('/attendance/check-in', normalizePunch(input)),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
     })
 }
@@ -60,7 +81,8 @@ export function useCheckIn() {
 export function useCheckOut() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (employeeId: string) => api.post('/attendance/check-out', { employeeId }),
+        mutationFn: (input: string | PunchInput) =>
+            api.post('/attendance/check-out', normalizePunch(input)),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['attendance'] }),
     })
 }
@@ -161,6 +183,54 @@ export interface ManualPunchBody {
     locationName?: string
     latitude?: number
     longitude?: number
+}
+
+// ─── Per-punch event log (one row per check-in / out) ─────────────────────
+//
+// Mirrors `attendance_punches`. The Punch History view in the admin app
+// uses this to enrich each daily rollup row with its first check-in's
+// `source` (Web / Mobile / Biometric / Manual) and `locationName` — data
+// that lives on the event log, not the daily rollup.
+
+export interface AttendancePunchEvent {
+    id: string
+    tenantId: string
+    employeeId: string
+    date: string
+    punchType: 'in' | 'out'
+    recordedAt: string
+    locationName: string | null
+    latitude: string | null
+    longitude: string | null
+    source: 'web' | 'mobile' | 'biometric' | 'manual'
+    deviceId: string | null
+    notes: string | null
+    createdBy: string | null
+    createdAt: string
+}
+
+/**
+ * Fetch every punch event for a single date.
+ *
+ *   • `employeeId` set    → that employee only
+ *   • `employeeId` unset  → tenant-wide (HR / super_admin) or department-
+ *                           wide (dept_head). The backend enforces the
+ *                           scoping; the frontend does not need to know.
+ *
+ * The result is sorted by `recordedAt ASC`, so consumers can pick the
+ * first 'in' per employee directly.
+ */
+export function usePunchesForDay(date: string | null, employeeId?: string) {
+    const qs = new URLSearchParams()
+    if (date) qs.set('date', date)
+    if (employeeId) qs.set('employeeId', employeeId)
+    return useQuery({
+        queryKey: ['attendance', 'punches', date, employeeId ?? null],
+        queryFn: () =>
+            api.get<{ data: AttendancePunchEvent[] }>(`/attendance/punches?${qs}`).then((r) => r.data),
+        enabled: !!date && /^\d{4}-\d{2}-\d{2}$/.test(date),
+        staleTime: 30_000,
+    })
 }
 
 /** Insert a paired in/out manual punch via /attendance/punches.

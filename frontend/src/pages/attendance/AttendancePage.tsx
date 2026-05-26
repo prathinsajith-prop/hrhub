@@ -6,7 +6,8 @@ import {
     CalendarDays, Clock, UserCheck, UserX,
     AlarmClock, Home, CalendarOff, TrendingUp, Edit2, RefreshCcw, Zap, Fingerprint,
     Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Download, X, Check,
-    ArrowUpRight,
+    ArrowUpRight, ChevronLeft, ChevronRight,
+    MapPin, Globe, Smartphone, Hand, ExternalLink,
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -32,8 +33,9 @@ import {
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
-import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, useAddManualPunch, type AttendanceRecord } from '@/hooks/useAttendance'
-import { AttendanceCalendarGrid, AttendanceLegendPopover } from '@/components/shared/AttendanceCalendarGrid'
+import { useAttendance, useAttendanceCalendar, useUpsertAttendance, useExternalPunch, useAddManualPunch, usePunchesForDay, type AttendanceRecord, type AttendancePunchEvent } from '@/hooks/useAttendance'
+import { AttendanceCalendarGrid } from '@/components/shared/AttendanceCalendarGrid'
+import { AttendanceLegendPopover } from '@/components/shared/AttendanceLegend'
 import { MonthSwitcher } from '@/components/shared/MonthSwitcher'
 import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployees } from '@/hooks/useEmployees'
@@ -242,6 +244,49 @@ export function AttendancePage() {
         [filteredAttendance, historyDate, filterEmployee, filterStatus],
     )
 
+    // ─── Per-row punch enrichment ────────────────────────────────────
+    //
+    // The daily rollup (`attendance_records`) doesn't carry source/location —
+    // those live on `attendance_punches`. We fetch every punch for the
+    // selected `historyDate` in one round-trip, then build a map of
+    // `employeeId → first 'in' punch` so each row in Punch History can
+    // surface "how the check-in was recorded" and "where".
+    const { data: punchesData } = usePunchesForDay(historyDate, filterEmployee || undefined)
+    // Two indexes per day: the FIRST 'in' (opens the day) and the LAST
+    // 'out' (closes the day). The Punch History row surfaces each one
+    // under its respective time cell so location follows the event it
+    // belongs to — punching in at HQ and out at the client site renders
+    // as two distinct location chips rather than a single "first punch"
+    // chip that misrepresents either half.
+    const { firstInByEmployee, lastOutByEmployee } = useMemo(() => {
+        const firstIn = new Map<string, AttendancePunchEvent>()
+        const lastOut = new Map<string, AttendancePunchEvent>()
+        const list = punchesData ?? []
+        // Backend sorts ASC by recordedAt. First 'in' we see per employee
+        // is the open; we keep overwriting `lastOut` so we end up with
+        // the latest 'out'.
+        for (const p of list) {
+            if (p.punchType === 'in' && !firstIn.has(p.employeeId)) {
+                firstIn.set(p.employeeId, p)
+            } else if (p.punchType === 'out') {
+                lastOut.set(p.employeeId, p)
+            }
+        }
+        return { firstInByEmployee: firstIn, lastOutByEmployee: lastOut }
+    }, [punchesData])
+
+    // Map-preview modal for clicking a row's location pin. Renders an
+    // embedded OpenStreetMap iframe so HR can verify the punch happened
+    // where the employee says — without leaving the page.
+    const [locationModal, setLocationModal] = useState<{
+        employeeName: string
+        recordedAt: string
+        source: AttendancePunchEvent['source']
+        locationName: string | null
+        latitude: string | null
+        longitude: string | null
+    } | null>(null)
+
     const summary = useMemo(() => {
         const counts: Record<string, number> = {
             present: 0, absent: 0, late: 0, wfh: 0, half_day: 0, on_leave: 0,
@@ -401,22 +446,76 @@ export function AttendancePage() {
         {
             accessorKey: 'checkIn',
             header: 'Punch In',
-            cell: ({ getValue }) => (
-                <span className="font-mono text-[11px] text-green-700 dark:text-green-400">
-                    {fmtTime(getValue() as string | undefined)}
-                </span>
-            ),
-            size: 90,
+            // Three pieces per cell, vertically stacked:
+            //   row 1 — Time (bold mono) + source pill (e.g. "Web")
+            //   row 2 — Location chip (red pin + place name, clickable)
+            //
+            // Source + location both describe the same event, so they
+            // belong in the same cell as the time they annotate. Pulling
+            // them into their own columns (as we used to) made HR read
+            // left-to-right across three columns to reconstruct one fact.
+            cell: ({ row, getValue }) => {
+                const p = firstInByEmployee.get(row.original.employeeId)
+                const time = fmtTime(getValue() as string | undefined)
+                if (!time && !p) {
+                    return <span className="text-xs text-muted-foreground/60">—</span>
+                }
+                return (
+                    <div className="flex flex-col gap-1 min-w-0 py-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[12px] font-semibold text-emerald-700 dark:text-emerald-400 tabular-nums">
+                                {time || '—'}
+                            </span>
+                            {p && <PunchSourceBadge source={p.source} />}
+                        </div>
+                        <PunchLocationChip
+                            punch={p}
+                            onOpen={(p) => setLocationModal({
+                                employeeName: row.original.employeeName ?? empMap.get(row.original.employeeId)?.name ?? '—',
+                                recordedAt: p.recordedAt,
+                                source: p.source,
+                                locationName: p.locationName,
+                                latitude: p.latitude,
+                                longitude: p.longitude,
+                            })}
+                        />
+                    </div>
+                )
+            },
+            size: 200,
         },
         {
             accessorKey: 'checkOut',
             header: 'Punch Out',
-            cell: ({ getValue }) => (
-                <span className="font-mono text-[11px] text-red-700 dark:text-red-400">
-                    {fmtTime(getValue() as string | undefined)}
-                </span>
-            ),
-            size: 90,
+            cell: ({ row, getValue }) => {
+                const p = lastOutByEmployee.get(row.original.employeeId)
+                const time = fmtTime(getValue() as string | undefined)
+                if (!time && !p) {
+                    return <span className="text-xs text-muted-foreground/60">—</span>
+                }
+                return (
+                    <div className="flex flex-col gap-1 min-w-0 py-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-[12px] font-semibold text-rose-700 dark:text-rose-400 tabular-nums">
+                                {time || '—'}
+                            </span>
+                            {p && <PunchSourceBadge source={p.source} />}
+                        </div>
+                        <PunchLocationChip
+                            punch={p}
+                            onOpen={(p) => setLocationModal({
+                                employeeName: row.original.employeeName ?? empMap.get(row.original.employeeId)?.name ?? '—',
+                                recordedAt: p.recordedAt,
+                                source: p.source,
+                                locationName: p.locationName,
+                                latitude: p.latitude,
+                                longitude: p.longitude,
+                            })}
+                        />
+                    </div>
+                )
+            },
+            size: 200,
         },
         {
             accessorKey: 'hoursWorked',
@@ -477,7 +576,7 @@ export function AttendancePage() {
             ),
             size: 80,
         },
-    ], [empMap, orgMap, handleEdit])
+    ], [empMap, orgMap, handleEdit, firstInByEmployee, lastOutByEmployee])
 
     return (
         <PageWrapper>
@@ -918,12 +1017,16 @@ export function AttendancePage() {
             <EmployeeMonthAttendanceDialog
                 state={attendanceModal}
                 onClose={() => setAttendanceModal(null)}
-                monthLabel={label}
-                calendarData={calendarData}
+                initialMonth={calendarMonth}
                 onViewProfile={(id) => {
                     setAttendanceModal(null)
                     navigate(`/employees/${id}`)
                 }}
+            />
+
+            <PunchLocationDialog
+                state={locationModal}
+                onClose={() => setLocationModal(null)}
             />
 
             <EditAttendanceDialog
@@ -983,17 +1086,46 @@ export function AttendancePage() {
 interface EmployeeMonthAttendanceDialogProps {
     state: { id: string; name: string; avatarUrl: string | null } | null
     onClose: () => void
-    monthLabel: string
-    calendarData: import('@/hooks/useAttendance').CalendarResponse | undefined
+    /** Initial month (YYYY-MM) shown when the dialog opens — taken from the
+     *  parent page's selected month. The dialog then owns its own month state
+     *  so HR can navigate prev/next without disturbing the page underneath. */
+    initialMonth: string
     onViewProfile: (id: string) => void
 }
 
 function EmployeeMonthAttendanceDialog({
-    state, onClose, monthLabel, calendarData, onViewProfile,
+    state, onClose, initialMonth, onViewProfile,
 }: EmployeeMonthAttendanceDialogProps) {
     const open = !!state
-    // Slice the calendar payload to just the chosen employee so we can reuse
-    // AttendanceCalendarGrid in its hideEmployeeColumn mode.
+
+    // ─── Dialog-local month state ──────────────────────────────────────
+    // The parent's `calendarData` carries one month at a time; if HR wants
+    // to scrub through history without leaving the dialog, we need our own
+    // month + our own fetch. State-during-render reset (CLAUDE.md pattern):
+    // when the dialog opens for a different employee, snap back to the
+    // page's current month so the first view matches the row HR clicked.
+    const [month, setMonth] = useState(initialMonth)
+    const [lastEmployeeId, setLastEmployeeId] = useState<string | null>(null)
+    const currentEmployeeId = state?.id ?? null
+    if (open && currentEmployeeId !== lastEmployeeId) {
+        setLastEmployeeId(currentEmployeeId)
+        setMonth(initialMonth)
+    } else if (!open && lastEmployeeId !== null) {
+        setLastEmployeeId(null)
+    }
+
+    // Scope the calendar fetch to this employee + the dialog's month. We
+    // pass `employeeId` so the server only returns one employee's cells,
+    // not the entire tenant — much smaller payload while the dialog is
+    // open. The hook is no-op when the dialog is closed (employeeId is
+    // null), so we don't fetch in the background.
+    const { data: calendarData, isLoading } = useAttendanceCalendar(month, {
+        employeeId: currentEmployeeId ?? undefined,
+    })
+
+    // Slice to the picked employee. The /calendar endpoint may include
+    // other employees when `employeeId` isn't passed (legacy hook
+    // signature), so we filter defensively.
     const employeeSlice = useMemo(() => {
         if (!state || !calendarData) return undefined
         const emp = calendarData.employees.find((e) => e.id === state.id)
@@ -1001,6 +1133,37 @@ function EmployeeMonthAttendanceDialog({
         return { ...calendarData, employees: [emp] }
     }, [state, calendarData])
     const employee = employeeSlice?.employees[0]
+
+    // Pretty label for the chosen month — used in the header subtitle and
+    // the section heading. Built off the YYYY-MM string so it stays in
+    // sync with whatever the user picks.
+    const monthLabel = useMemo(() => {
+        const [yStr, mStr] = month.split('-')
+        const y = Number(yStr); const m = Number(mStr)
+        if (!Number.isFinite(y) || !Number.isFinite(m)) return month
+        return new Date(y, m - 1, 1).toLocaleString('en-AE', { month: 'long', year: 'numeric' })
+    }, [month])
+
+    // Prev / next month navigation. We work in YYYY-MM space (UTC-safe,
+    // no timezone surprises) — Date math at the local boundary would shift
+    // the displayed month for users in negative-offset timezones.
+    const shiftMonth = useCallback((delta: number) => {
+        setMonth((current) => {
+            const [yStr, mStr] = current.split('-')
+            const y = Number(yStr); const m = Number(mStr)
+            if (!Number.isFinite(y) || !Number.isFinite(m)) return current
+            const d = new Date(y, m - 1 + delta, 1)
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        })
+    }, [])
+
+    // Disable "Next" once we're at the current month — we don't show
+    // future attendance and the empty calendar would be confusing.
+    const currentMonthIso = useMemo(() => {
+        const now = new Date()
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    }, [])
+    const canGoNext = month < currentMonthIso
     // Per-status counts from the same cells the grid renders — keeps the
     // summary perfectly consistent with what the user sees in the calendar.
     const counts = useMemo(() => {
@@ -1008,9 +1171,15 @@ function EmployeeMonthAttendanceDialog({
         if (!employee) return acc
         for (const c of employee.cells) {
             if (!c.code) continue
-            if (c.code === 'P') acc.present++
+            // 'IP' (In Progress, still checked in today) counts as Present
+            // for the headline KPI — the employee is on shift, just hasn't
+            // punched out yet. 'INC' (Incomplete, past day missing checkout)
+            // still counts as Absent so HR sees the impact on attendance
+            // until they close out the day. Both are distinct hues on the
+            // grid so HR can tell them apart visually.
+            if (c.code === 'P' || c.code === 'IP') acc.present++
             else if (c.code === 'P-late' || c.code === 'P-short') acc.late++
-            else if (c.code === 'A') acc.absent++
+            else if (c.code === 'A' || c.code === 'INC') acc.absent++
             else if (['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'].includes(c.code)) acc.leave++
             else if (c.code === 'WFH') acc.wfh++
             else if (c.code === 'H') acc.holiday++
@@ -1040,7 +1209,7 @@ function EmployeeMonthAttendanceDialog({
                                     {employee?.name ?? state?.name ?? '—'}
                                 </DialogTitle>
                                 <p className="text-xs text-muted-foreground truncate">
-                                    {employee?.designation ?? employee?.department ?? 'Attendance summary'} · {monthLabel}
+                                    {employee?.designation ?? employee?.department ?? 'Attendance summary'}
                                 </p>
                             </div>
                         </div>
@@ -1056,6 +1225,39 @@ function EmployeeMonthAttendanceDialog({
                             </Button>
                         ) : null}
                     </div>
+
+                    {/* Month navigator — Prev / label / Next. Lives inside the
+                        modal so HR can scrub through months without closing
+                        the dialog (and without dragging the page header
+                        underneath along with them). Disabled when there's
+                        no employee selected yet, and "Next" is gated to the
+                        current month so HR can't peek into empty future
+                        months. */}
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-2 py-1">
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            onClick={() => shiftMonth(-1)}
+                            disabled={!state}
+                            aria-label="Previous month"
+                        >
+                            <ChevronLeft className="size-4" />
+                        </Button>
+                        <span className="text-sm font-semibold tabular-nums">
+                            {monthLabel}
+                        </span>
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7"
+                            onClick={() => shiftMonth(1)}
+                            disabled={!state || !canGoNext}
+                            aria-label="Next month"
+                        >
+                            <ChevronRight className="size-4" />
+                        </Button>
+                    </div>
                 </DialogHeader>
                 <div className="overflow-y-auto px-6 py-4 space-y-4">
                     {/* KPI strip */}
@@ -1070,7 +1272,7 @@ function EmployeeMonthAttendanceDialog({
                     </div>
                     {/* Original tabular grid (one row, 31 cells) in compact mode so a
                         full month fits without horizontal scroll. */}
-                    {employeeSlice ? (
+                    {employeeSlice || isLoading ? (
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1080,7 +1282,7 @@ function EmployeeMonthAttendanceDialog({
                             </div>
                             <AttendanceCalendarGrid
                                 data={employeeSlice}
-                                loading={false}
+                                loading={isLoading}
                                 hideEmployeeColumn
                                 showLegend={false}
                                 compact
@@ -1930,4 +2132,239 @@ function normalizeImportTime(raw: string): string {
     if (/^\d{1}:\d{2}$/.test(s)) return `0${s}`
     if (/^\d{4}$/.test(s)) return `${s.slice(0, 2)}:${s.slice(2)}`
     return s
+}
+
+// ─── Punch source / location UI ───────────────────────────────────────────
+//
+// Source pill: visualises *how* the punch was recorded. Each source gets a
+// distinct icon + colour so HR can spot at a glance whether an entry came
+// from a self-service web punch, a mobile app, a biometric/vendor device,
+// or an HR back-fill.
+//
+//   Web        → blue   (the employee tapped the button in the browser)
+//   Mobile     → indigo (mobile app / responsive web on a phone)
+//   Biometric  → violet (fingerprint device, kiosk, vendor API)
+//   Manual     → amber  (HR back-filled the row — i.e. *not* a real punch)
+//   — (null)   → grey   (no punch event recorded; the row is rollup-only)
+
+// Short labels — fit inside narrow table cells without wrapping.
+// Tooltips on hover spell out the full meaning ("Web check-in",
+// "HR-back-filled punch", etc.) for anyone who wants the longer form.
+const SOURCE_META: Record<AttendancePunchEvent['source'], { label: string; tooltip: string; icon: typeof Globe; tone: string }> = {
+    web: { label: 'Web', tooltip: 'Web check-in (browser)', icon: Globe, tone: 'bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:ring-blue-900' },
+    mobile: { label: 'Mobile', tooltip: 'Mobile app check-in', icon: Smartphone, tone: 'bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:ring-indigo-900' },
+    biometric: { label: 'Device', tooltip: 'Biometric / vendor device', icon: Fingerprint, tone: 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900' },
+    manual: { label: 'Manual', tooltip: 'HR back-filled this punch', icon: Hand, tone: 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900' },
+}
+
+function PunchSourceBadge({ source }: { source: AttendancePunchEvent['source'] | null }) {
+    if (!source) return null
+    const meta = SOURCE_META[source]
+    const Icon = meta.icon
+    return (
+        <span
+            title={meta.tooltip}
+            className={cn(
+                'inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium ring-1 whitespace-nowrap leading-none',
+                meta.tone,
+            )}
+        >
+            <Icon className="size-2.5" />
+            {meta.label}
+        </span>
+    )
+}
+
+// Map-preview modal. Embeds an OpenStreetMap iframe so HR can verify the
+// punch happened where the employee says, without leaving the page or
+// hitting a third-party SDK. Same vendor as our reverse-geocoder, so
+// what's labelled matches what's pinned. Falls back gracefully when
+// coordinates are missing — the modal still surfaces the locationName /
+// recorded time, just without the map.
+/**
+ * Small location chip rendered beneath a punch time in the Punch History
+ * table. Three visual states:
+ *
+ *   • No punch event       → nothing rendered (the daily rollup carried no
+ *                            in/out event for this slot — usually means
+ *                            it was back-filled via the rollup directly).
+ *   • Coords present       → red map-pin + place name, clickable. Opens
+ *                            the embedded-map dialog.
+ *   • No coords but punch  → muted "Location off" pill so HR knows the
+ *                            punch happened but geo wasn't captured.
+ */
+function PunchLocationChip({
+    punch,
+    onOpen,
+}: {
+    punch: AttendancePunchEvent | undefined
+    onOpen: (p: AttendancePunchEvent) => void
+}) {
+    if (!punch) return null
+    const hasCoords = !!(punch.latitude && punch.longitude)
+    const label = punch.locationName ?? (hasCoords ? `${Number(punch.latitude).toFixed(3)}, ${Number(punch.longitude).toFixed(3)}` : null)
+
+    if (!label) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 whitespace-nowrap">
+                <MapPin className="size-2.5 shrink-0 opacity-50" />
+                Location off
+            </span>
+        )
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={(e) => {
+                e.stopPropagation()
+                onOpen(punch)
+            }}
+            disabled={!hasCoords}
+            className={cn(
+                'group inline-flex items-center gap-1 text-[10px] text-left max-w-[180px] leading-tight',
+                hasCoords
+                    ? 'text-muted-foreground hover:text-primary cursor-pointer'
+                    : 'text-muted-foreground cursor-default',
+            )}
+            title={hasCoords ? `View on map · ${label}` : label}
+        >
+            <MapPin
+                className={cn(
+                    'size-2.5 shrink-0',
+                    hasCoords ? 'text-rose-500 group-hover:text-primary' : 'text-muted-foreground/50',
+                )}
+            />
+            <span className="truncate">{label}</span>
+        </button>
+    )
+}
+
+function PunchLocationDialog({
+    state,
+    onClose,
+}: {
+    state: {
+        employeeName: string
+        recordedAt: string
+        source: AttendancePunchEvent['source']
+        locationName: string | null
+        latitude: string | null
+        longitude: string | null
+    } | null
+    onClose: () => void
+}) {
+    const open = !!state
+    const lat = state?.latitude ? Number(state.latitude) : null
+    const lng = state?.longitude ? Number(state.longitude) : null
+    const hasCoords = lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng)
+
+    // OpenStreetMap embed URL — bounding box ~250 m around the punch, marker
+    // pinned at the exact coordinate. Same vendor we reverse-geocode against
+    // so the label and the pin always match.
+    const delta = 0.0025
+    const bbox = hasCoords
+        ? `${(lng! - delta).toFixed(6)},${(lat! - delta).toFixed(6)},${(lng! + delta).toFixed(6)},${(lat! + delta).toFixed(6)}`
+        : null
+    const mapSrc = hasCoords
+        ? `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat!.toFixed(6)},${lng!.toFixed(6)}`
+        : null
+    const externalMapHref = hasCoords
+        ? `https://www.openstreetmap.org/?mlat=${lat!.toFixed(6)}&mlon=${lng!.toFixed(6)}#map=18/${lat!.toFixed(6)}/${lng!.toFixed(6)}`
+        : null
+    const googleMapsHref = hasCoords
+        ? `https://maps.google.com/?q=${lat!.toFixed(6)},${lng!.toFixed(6)}`
+        : null
+
+    return (
+        <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+            <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+                <DialogHeader className="px-6 pt-5 pb-3 border-b">
+                    <DialogTitle className="text-base font-semibold">Punch location</DialogTitle>
+                    {state && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {state.employeeName} - {new Date(state.recordedAt).toLocaleString()}
+                        </p>
+                    )}
+                </DialogHeader>
+
+                {/* Metadata strip — recorded source, place name, coords. Compact
+                    so the map gets the bulk of the dialog real estate. */}
+                {state && (
+                    <div className="px-6 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs border-b bg-muted/30">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Recorded via</p>
+                            <PunchSourceBadge source={state.source} />
+                        </div>
+                        <div className="sm:col-span-2 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Place</p>
+                            <p className="font-medium truncate" title={state.locationName ?? undefined}>
+                                {state.locationName ?? <span className="text-muted-foreground">No place name resolved</span>}
+                            </p>
+                            {hasCoords && (
+                                <p className="text-[11px] text-muted-foreground tabular-nums mt-0.5">
+                                    {lat!.toFixed(6)}, {lng!.toFixed(6)}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Map (iframe — no API key, no JS SDK, no tracking script).
+                    `sandbox` restricts the embed to running scripts + same-
+                    origin requests it actually needs (OSM's map JS) and
+                    nothing else — no top-level navigation, no popups, no
+                    form posts back through us. `referrerPolicy="no-referrer"`
+                    prevents the precise punch coordinates from leaking to
+                    OSM via the HTTP Referer header. */}
+                <div className="relative bg-muted/20" style={{ aspectRatio: '16 / 10' }}>
+                    {hasCoords && mapSrc ? (
+                        <iframe
+                            key={mapSrc}
+                            title="Punch location map"
+                            src={mapSrc}
+                            className="absolute inset-0 size-full border-0"
+                            loading="lazy"
+                            sandbox="allow-scripts allow-same-origin"
+                            referrerPolicy="no-referrer"
+                        />
+                    ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                            <MapPin className="size-8 text-muted-foreground/40 mb-2" />
+                            <p className="text-sm font-medium">No coordinates captured</p>
+                            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                                This punch was recorded without a GPS reading - common for desktop browsers or when location permission is off.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter className="px-6 py-3 border-t bg-background">
+                    <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+                    {hasCoords && (
+                        <>
+                            <a
+                                href={externalMapHref!}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1"
+                            >
+                                <ExternalLink className="size-3.5" />
+                                OpenStreetMap
+                            </a>
+                            <a
+                                href={googleMapsHref!}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline px-2 py-1"
+                            >
+                                <ExternalLink className="size-3.5" />
+                                Open in Google Maps
+                            </a>
+                        </>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
 }

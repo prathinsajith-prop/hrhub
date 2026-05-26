@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useJob, useApplications, useRecruitmentStages } from '@/hooks/useRecruitment'
@@ -357,25 +358,26 @@ export function JobDetailPage() {
                     {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 rounded-lg" />)}
                   </div>
                 ) : allCandidates.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
-                    <div className="size-12 rounded-xl bg-muted/60 border flex items-center justify-center mb-3">
-                      <Users className="size-6 text-muted-foreground/30" />
-                    </div>
-                    <p className="text-sm font-semibold">{t('recruitment.jobDetail.noCandidatesYet')}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{t('recruitment.jobDetail.candidatesWillAppear')}</p>
-                  </div>
+                  <EmptyState
+                    icon={Users}
+                    title={t('recruitment.jobDetail.noCandidatesYet')}
+                    description={t('recruitment.jobDetail.candidatesWillAppear')}
+                    size="lg"
+                  />
                 ) : candidates.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                    <AlertCircle className="size-8 text-muted-foreground/20 mb-2" />
-                    <p className="text-sm text-muted-foreground">{t('recruitment.jobDetail.noCandidatesInStage')}</p>
-                    <button
-                      type="button"
-                      onClick={() => setStageFilter('all')}
-                      className="text-xs text-primary mt-2 hover:underline"
-                    >
-                      {t('recruitment.jobDetail.showAll')}
-                    </button>
-                  </div>
+                  <EmptyState
+                    icon={AlertCircle}
+                    title={t('recruitment.jobDetail.noCandidatesInStage')}
+                    action={(
+                      <button
+                        type="button"
+                        onClick={() => setStageFilter('all')}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        {t('recruitment.jobDetail.showAll')}
+                      </button>
+                    )}
+                  />
                 ) : (
                   <>
                     <div className="divide-y divide-border/40">

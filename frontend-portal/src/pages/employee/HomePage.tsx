@@ -36,6 +36,7 @@ import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
 import { useMyPayslips } from '@/hooks/usePayslips'
 import { useMyOpenExit } from '@/hooks/useMyExit'
 import { useAttendance, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
+import { formatTime } from '@/lib/datetime'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { ChartCard } from '@/components/shared/ChartCard'
 import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
@@ -171,12 +172,12 @@ export function EmployeeHomePage() {
                         {todayRecord?.checkIn ? (
                             <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                                 <div className="font-display text-2xl font-bold tabular-figures">
-                                    {new Date(todayRecord.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {formatTime(todayRecord.checkIn)}
                                 </div>
                                 <div className="text-xs text-muted-foreground">→</div>
                                 {todayRecord.checkOut ? (
                                     <div className="font-display text-2xl font-bold tabular-figures">
-                                        {new Date(todayRecord.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {formatTime(todayRecord.checkOut)}
                                     </div>
                                 ) : (
                                     <div className="text-sm font-medium text-foreground/70">{t('common.today')}…</div>

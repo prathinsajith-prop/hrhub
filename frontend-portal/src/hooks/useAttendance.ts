@@ -40,12 +40,62 @@ export interface PunchBody {
     notes?: string | null
 }
 
+// Today's date in the user's local timezone — used both as the query key for
+// the today-punches cache and the optimistic-update target on punch success.
+function localTodayISO(): string {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Append a synthetic punch into the today-punches cache the moment the
+// mutation succeeds. The UI then flips Check-in ↔ Check-out and the live
+// timer starts ticking from `recordedAt` immediately — no need to wait for
+// the GET refetch to land. Once the real refetch lands, the server's row
+// replaces this stub.
+function pushOptimisticPunch(
+    qc: ReturnType<typeof useQueryClient>,
+    tenantId: string | undefined,
+    employeeId: string | undefined,
+    punchType: 'in' | 'out',
+    body: PunchBody,
+) {
+    if (!tenantId) return
+    const date = localTodayISO()
+    // Match the queryKey shape used by usePunchesForDay so we land on the
+    // right cache entry. employeeId in the key may be `null` (the hook
+    // normalises undefined → null) — match that.
+    const key = ['portal', 'attendance-punches', tenantId, date, employeeId ?? null]
+    qc.setQueryData<AttendancePunch[]>(key, (prev) => {
+        const list = prev ?? []
+        const stub: AttendancePunch = {
+            id: `optimistic-${Date.now()}`,
+            tenantId,
+            employeeId: employeeId ?? '',
+            date,
+            punchType,
+            recordedAt: new Date().toISOString(),
+            locationName: body.locationName ?? null,
+            latitude: body.latitude != null ? String(body.latitude) : null,
+            longitude: body.longitude != null ? String(body.longitude) : null,
+            source: 'web',
+            deviceId: null,
+            notes: body.notes ?? null,
+            createdBy: null,
+            createdAt: new Date().toISOString(),
+        }
+        return [...list, stub]
+    })
+}
+
 export function useCheckIn() {
     const qc = useQueryClient()
+    const tenantId = useAuthStore((s) => s.user?.tenantId)
+    const employeeId = useAuthStore((s) => s.user?.employeeId ?? undefined)
     return useMutation({
         mutationFn: (body: PunchBody = {}) =>
             api.post<{ data: AttendanceRecord }>('/attendance/check-in', body).then((r) => r.data),
-        onSuccess: () => {
+        onSuccess: (_data, body) => {
+            pushOptimisticPunch(qc, tenantId, body.employeeId ?? employeeId, 'in', body)
             qc.invalidateQueries({ queryKey: ['portal', 'attendance'] })
             qc.invalidateQueries({ queryKey: ['portal', 'attendance-calendar'] })
             qc.invalidateQueries({ queryKey: ['portal', 'attendance-punches'] })
@@ -55,10 +105,13 @@ export function useCheckIn() {
 
 export function useCheckOut() {
     const qc = useQueryClient()
+    const tenantId = useAuthStore((s) => s.user?.tenantId)
+    const employeeId = useAuthStore((s) => s.user?.employeeId ?? undefined)
     return useMutation({
         mutationFn: (body: PunchBody = {}) =>
             api.post<{ data: AttendanceRecord }>('/attendance/check-out', body).then((r) => r.data),
-        onSuccess: () => {
+        onSuccess: (_data, body) => {
+            pushOptimisticPunch(qc, tenantId, body.employeeId ?? employeeId, 'out', body)
             qc.invalidateQueries({ queryKey: ['portal', 'attendance'] })
             qc.invalidateQueries({ queryKey: ['portal', 'attendance-calendar'] })
             qc.invalidateQueries({ queryKey: ['portal', 'attendance-punches'] })
@@ -87,6 +140,13 @@ export interface AttendancePunch {
 
 export function usePunchesForDay(date: string | null, employeeId?: string) {
     const tenantId = useAuthStore((s) => s.user?.tenantId)
+    // When the requested day is *today*, treat the cache as always stale and
+    // refetch on every mount: this is the data that drives the live check-in
+    // band, so we never want it to lag a tab-switch or page-revisit.
+    const isToday = date === (() => {
+        const d = new Date()
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    })()
     return useQuery({
         queryKey: ['portal', 'attendance-punches', tenantId, date, employeeId ?? null],
         queryFn: () => {
@@ -95,6 +155,8 @@ export function usePunchesForDay(date: string | null, employeeId?: string) {
             return api.get<{ data: AttendancePunch[] }>(`/attendance/punches?${qs}`).then((r) => r.data)
         },
         enabled: !!tenantId && !!date && /^\d{4}-\d{2}-\d{2}$/.test(date),
+        staleTime: isToday ? 0 : 30_000,
+        refetchOnMount: isToday ? 'always' : true,
     })
 }
 

@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, toast, ConfirmDialog } from '@/components/ui/overlays'
 import { cn } from '@/lib/utils'
 import {
@@ -375,24 +377,26 @@ function GradeLevelsSection() {
             >
                 {isLoading ? (
                     <div className="space-y-2">
-                        {[1, 2, 3].map(i => <div key={`div-${i}`} className="h-12 rounded-lg bg-muted animate-pulse" />)}
+                        {[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-12 rounded-lg" />)}
                     </div>
                 ) : levels.length === 0 ? (
-                    <div className="rounded-xl border border-dashed bg-muted/30 flex flex-col items-center justify-center py-12 text-center gap-4">
-                        <div className="space-y-1">
-                            <p className="text-sm font-medium">{t('orgSettings.gradeLevels.noGradeLevels')}</p>
-                            <p className="text-xs text-muted-foreground">{t('orgSettings.gradeLevels.noGradeLevelsHint')}</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleSeedDefaults} disabled={seed.isPending}>
-                                <Sparkles className="size-3.5" />
-                                {seed.isPending ? t('orgSettings.gradeLevels.loading') : t('orgSettings.gradeLevels.loadDefaults')}
-                            </Button>
-                            <Button size="sm" className="gap-1.5" onClick={openAdd}>
-                                <Plus className="size-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
-                            </Button>
-                        </div>
-                    </div>
+                    <EmptyState
+                        icon={GraduationCap}
+                        title={t('orgSettings.gradeLevels.noGradeLevels')}
+                        description={t('orgSettings.gradeLevels.noGradeLevelsHint')}
+                        className="rounded-xl border border-dashed bg-muted/30"
+                        action={(
+                            <>
+                                <Button variant="outline" size="sm" className="gap-1.5" onClick={handleSeedDefaults} disabled={seed.isPending}>
+                                    <Sparkles className="size-3.5" />
+                                    {seed.isPending ? t('orgSettings.gradeLevels.loading') : t('orgSettings.gradeLevels.loadDefaults')}
+                                </Button>
+                                <Button size="sm" className="gap-1.5" onClick={openAdd}>
+                                    <Plus className="size-3.5" /> {t('orgSettings.gradeLevels.addGradeLevel')}
+                                </Button>
+                            </>
+                        )}
+                    />
                 ) : (
                     <div className="rounded-xl border bg-card overflow-hidden">
                         <div className="overflow-x-auto">
@@ -562,14 +566,12 @@ function MasterList({
         <div className="space-y-3">
             {isLoading ? (
                 <div className="space-y-2">
-                    {[1, 2, 3].map(i => <div key={`div-${i}`} className="h-10 rounded-lg bg-muted animate-pulse" />)}
+                    {[1, 2, 3].map(i => <Skeleton key={`div-${i}`} className="h-10 rounded-lg" />)}
                 </div>
             ) : (
                 <div className="rounded-xl border bg-card overflow-hidden">
                     {items.length === 0 && !addingNew ? (
-                        <div className="flex flex-col items-center justify-center py-10 text-center text-sm text-muted-foreground gap-2">
-                            <p>{emptyMessage}</p>
-                        </div>
+                        <EmptyState title={emptyMessage} size="sm" />
                     ) : (
                         <table className="w-full text-sm">
                             <thead>

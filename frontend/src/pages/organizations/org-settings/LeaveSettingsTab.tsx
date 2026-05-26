@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { toast, ConfirmDialog } from '@/components/ui/overlays'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { NumericInput } from '@/components/ui/numeric-input'
@@ -254,10 +255,7 @@ export function LeaveSettingsTab() {
                 description={t('orgSettings.leave.leavePoliciesDesc')}
             >
                 {policyDraft.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <CalendarDays className="size-8 text-muted-foreground/20 mb-2" />
-                        <p className="text-sm text-muted-foreground">{t('orgSettings.leave.noLeaveTypes')}</p>
-                    </div>
+                    <EmptyState icon={CalendarDays} title={t('orgSettings.leave.noLeaveTypes')} size="sm" />
                 ) : (
                     <div className="space-y-3">
                         {/* Column headers - desktop only */}
