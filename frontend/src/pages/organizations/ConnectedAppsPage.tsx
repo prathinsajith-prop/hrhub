@@ -19,6 +19,7 @@ import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -356,20 +357,17 @@ export function ConnectedAppsPage() {
                             ))}
                         </div>
                     ) : !apps || apps.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-                            <div className="flex size-14 items-center justify-center rounded-2xl bg-muted mb-4">
-                                <Plug2 className="size-7 text-muted-foreground/40" />
-                            </div>
-                            <p className="text-sm font-semibold text-foreground">{t('common.noData')}</p>
-                            <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                                Create an API app to connect external systems like ERP, payroll, or analytics tools.
-                            </p>
-                            {canManage && (
-                                <Button size="sm" className="mt-4" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
+                        <EmptyState
+                            icon={Plug2}
+                            title={t('common.noData')}
+                            description="Create an API app to connect external systems like ERP, payroll, or analytics tools."
+                            size="lg"
+                            action={canManage ? (
+                                <Button size="sm" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
                                     {t('apps.newApp')}
                                 </Button>
-                            )}
-                        </div>
+                            ) : undefined}
+                        />
                     ) : (
                         <div>
                             {apps.map((app) => (

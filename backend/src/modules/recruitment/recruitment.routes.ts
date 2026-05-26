@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, type BulkJobInputRow } from './recruitment.service.js'
+import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
@@ -376,6 +376,134 @@ export default async function (fastify: any): Promise<void> {
             broadcastToTenant(request.user.tenantId, {
                 type: 'recruitment:job-changed',
                 payload: { jobId: null, action: 'bulk', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
+            })
+        }
+        return reply.code(201).send(result)
+    })
+
+    // ─── Bulk import for Candidates / Job Applications ───────────────────────
+    //
+    // Same three-step UX (template → preview → commit) as the other bulk
+    // imports. Difference vs jobs/assets: candidates carry FK to a job, and
+    // the dialog forces HR to pick exactly one job per import — applied to
+    // every row. The same email + same job duplicate guard applies (we
+    // re-use `createApplication`'s rule in bulk form).
+    //
+    // The template lists BOTH the canonical column names AND common
+    // LinkedIn / ATS aliases on the reference sheet, so HR can paste a
+    // LinkedIn or Workable export with minimal cleanup.
+
+    // GET /api/v1/applications/bulk-template
+    fastify.get('/applications/bulk-template', writeAuth, async (_request: any, reply: any) => {
+        const header = [
+            'first_name',
+            'last_name',
+            'name',
+            'email',
+            'phone',
+            'nationality',
+            'experience',
+            'expected_salary',
+            'notes',
+        ]
+        // Two example rows so HR sees both the split-name (LinkedIn) AND
+        // single-name (ATS) shapes the importer accepts.
+        const sample1 = ['Fatima', 'Al Mansoori', '', 'fatima.almansoori@example.com', '+971501234567', 'UAE', 5, 22000, 'Senior FE candidate']
+        const sample2 = ['', '', 'Omar Khan', 'omar.k@example.com', '+971555998877', 'Pakistan', 3, 14000, 'Referred by Aisha']
+
+        const wb = XLSX.utils.book_new()
+        const candidateSheet = XLSX.utils.aoa_to_sheet([header, sample1, sample2])
+        candidateSheet['!cols'] = [
+            { wch: 16 }, { wch: 18 }, { wch: 24 }, { wch: 28 }, { wch: 18 },
+            { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 32 },
+        ]
+        XLSX.utils.book_append_sheet(wb, candidateSheet, 'Candidates')
+
+        // Reference sheet — header aliases for common imports.
+        const refSheet = XLSX.utils.aoa_to_sheet([
+            ['Notes:'],
+            ['• Pick the target job once in the Bulk import dialog — every row in the file is added to that job.'],
+            ['• Provide either both first_name AND last_name, or a single name column. The importer combines them.'],
+            ['• email is required. Rows with duplicate emails (same job, active stages) are flagged and skipped on save.'],
+            ['• Other columns are optional. Missing values land as null.'],
+            [],
+            ['Header aliases the importer also accepts (case-insensitive):'],
+            ['first_name      ← "First Name", "given_name", "fname"'],
+            ['last_name       ← "Last Name", "surname", "lname", "family name"'],
+            ['name            ← "Name", "Candidate Name", "full name"'],
+            ['email           ← "Email Address", "Email", "e-mail"'],
+            ['phone           ← "Phone Number", "Phone", "mobile", "contact"'],
+            ['nationality     ← "Country", "Location", "Nationality"'],
+            ['experience      ← "Years of Experience", "Yrs Exp", "exp_years"'],
+            ['expected_salary ← "Expected Salary", "Salary", "Compensation"'],
+            ['notes           ← "Remarks", "Comments", "Description"'],
+        ])
+        refSheet['!cols'] = [{ wch: 90 }]
+        XLSX.utils.book_append_sheet(wb, refSheet, 'Reference')
+
+        const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+        reply
+            .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .header('Content-Disposition', 'attachment; filename="candidates-bulk-template.xlsx"')
+            .send(buf)
+    })
+
+    // Shared row-normalizer — both validate + commit accept the same shape.
+    // Cap rows at 500 (same as the other bulk endpoints) so a runaway sheet
+    // can't tie up the request thread.
+    const normalizeCandidateRows = (rows: Array<Record<string, unknown>>): BulkCandidateInputRow[] =>
+        rows.map((r, i) => ({
+            rowNumber: Number(r.rowNumber) || i + 1,
+            firstName: r.firstName != null ? String(r.firstName) : null,
+            lastName: r.lastName != null ? String(r.lastName) : null,
+            name: r.name != null ? String(r.name) : null,
+            email: r.email != null ? String(r.email) : null,
+            phone: r.phone != null ? String(r.phone) : null,
+            nationality: r.nationality != null ? String(r.nationality) : null,
+            experience: (r.experience as number | string | null | undefined) ?? null,
+            expectedSalary: (r.expectedSalary as number | string | null | undefined) ?? null,
+            notes: r.notes != null ? String(r.notes) : null,
+        }))
+
+    // POST /api/v1/applications/bulk-validate — preview only, no writes.
+    fastify.post('/applications/bulk-validate', writeAuth, async (request: any, reply: any) => {
+        const body = request.body as Record<string, unknown>
+        const jobId = typeof body.jobId === 'string' ? body.jobId : null
+        const rows = Array.isArray(body.rows) ? (body.rows as Array<Record<string, unknown>>) : []
+        if (!jobId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'jobId is required' })
+        if (rows.length === 0) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        if (rows.length > 500) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        const result = await validateBulkCandidateRows(request.user.tenantId, jobId, normalizeCandidateRows(rows))
+        if (!result.jobExists) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found in your organisation.' })
+        return reply.send(result)
+    })
+
+    // POST /api/v1/applications/bulk — commit.
+    fastify.post('/applications/bulk', writeAuth, async (request: any, reply: any) => {
+        const body = request.body as Record<string, unknown>
+        const jobId = typeof body.jobId === 'string' ? body.jobId : null
+        const rows = Array.isArray(body.rows) ? (body.rows as Array<Record<string, unknown>>) : []
+        if (!jobId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'jobId is required' })
+        if (rows.length === 0) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'rows must contain at least one entry' })
+        if (rows.length > 500) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
+        const result = await bulkCreateCandidates(request.user.tenantId, jobId, normalizeCandidateRows(rows))
+        if (!result.jobExists) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found in your organisation.' })
+        if (result.created > 0) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'application',
+                entityId: null,
+                entityName: `bulk import: ${result.created} candidate(s)`,
+                action: 'create',
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            broadcastToTenant(request.user.tenantId, {
+                type: 'recruitment:application-changed',
+                payload: { jobId, action: 'bulk', actorId: request.user.id, actorSocketId: request.headers['x-socket-id'] ?? null },
             })
         }
         return reply.code(201).send(result)

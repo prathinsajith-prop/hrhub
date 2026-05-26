@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { labelFor } from '@/lib/enums'
 import {
     Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users,
     Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle, Receipt, TrendingUp, RefreshCcw,
+    CalendarCheck, Plane, Timer, Hourglass, GitCommit, ClipboardCheck, Star, AlertOctagon,
 } from 'lucide-react'
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -22,22 +23,51 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useReportsSummary } from '@/hooks/useReports'
 import { usePermissions } from '@/hooks/usePermissions'
-import type { PayrollTrendRow, VisaExpiryEmployee } from '@/hooks/useReports'
+import type {
+    PayrollTrendRow,
+    AttendanceByDepartment, AttendanceLeader,
+    LeaveTopTaker,
+    StalledChecklist, OnboardingByDepartment,
+    PerformanceDeptRow, RecentReview,
+    DocExpiryRow, DocType,
+} from '@/hooks/useReports'
 import { COST_CATEGORY_LABELS } from '@/hooks/useVisaCosts'
 import type { CostReportEmployee } from '@/hooks/useVisaCosts'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { applyClientFilters, type FilterConfig } from '@/lib/filters'
-import { searchDepartments, searchNationalities } from '@/lib/filters/filter-loaders'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const URGENCY_COLORS: Record<string, string> = {
-    expired: '#ef4444',
-    critical: '#f97316',
-    urgent: '#f59e0b',
-    normal: '#10b981',
+// ─── Document Expiry — config ────────────────────────────────────────────
+// Friendly labels + per-type colour tones for the unified Expiry tab.
+// Each tone lives in `ROLE_BADGE_STYLE`-style classes so adding a new doc
+// type means adding one entry here and one to the DocType union.
+
+const DOC_TYPE_LABEL: Record<DocType, string> = {
+    visa:         'Visa',
+    passport:     'Passport',
+    emirates_id:  'Emirates ID',
+    labour_card:  'Labour Card',
+    contract:     'Contract',
+}
+
+const DOC_TYPE_TONE: Record<DocType, string> = {
+    visa:         'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900',
+    passport:     'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900',
+    emirates_id:  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
+    labour_card:  'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
+    contract:     'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
+}
+
+// Urgency tone palette — used both by the donut chart and the urgency
+// summary card on the Expiry tab.
+const URGENCY_TONE: Record<'expired' | 'critical' | 'urgent' | 'normal', { color: string; label: string }> = {
+    expired:  { color: '#ef4444', label: 'Expired' },
+    critical: { color: '#f97316', label: 'Critical (≤30d)' },
+    urgent:   { color: '#f59e0b', label: 'Urgent (31–60d)' },
+    normal:   { color: '#10b981', label: 'Normal (61–90d)' },
 }
 
 const PAYROLL_REPORT_FILTERS: FilterConfig[] = [
@@ -53,24 +83,6 @@ const PAYROLL_REPORT_FILTERS: FilterConfig[] = [
     { name: 'headcount', label: 'Employee count', type: 'number_range', field: 'headcount', min: 0 },
     { name: 'net', label: 'Net pay (AED)', type: 'number_range', field: 'net', min: 0, prefix: 'AED' },
     { name: 'gross', label: 'Gross pay (AED)', type: 'number_range', field: 'gross', min: 0, prefix: 'AED' },
-]
-
-const VISA_REPORT_FILTERS: FilterConfig[] = [
-    { name: 'fullName', label: 'Employee name', type: 'text', field: 'fullName' },
-    { name: 'department', label: 'Department', type: 'autocomplete', field: 'department', onSearch: searchDepartments, placeholder: 'Search departments…' },
-    { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
-    {
-        name: 'urgency', label: 'Urgency', type: 'select', field: 'urgency',
-        options: [
-            { value: 'expired', label: 'Expired' },
-            { value: 'critical', label: 'Critical' },
-            { value: 'urgent', label: 'Urgent' },
-            { value: 'normal', label: 'Normal' },
-        ],
-    },
-    { name: 'visaExpiry', label: 'Visa expiry', type: 'date_range', field: 'visaExpiry' },
-    { name: 'daysLeft', label: 'Days remaining', type: 'number_range', field: 'daysLeft', min: -9999, max: 365 },
-    { name: 'visaType', label: 'Visa type', type: 'text', field: 'visaType' },
 ]
 
 const EMPLOYEE_STATUS_META: Record<
@@ -97,6 +109,173 @@ function EmptyChart({ message = 'No data available' }: { message?: string }) {
     )
 }
 
+/**
+ * Doc-type filter pills for the unified Expiry tab. Renders an "All" pill
+ * plus one per doc type, each with the count of documents currently
+ * expiring in that bucket. Selected pill picks up the tone defined in
+ * `DOC_TYPE_TONE` so the active filter is colour-coded to its category.
+ */
+function ExpiryTypeFilter({
+    docTypeFilter,
+    setDocTypeFilter,
+    byType,
+    loading,
+}: {
+    docTypeFilter: DocType | 'all'
+    setDocTypeFilter: (v: DocType | 'all') => void
+    byType: Record<DocType | 'total', { total: number }> | null | undefined
+    loading: boolean
+}) {
+    if (loading) {
+        return (
+            <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-24 rounded-full" />)}
+            </div>
+        )
+    }
+    const types: Array<{ key: DocType | 'all'; label: string; tone?: string }> = [
+        { key: 'all',         label: 'All Documents' },
+        { key: 'visa',        label: DOC_TYPE_LABEL.visa,        tone: DOC_TYPE_TONE.visa },
+        { key: 'passport',    label: DOC_TYPE_LABEL.passport,    tone: DOC_TYPE_TONE.passport },
+        { key: 'emirates_id', label: DOC_TYPE_LABEL.emirates_id, tone: DOC_TYPE_TONE.emirates_id },
+        { key: 'labour_card', label: DOC_TYPE_LABEL.labour_card, tone: DOC_TYPE_TONE.labour_card },
+        { key: 'contract',    label: DOC_TYPE_LABEL.contract,    tone: DOC_TYPE_TONE.contract },
+    ]
+    return (
+        <div className="flex flex-wrap gap-1.5">
+            {types.map((t) => {
+                const count = t.key === 'all' ? byType?.total.total ?? 0 : byType?.[t.key].total ?? 0
+                const active = docTypeFilter === t.key
+                return (
+                    <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => setDocTypeFilter(t.key)}
+                        className={cn(
+                            'inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-all',
+                            active
+                                ? cn(t.tone ?? 'bg-primary/10 border-primary/30 text-primary', 'shadow-sm')
+                                : 'border-border bg-background text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40',
+                        )}
+                    >
+                        <span>{t.label}</span>
+                        <span className={cn(
+                            'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums',
+                            active ? 'bg-background/70' : 'bg-muted',
+                        )}>
+                            {count}
+                        </span>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/**
+ * Donut + per-urgency progress bars. Drives the "Urgency Mix" card on the
+ * Expiry tab. Works on the filtered row set so swapping doc-type pills
+ * re-paints the visual immediately.
+ */
+function ExpiryUrgencyCard({ rows, loading }: { rows: DocExpiryRow[]; loading: boolean }) {
+    const data = useMemo(() => {
+        const buckets: Record<'expired' | 'critical' | 'urgent' | 'normal', number> = { expired: 0, critical: 0, urgent: 0, normal: 0 }
+        for (const r of rows) buckets[r.urgency]++
+        return (Object.keys(buckets) as Array<keyof typeof buckets>)
+            .map((k) => ({ key: k, name: URGENCY_TONE[k].label, value: buckets[k], color: URGENCY_TONE[k].color }))
+    }, [rows])
+    const total = data.reduce((s, d) => s + d.value, 0)
+    if (loading) return <ChartSkeleton height={200} />
+    if (total === 0) {
+        return (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+                <CheckCircle2 className="size-8 text-emerald-400" />
+                <p className="text-sm text-muted-foreground">Nothing expiring in this slice</p>
+            </div>
+        )
+    }
+    return (
+        <div className="space-y-4">
+            <ResponsiveContainer width="100%" height={140}>
+                <PieChart>
+                    <Pie data={data.filter((d) => d.value > 0)} cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value">
+                        {data.filter((d) => d.value > 0).map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: unknown, name: unknown) => [Number(v ?? 0), String(name ?? '')]} />
+                </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-2">
+                {data.map((d) => {
+                    const pct = total > 0 ? (d.value / total) * 100 : 0
+                    return (
+                        <div key={d.key} className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="size-2 rounded-full" style={{ background: d.color }} />
+                                    <span className="font-medium">{d.name}</span>
+                                </div>
+                                <span className="tabular-nums text-muted-foreground">{d.value} · {pct.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: d.color }} />
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+/**
+ * Per-department breakdown for the active doc-type filter. Sorted DESC
+ * by exposure so the riskiest department lands at the top. Capped at 8
+ * rows; an overflow row shows "+N more" so HR can still see the magnitude.
+ */
+function ExpiryByDepartmentCard({ rows, loading }: { rows: DocExpiryRow[]; loading: boolean }) {
+    const stats = useMemo(() => {
+        const m = new Map<string, { expired: number; critical: number; urgent: number; normal: number; total: number }>()
+        for (const r of rows) {
+            const key = r.department ?? 'Unassigned'
+            const s = m.get(key) ?? { expired: 0, critical: 0, urgent: 0, normal: 0, total: 0 }
+            s[r.urgency]++
+            s.total++
+            m.set(key, s)
+        }
+        return Array.from(m.entries())
+            .map(([department, v]) => ({ department, ...v }))
+            .sort((a, b) => b.total - a.total)
+    }, [rows])
+    if (loading) return <ChartSkeleton height={200} />
+    if (stats.length === 0) return <EmptyChart message="No expiring documents in this slice" />
+    const top = stats.slice(0, 8)
+    const overflow = stats.length - top.length
+    const maxTotal = Math.max(1, ...top.map((s) => s.total))
+    return (
+        <div className="space-y-2.5">
+            {top.map((s) => (
+                <div key={s.department} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium truncate pe-2">{s.department}</span>
+                        <span className="tabular-nums text-muted-foreground shrink-0">{s.total}</span>
+                    </div>
+                    {/* Stacked bar so HR sees expired vs critical vs urgent vs
+                        normal proportions per dept at a glance. */}
+                    <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden flex">
+                        {(['expired', 'critical', 'urgent', 'normal'] as const).map((u) => {
+                            const w = s[u] === 0 ? 0 : (s[u] / maxTotal) * 100
+                            return w > 0 ? <div key={u} className="h-full" style={{ width: `${w}%`, background: URGENCY_TONE[u].color }} title={`${URGENCY_TONE[u].label}: ${s[u]}`} /> : null
+                        })}
+                    </div>
+                </div>
+            ))}
+            {overflow > 0 && (
+                <p className="text-[11px] text-muted-foreground pt-1">+ {overflow} more department{overflow === 1 ? '' : 's'}</p>
+            )}
+        </div>
+    )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export function ReportsPage() {
@@ -109,22 +288,35 @@ export function ReportsPage() {
     const { data: reportsSummary, isLoading: summaryLoading, isFetching: summaryFetching, refetch: refetchSummary } = useReportsSummary(90)
     const headcount = reportsSummary?.headcount
     const payrollSummary = reportsSummary?.payrollSummary
-    const visaExpiry = reportsSummary?.visaExpiry
     const proCosts = reportsSummary?.proCosts
+    const attendanceSummary = reportsSummary?.attendanceSummary
+    const leaveSummary = reportsSummary?.leaveSummary
+    const turnover = reportsSummary?.turnover
+    const onboarding = reportsSummary?.onboarding
+    const performance = reportsSummary?.performance
+    const documentExpiry = reportsSummary?.documentExpiry
     const isLoading = summaryLoading
     const isRefreshing = summaryFetching
+
+    // ─── Permission gates for the new tabs ─────────────────────────────
+    // No dedicated `view_attendance` / `view_leave` permission yet — fall
+    // back to the `manage_*` versions every HR/PRO role already holds.
+    // dept_head sees their subtree scoping server-side in the BFF.
+    const canViewAttendance = can('manage_attendance')
+    const canViewLeave = can('manage_leave')
+    const canViewTurnover = can('view_employees')
+    const canViewOnboarding = can('view_employees')
+    const canViewPerformance = can('view_employees')
+
+    // Active filter for the unified Expiry tab — drives both the table
+    // data slice and which pill is highlighted. 'all' shows every doc.
+    const [docTypeFilter, setDocTypeFilter] = useState<DocType | 'all'>('all')
 
     const payrollSearch = useSearchFilters({
         storageKey: 'hrhub.reports.payroll.searchHistory',
         availableFilters: PAYROLL_REPORT_FILTERS,
     })
-    const visaReportSearch = useSearchFilters({
-        storageKey: 'hrhub.reports.visa.searchHistory',
-        availableFilters: VISA_REPORT_FILTERS,
-    })
-
     const payrollTrend = useMemo<PayrollTrendRow[]>(() => payrollSummary?.trend ?? [], [payrollSummary?.trend])
-    const visaEmployees = useMemo<VisaExpiryEmployee[]>(() => visaExpiry?.employees ?? [], [visaExpiry?.employees])
 
     const payrollRows = useMemo(
         () => applyClientFilters(payrollTrend as unknown as Record<string, unknown>[], {
@@ -134,14 +326,14 @@ export function ReportsPage() {
         }),
         [payrollTrend, payrollSearch.appliedFilters, payrollSearch.searchInput],
     )
-    const visaReportRows = useMemo(
-        () => applyClientFilters(visaEmployees as unknown as Record<string, unknown>[], {
-            searchInput: visaReportSearch.searchInput,
-            appliedFilters: visaReportSearch.appliedFilters,
-            searchFields: ['fullName', 'employeeNo', 'department', 'visaType'],
-        }),
-        [visaEmployees, visaReportSearch.appliedFilters, visaReportSearch.searchInput],
-    )
+
+    // Slice the unified expiry roll-up by the active doc-type filter. The
+    // backend already returns rows sorted by `expiryDate` ASC, so the most
+    // urgent docs naturally sit at the top.
+    const docRows = useMemo<DocExpiryRow[]>(() => {
+        const list = documentExpiry?.documents ?? []
+        return docTypeFilter === 'all' ? list : list.filter((d) => d.docType === docTypeFilter)
+    }, [documentExpiry?.documents, docTypeFilter])
 
     // Derived chart data
     const deptChartData = useMemo(
@@ -165,12 +357,6 @@ export function ReportsPage() {
         })),
         [payrollTrend],
     )
-    const visaUrgencyData = useMemo(() => [
-        { name: 'Expired', value: visaExpiry?.expired ?? 0, color: URGENCY_COLORS.expired },
-        { name: 'Critical', value: visaExpiry?.critical ?? 0, color: URGENCY_COLORS.critical },
-        { name: 'Urgent', value: visaExpiry?.urgent ?? 0, color: URGENCY_COLORS.urgent },
-        { name: 'Normal', value: visaExpiry?.normal ?? 0, color: URGENCY_COLORS.normal },
-    ].filter(d => d.value > 0), [visaExpiry])
     const proCatData = useMemo(
         () => (proCosts?.byCategory ?? []).map(c => ({
             name: COST_CATEGORY_LABELS[c.label as keyof typeof COST_CATEGORY_LABELS] ?? c.label,
@@ -210,26 +396,64 @@ export function ReportsPage() {
             />
 
             <Tabs defaultValue="headcount">
-                <TabsList className="inline-flex h-auto rounded-xl border bg-card p-1 shadow-sm gap-1 mb-5">
-                    <TabsTrigger value="headcount" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                        <Users className="size-4" /> Headcount
-                    </TabsTrigger>
-                    {canViewPayroll && (
-                        <TabsTrigger value="payroll" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                            <BarChart3 className="size-4" /> Payroll Summary
-                        </TabsTrigger>
-                    )}
-                    {canViewVisa && (
-                        <TabsTrigger value="visa" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                            <Shield className="size-4" /> Visa Expiry
-                        </TabsTrigger>
-                    )}
-                    {canViewPayroll && (
-                        <TabsTrigger value="pro-costs" className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-colors">
-                            <Receipt className="size-4" /> PRO Costs
-                        </TabsTrigger>
-                    )}
-                </TabsList>
+                {/* Tab navigation — config-driven so we don't repeat trigger
+                    classes 9 times. Each tab knows its category and accent
+                    colour; the bar renders in a single horizontally-scrollable
+                    row with subtle category-coloured icon halos so the
+                    People / Time / Compensation / Compliance grouping reads
+                    visually without separator chips that broke onto a second
+                    row on narrow widths. */}
+                {(() => {
+                    type Category = 'people' | 'time' | 'comp' | 'compliance'
+                    const CATEGORY_TONE: Record<Category, { tint: string; text: string; ring: string }> = {
+                        people:     { tint: 'bg-blue-50 dark:bg-blue-950/40',     text: 'text-blue-600 dark:text-blue-400',     ring: 'data-[state=active]:ring-blue-200 dark:data-[state=active]:ring-blue-900/60' },
+                        time:       { tint: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400', ring: 'data-[state=active]:ring-emerald-200 dark:data-[state=active]:ring-emerald-900/60' },
+                        comp:       { tint: 'bg-amber-50 dark:bg-amber-950/40',   text: 'text-amber-600 dark:text-amber-400',   ring: 'data-[state=active]:ring-amber-200 dark:data-[state=active]:ring-amber-900/60' },
+                        compliance: { tint: 'bg-rose-50 dark:bg-rose-950/40',     text: 'text-rose-600 dark:text-rose-400',     ring: 'data-[state=active]:ring-rose-200 dark:data-[state=active]:ring-rose-900/60' },
+                    }
+                    interface TabSpec { value: string; label: string; icon: typeof Users; category: Category; visible: boolean }
+                    const tabs: TabSpec[] = [
+                        { value: 'headcount',   label: 'Headcount',       icon: Users,            category: 'people',     visible: true },
+                        { value: 'turnover',    label: 'Turnover',        icon: GitCommit,        category: 'people',     visible: canViewTurnover },
+                        { value: 'onboarding',  label: 'Onboarding',      icon: ClipboardCheck,   category: 'people',     visible: canViewOnboarding },
+                        { value: 'performance', label: 'Performance',     icon: Star,             category: 'people',     visible: canViewPerformance },
+                        { value: 'attendance',  label: 'Attendance',      icon: CalendarCheck,    category: 'time',       visible: canViewAttendance },
+                        { value: 'leave',       label: 'Leave',           icon: Plane,            category: 'time',       visible: canViewLeave },
+                        { value: 'payroll',     label: 'Payroll',         icon: BarChart3,        category: 'comp',       visible: canViewPayroll },
+                        { value: 'expiry',      label: 'Expiry',          icon: Shield,           category: 'compliance', visible: canViewVisa },
+                        { value: 'pro-costs',   label: 'PRO Costs',       icon: Receipt,          category: 'compliance', visible: canViewPayroll },
+                    ]
+                    return (
+                        <div className="mb-5 -mx-1 overflow-x-auto scrollbar-thin">
+                            <TabsList className="inline-flex h-auto items-center rounded-xl border bg-card p-1 shadow-sm gap-0.5 mx-1 min-w-fit">
+                                {tabs.filter((t) => t.visible).map((tab) => {
+                                    const tone = CATEGORY_TONE[tab.category]
+                                    const Icon = tab.icon
+                                    return (
+                                        <TabsTrigger
+                                            key={tab.value}
+                                            value={tab.value}
+                                            className={cn(
+                                                'group relative flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground hover:text-foreground transition-colors',
+                                                'data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1',
+                                                tone.ring,
+                                            )}
+                                        >
+                                            <span className={cn(
+                                                'inline-flex items-center justify-center size-6 rounded-md transition-colors',
+                                                tone.tint, tone.text,
+                                                'group-data-[state=active]:scale-105',
+                                            )}>
+                                                <Icon className="size-3.5" />
+                                            </span>
+                                            {tab.label}
+                                        </TabsTrigger>
+                                    )
+                                })}
+                            </TabsList>
+                        </div>
+                    )
+                })()}
 
                 {/* ── Headcount ── */}
                 <TabsContent value="headcount" className="space-y-4">
@@ -320,6 +544,451 @@ export function ReportsPage() {
                     </Card>
                 </TabsContent>
 
+                {/* ── Turnover & Attrition ──
+                    Joins vs exits trend, turnover rate, by-department exits,
+                    tenure distribution of the current workforce, exit-type pie. */}
+                {canViewTurnover && (
+                    <TabsContent value="turnover" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Turnover Rate" value={`${turnover?.turnoverRate ?? 0}%`} icon={TrendingUp} color={(turnover?.turnoverRate ?? 0) > 15 ? 'red' : (turnover?.turnoverRate ?? 0) > 8 ? 'amber' : 'green'} loading={isLoading} />
+                            <KpiCardCompact label="Joins" value={turnover?.totalJoins ?? 0} icon={UserPlus} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Exits" value={turnover?.totalExits ?? 0} icon={UserMinus} color="red" loading={isLoading} />
+                            <KpiCardCompact label="Net Change" value={`${(turnover?.netChange ?? 0) >= 0 ? '+' : ''}${turnover?.netChange ?? 0}`} icon={BarChart3} color={(turnover?.netChange ?? 0) >= 0 ? 'green' : 'red'} loading={isLoading} />
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Monthly Joins vs Exits (last 12 months)</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(turnover?.trend ?? [], 'turnover-trend.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {isLoading ? <ChartSkeleton height={240} /> : (turnover?.trend ?? []).length === 0 ? <EmptyChart /> : (
+                                <ResponsiveContainer width="100%" height={240}>
+                                    <BarChart data={turnover?.trend ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={30} />
+                                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                                        <Bar dataKey="joins" name="Joins" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                        <Bar dataKey="exits" name="Exits" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={22} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <Card className="p-4">
+                                <h3 className="font-semibold text-sm mb-4">Tenure of Current Workforce</h3>
+                                {isLoading ? <ChartSkeleton height={180} /> : (turnover?.tenureDistribution ?? []).length === 0 ? <EmptyChart /> : (
+                                    <ResponsiveContainer width="100%" height={180}>
+                                        <BarChart data={turnover?.tenureDistribution ?? []} margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                                            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={30} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                            <Bar dataKey="count" name="Employees" fill="#0ea5e9" radius={[4, 4, 0, 0]} maxBarSize={56} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </Card>
+
+                            <Card className="p-4">
+                                <h3 className="font-semibold text-sm mb-4">Exits by Type</h3>
+                                {isLoading ? <ChartSkeleton height={180} /> : (turnover?.byExitType ?? []).length === 0 ? <EmptyChart message="No exits in this window" /> : (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <ResponsiveContainer width="100%" height={140}>
+                                            <PieChart>
+                                                <Pie data={(turnover?.byExitType ?? []).map((d, i) => ({ name: labelFor(d.label), value: d.count, color: ['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4] }))} cx="50%" cy="50%" innerRadius={36} outerRadius={56} paddingAngle={3} dataKey="value">
+                                                    {(turnover?.byExitType ?? []).map((_, i) => (
+                                                        <Cell key={i} fill={['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="space-y-1.5 w-full">
+                                            {(turnover?.byExitType ?? []).map((d, i) => (
+                                                <div key={d.label} className="flex items-center justify-between text-xs">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="size-2.5 rounded-full" style={{ background: ['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4] }} />
+                                                        <span className="text-muted-foreground capitalize">{labelFor(d.label)}</span>
+                                                    </div>
+                                                    <span className="font-semibold">{d.count}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </Card>
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Exits by Department</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(turnover?.byDepartment ?? [], 'turnover-by-dept.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {isLoading ? <ChartSkeleton height={200} /> : (turnover?.byDepartment ?? []).length === 0 ? <EmptyChart message="No exits in this window" /> : (
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <BarChart data={turnover?.byDepartment ?? []} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                                        <YAxis type="category" dataKey="department" tick={{ fontSize: 10 }} width={110} />
+                                        <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                        <Bar dataKey="exits" name="Exits" fill="#ef4444" radius={[0, 4, 4, 0]} maxBarSize={18}
+                                            label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* ── Onboarding Completion ──
+                    Completion rate KPI, in-progress vs done, stalled checklists,
+                    by-department breakdown. */}
+                {canViewOnboarding && (
+                    <TabsContent value="onboarding" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Completion Rate" value={`${onboarding?.completionRate ?? 0}%`} icon={CheckCircle2} color="green" loading={isLoading} />
+                            <KpiCardCompact label="In Progress" value={onboarding?.inProgress ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                            <KpiCardCompact label="Stalled (>30d)" value={onboarding?.stalled ?? 0} icon={AlertOctagon} color="red" loading={isLoading} />
+                            <KpiCardCompact label="Avg Days to Complete" value={(onboarding?.avgDaysToComplete ?? 0).toFixed(1)} icon={Hourglass} color="blue" loading={isLoading} />
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Completion Rate by Department</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(onboarding?.byDepartment ?? [], 'onboarding-by-dept.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm font-medium">{getValue() as string}</span> },
+                                    { accessorKey: 'total', header: 'Total', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'completed', header: 'Completed', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm text-success tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'inProgress', header: 'In Progress', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className="text-sm text-amber-600 tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'completionRate', header: 'Rate', cell: ({ getValue }: CellContext<OnboardingByDepartment, unknown>) => <span className={cn('text-sm font-semibold', (getValue() as number) >= 80 ? 'text-success' : (getValue() as number) >= 50 ? 'text-amber-600' : 'text-destructive')}>{`${getValue() as number}%`}</span> },
+                                ]}
+                                data={(onboarding?.byDepartment ?? []) as unknown as OnboardingByDepartment[]}
+                                pageSize={12}
+                            />
+                        </Card>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Stalled Checklists (no progress &gt; 30 days)</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(onboarding?.stalledList ?? [], 'onboarding-stalled.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<StalledChecklist, unknown>) => (
+                                        <div className="flex items-center gap-2">
+                                            <InitialsAvatar name={row.original.fullName} size="sm" />
+                                            <div className="min-w-0">
+                                                <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                            </div>
+                                        </div>
+                                    ) },
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                    { accessorKey: 'progress', header: 'Progress', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <Badge variant="secondary" className="tabular-nums">{`${getValue() as number}%`}</Badge> },
+                                    { accessorKey: 'stalledDays', header: 'Stalled', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <span className="text-sm font-semibold text-destructive">{`${getValue() as number}d`}</span> },
+                                    { accessorKey: 'dueDate', header: 'Due', cell: ({ getValue }: CellContext<StalledChecklist, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) ? formatDate(getValue() as string) : '—'}</span> },
+                                ]}
+                                data={(onboarding?.stalledList ?? []) as unknown as StalledChecklist[]}
+                                pageSize={10}
+                            />
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* ── Performance Reviews ──
+                    Status counts, rating distribution, per-department averages,
+                    recent submitted/completed reviews. */}
+                {canViewPerformance && (
+                    <TabsContent value="performance" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Avg Rating" value={(performance?.avgRating ?? 0).toFixed(2)} icon={Star} color={(performance?.avgRating ?? 0) >= 4 ? 'green' : (performance?.avgRating ?? 0) >= 3 ? 'amber' : 'red'} loading={isLoading} />
+                            <KpiCardCompact label="Completion Rate" value={`${performance?.completionRate ?? 0}%`} icon={TrendingUp} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Total Reviews" value={performance?.total ?? 0} icon={BarChart3} color="blue" loading={isLoading} />
+                            <KpiCardCompact label="In Draft" value={performance?.draft ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <Card className="lg:col-span-1 p-4">
+                                <h3 className="font-semibold text-sm mb-4">Rating Distribution</h3>
+                                {isLoading ? <ChartSkeleton height={200} /> : (performance?.ratingDistribution ?? []).length === 0 ? <EmptyChart message="No ratings yet" /> : (
+                                    <ResponsiveContainer width="100%" height={200}>
+                                        <BarChart data={(performance?.ratingDistribution ?? []).map((r) => ({ name: `${r.rating} ★`, count: r.count }))} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={30} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                            <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </Card>
+
+                            <Card className="lg:col-span-2 p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">Average Rating by Department</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(performance?.byDepartment ?? [], 'performance-by-dept.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                <DataTable
+                                    isLoading={isLoading}
+                                    columns={[
+                                        { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<PerformanceDeptRow, unknown>) => <span className="text-sm font-medium">{getValue() as string}</span> },
+                                        { accessorKey: 'avgRating', header: 'Avg Rating', cell: ({ getValue }: CellContext<PerformanceDeptRow, unknown>) => <span className={cn('text-sm font-semibold tabular-nums', (getValue() as number) >= 4 ? 'text-success' : (getValue() as number) >= 3 ? 'text-amber-600' : 'text-destructive')}>{(getValue() as number).toFixed(2)} ★</span> },
+                                        { accessorKey: 'count', header: 'Reviews', cell: ({ getValue }: CellContext<PerformanceDeptRow, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                    ]}
+                                    data={(performance?.byDepartment ?? []) as unknown as PerformanceDeptRow[]}
+                                    pageSize={12}
+                                />
+                            </Card>
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Recent Reviews</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(performance?.recent ?? [], 'performance-recent.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<RecentReview, unknown>) => (
+                                        <div className="flex items-center gap-2">
+                                            <InitialsAvatar name={row.original.fullName} size="sm" />
+                                            <div className="min-w-0">
+                                                <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                            </div>
+                                        </div>
+                                    ) },
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<RecentReview, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                    { accessorKey: 'period', header: 'Period', cell: ({ getValue }: CellContext<RecentReview, unknown>) => <span className="text-sm">{getValue() as string}</span> },
+                                    { accessorKey: 'overallRating', header: 'Rating', cell: ({ getValue }: CellContext<RecentReview, unknown>) => {
+                                        const v = getValue() as number | null
+                                        if (v == null) return <span className="text-xs text-muted-foreground">—</span>
+                                        return <span className={cn('text-sm font-semibold tabular-nums', v >= 4 ? 'text-success' : v >= 3 ? 'text-amber-600' : 'text-destructive')}>{v} ★</span>
+                                    } },
+                                    { accessorKey: 'status', header: 'Status', cell: ({ getValue }: CellContext<RecentReview, unknown>) => <Badge variant="secondary" className="capitalize text-[11px]">{labelFor(getValue() as string)}</Badge> },
+                                ]}
+                                data={(performance?.recent ?? []) as unknown as RecentReview[]}
+                                pageSize={10}
+                            />
+                        </Card>
+                    </TabsContent>
+                )}
+
+                {/* ── Attendance Summary ──
+                    KPI strip + monthly attendance-rate trend + per-department
+                    breakdown + late-arrivals leaderboard. Window matches the
+                    visa report's 90-day default. */}
+                {canViewAttendance && (
+                    <TabsContent value="attendance" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Attendance Rate" value={`${attendanceSummary?.attendanceRate ?? 0}%`} icon={TrendingUp} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Late Arrivals" value={attendanceSummary?.late ?? 0} icon={Timer} color="amber" loading={isLoading} />
+                            <KpiCardCompact label="Absences" value={attendanceSummary?.absent ?? 0} icon={XCircle} color="red" loading={isLoading} />
+                            <KpiCardCompact label="Avg Hrs / Day" value={(attendanceSummary?.avgHoursPerDay ?? 0).toFixed(1)} icon={Hourglass} color="blue" loading={isLoading} />
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Monthly Attendance Rate</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(attendanceSummary?.trend ?? [], 'attendance-trend.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            {isLoading ? <ChartSkeleton height={220} /> : (attendanceSummary?.trend ?? []).length === 0 ? <EmptyChart message="No attendance data in this window" /> : (
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <AreaChart data={attendanceSummary?.trend ?? []} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="gradAttRate" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                                        <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} domain={[0, 100]} width={42} />
+                                        <Tooltip formatter={(v: unknown) => [`${Number(v ?? 0)}%`, 'Rate']} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                        <Area type="monotone" dataKey="rate" stroke="#10b981" fill="url(#gradAttRate)" strokeWidth={2} dot={{ r: 3 }} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            )}
+                        </Card>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <Card className="p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">By Department</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(attendanceSummary?.byDepartment ?? [], 'attendance-by-dept.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                <DataTable
+                                    isLoading={isLoading}
+                                    columns={[
+                                        { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className="text-sm font-medium">{getValue() as string}</span> },
+                                        { accessorKey: 'rate', header: 'Rate', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className={cn('text-sm font-semibold', (getValue() as number) >= 95 ? 'text-success' : (getValue() as number) >= 85 ? 'text-amber-600' : 'text-destructive')}>{`${getValue() as number}%`}</span> },
+                                        { accessorKey: 'late', header: 'Late', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                        { accessorKey: 'absent', header: 'Absent', cell: ({ getValue }: CellContext<AttendanceByDepartment, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                    ]}
+                                    data={(attendanceSummary?.byDepartment ?? []) as unknown as AttendanceByDepartment[]}
+                                    pageSize={12}
+                                />
+                            </Card>
+
+                            <Card className="p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">Top Late Arrivals</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(attendanceSummary?.lateLeaderboard ?? [], 'attendance-late-leaders.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                <DataTable
+                                    isLoading={isLoading}
+                                    columns={[
+                                        { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<AttendanceLeader, unknown>) => (
+                                            <div className="flex items-center gap-2">
+                                                <InitialsAvatar name={row.original.fullName} size="sm" />
+                                                <div className="min-w-0">
+                                                    <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                    <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                                </div>
+                                            </div>
+                                        ) },
+                                        { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<AttendanceLeader, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                        { accessorKey: 'lateCount', header: 'Late count', cell: ({ getValue }: CellContext<AttendanceLeader, unknown>) => <Badge variant="warning" className="tabular-nums">{getValue() as number}</Badge> },
+                                    ]}
+                                    data={(attendanceSummary?.lateLeaderboard ?? []) as unknown as AttendanceLeader[]}
+                                    pageSize={10}
+                                />
+                            </Card>
+                        </div>
+                    </TabsContent>
+                )}
+
+                {/* ── Leave Summary ──
+                    YTD breakdown of leave requests: status KPIs, by-type pie,
+                    by-department days-taken table, top-takers leaderboard. */}
+                {canViewLeave && (
+                    <TabsContent value="leave" className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <KpiCardCompact label="Approved Days" value={leaveSummary?.approvedDays ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
+                            <KpiCardCompact label="Pending Requests" value={leaveSummary?.pendingRequests ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                            <KpiCardCompact label="Approved Requests" value={leaveSummary?.approvedRequests ?? 0} icon={UserPlus} color="blue" loading={isLoading} />
+                            <KpiCardCompact label="Rejected / Cancelled" value={(leaveSummary?.rejectedRequests ?? 0) + (leaveSummary?.cancelledRequests ?? 0)} icon={XCircle} color="red" loading={isLoading} />
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <Card className="lg:col-span-2 p-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-semibold text-sm">Approved Days by Department</h3>
+                                    <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                        onClick={() => exportCsv(leaveSummary?.byDepartment ?? [], 'leave-by-dept.csv')}>
+                                        Export
+                                    </Button>
+                                </div>
+                                {isLoading ? <ChartSkeleton height={220} /> : (leaveSummary?.byDepartment ?? []).length === 0 ? <EmptyChart /> : (
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={(leaveSummary?.byDepartment ?? []).map((d) => ({ name: d.department, days: d.days }))} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                                            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                                            <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={110} />
+                                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                                            <Bar dataKey="days" name="Days" fill="#6366f1" radius={[0, 4, 4, 0]} maxBarSize={18}
+                                                label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
+                            </Card>
+
+                            <Card className="p-4">
+                                <h3 className="font-semibold text-sm mb-4">By Leave Type</h3>
+                                {isLoading ? <ChartSkeleton height={220} /> : (leaveSummary?.byType ?? []).length === 0 ? <EmptyChart /> : (
+                                    <div className="flex flex-col items-center gap-3">
+                                        <ResponsiveContainer width="100%" height={160}>
+                                            <PieChart>
+                                                <Pie data={(leaveSummary?.byType ?? []).map((tp, i) => ({ name: labelFor(tp.leaveType), value: tp.days, color: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8] }))} cx="50%" cy="50%" innerRadius={44} outerRadius={68} paddingAngle={3} dataKey="value">
+                                                    {(leaveSummary?.byType ?? []).map((_, i) => (
+                                                        <Cell key={i} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8]} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip formatter={(v: unknown, name: unknown) => [`${Number(v ?? 0)} d`, String(name ?? '')]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="space-y-1.5 w-full">
+                                            {(leaveSummary?.byType ?? []).map((tp, i) => (
+                                                <div key={tp.leaveType} className="flex items-center justify-between text-xs">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <div className="size-2.5 rounded-full shrink-0" style={{ background: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8] }} />
+                                                        <span className="text-muted-foreground truncate">{labelFor(tp.leaveType)}</span>
+                                                    </div>
+                                                    <span className="font-semibold tabular-nums">{tp.days} d</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </Card>
+                        </div>
+
+                        <Card className="p-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold text-sm">Top Leave Takers</h3>
+                                <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
+                                    onClick={() => exportCsv(leaveSummary?.topTakers ?? [], 'leave-top-takers.csv')}>
+                                    Export
+                                </Button>
+                            </div>
+                            <DataTable
+                                isLoading={isLoading}
+                                columns={[
+                                    { accessorKey: 'fullName', header: 'Employee', cell: ({ row }: CellContext<LeaveTopTaker, unknown>) => (
+                                        <div className="flex items-center gap-2">
+                                            <InitialsAvatar name={row.original.fullName} size="sm" />
+                                            <div className="min-w-0">
+                                                <EmployeeLink id={row.original.employeeId} name={row.original.fullName} className="text-sm font-medium truncate block" />
+                                                <span className="text-[11px] text-muted-foreground truncate block">{row.original.designation ?? '—'}</span>
+                                            </div>
+                                        </div>
+                                    ) },
+                                    { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<LeaveTopTaker, unknown>) => <span className="text-xs text-muted-foreground">{(getValue() as string) || '—'}</span> },
+                                    { accessorKey: 'days', header: 'Days taken', cell: ({ getValue }: CellContext<LeaveTopTaker, unknown>) => <span className="text-sm font-bold tabular-nums">{getValue() as number}</span> },
+                                    { accessorKey: 'requests', header: 'Requests', cell: ({ getValue }: CellContext<LeaveTopTaker, unknown>) => <span className="text-sm tabular-nums">{getValue() as number}</span> },
+                                ]}
+                                data={(leaveSummary?.topTakers ?? []) as unknown as LeaveTopTaker[]}
+                                pageSize={10}
+                            />
+                        </Card>
+                    </TabsContent>
+                )}
+
                 {/* ── Payroll Summary ── */}
                 <TabsContent value="payroll" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -404,88 +1073,49 @@ export function ReportsPage() {
                 </TabsContent>
 
                 {/* ── Visa Expiry ── */}
-                <TabsContent value="visa" className="space-y-4">
+                <TabsContent value="expiry" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <KpiCardCompact label="Expired" value={visaExpiry?.expired ?? 0} icon={XCircle} color="red" loading={isLoading} />
-                        <KpiCardCompact label="Critical (≤30d)" value={visaExpiry?.critical ?? 0} icon={Shield} color="red" loading={isLoading} />
-                        <KpiCardCompact label="Urgent (31–60d)" value={visaExpiry?.urgent ?? 0} icon={Clock} color="amber" loading={isLoading} />
-                        <KpiCardCompact label="Normal (61–90d)" value={visaExpiry?.normal ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
+                        <KpiCardCompact label="Expired" value={documentExpiry?.byType.total.expired ?? 0} icon={XCircle} color="red" loading={isLoading} />
+                        <KpiCardCompact label="Critical (≤30d)" value={documentExpiry?.byType.total.critical ?? 0} icon={Shield} color="red" loading={isLoading} />
+                        <KpiCardCompact label="Urgent (31–60d)" value={documentExpiry?.byType.total.urgent ?? 0} icon={Clock} color="amber" loading={isLoading} />
+                        <KpiCardCompact label="Normal (61–90d)" value={documentExpiry?.byType.total.normal ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                        {/* Urgency donut */}
-                        <Card className="p-4">
-                            <h3 className="font-semibold text-sm mb-4">Urgency Breakdown</h3>
-                            {isLoading ? <ChartSkeleton height={200} /> : visaUrgencyData.length === 0 ? (
-                                <div className="flex flex-col items-center gap-2 py-10 text-center">
-                                    <CheckCircle2 className="size-8 text-emerald-400" />
-                                    <p className="text-sm text-muted-foreground">No visas expiring soon</p>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center gap-3">
-                                    <ResponsiveContainer width="100%" height={160}>
-                                        <PieChart>
-                                            <Pie data={visaUrgencyData} cx="50%" cy="50%" innerRadius={44} outerRadius={68}
-                                                paddingAngle={3} dataKey="value">
-                                                {visaUrgencyData.map((d, i) => (
-                                                    <Cell key={i} fill={d.color} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div className="space-y-1.5 w-full">
-                                        {visaUrgencyData.map(d => (
-                                            <div key={d.name} className="flex items-center justify-between text-xs">
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className="size-2.5 rounded-full" style={{ background: d.color }} />
-                                                    <span className="text-muted-foreground">{d.name}</span>
-                                                </div>
-                                                <span className="font-semibold">{d.value}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </Card>
+                    {/* Document-type filter pills — each shows the count for
+                        its type so HR can scan exposure across doc types
+                        before drilling in. "All" stays selected by default. */}
+                    <ExpiryTypeFilter
+                        docTypeFilter={docTypeFilter}
+                        setDocTypeFilter={setDocTypeFilter}
+                        byType={documentExpiry?.byType}
+                        loading={isLoading}
+                    />
 
-                        {/* Days-left distribution horizontal bar */}
+                    {/* Two-card summary row — urgency mix (donut + per-urgency
+                        bar) and a per-department "where's the risk?" view.
+                        Both react to the active doc-type filter so HR can
+                        slice the picture without losing context. */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
                         <Card className="lg:col-span-2 p-4">
-                            <h3 className="font-semibold text-sm mb-4">Expiry Risk Summary</h3>
-                            {isLoading ? <ChartSkeleton height={200} /> : visaUrgencyData.length === 0 ? <EmptyChart message="No expiring visas within 90 days" /> : (
-                                <div className="space-y-4">
-                                    {visaUrgencyData.map(d => {
-                                        const total = visaUrgencyData.reduce((s, x) => s + x.value, 0)
-                                        const pct = total > 0 ? (d.value / total) * 100 : 0
-                                        return (
-                                            <div key={d.name} className="space-y-1.5">
-                                                <div className="flex items-center justify-between text-xs">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div className="size-2.5 rounded-full" style={{ background: d.color }} />
-                                                        <span className="font-medium">{d.name}</span>
-                                                    </div>
-                                                    <span className="text-muted-foreground tabular-nums">{d.value} employee{d.value !== 1 ? 's' : ''} · {pct.toFixed(0)}%</span>
-                                                </div>
-                                                <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
-                                                    <div
-                                                        className="h-full rounded-full transition-all"
-                                                        style={{ width: `${pct}%`, background: d.color }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
+                            <h3 className="font-semibold text-sm mb-4">Urgency Mix</h3>
+                            <ExpiryUrgencyCard rows={docRows} loading={isLoading} />
+                        </Card>
+                        <Card className="lg:col-span-3 p-4">
+                            <h3 className="font-semibold text-sm mb-4">By Department</h3>
+                            <ExpiryByDepartmentCard rows={docRows} loading={isLoading} />
                         </Card>
                     </div>
 
-                    {/* Employee table */}
+                    {/* Unified expiring-documents table — one row per
+                        document, filtered by the active doc-type pill. */}
                     <Card className="p-4">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-semibold text-sm">Expiring within 90 days</h3>
+                            <h3 className="font-semibold text-sm">
+                                {docTypeFilter === 'all' ? 'All Expiring Documents' : `${DOC_TYPE_LABEL[docTypeFilter]} Expiring`}
+                                <span className="ml-2 text-xs text-muted-foreground font-normal">within {documentExpiry?.windowDays ?? 90} days</span>
+                            </h3>
                             <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
-                                onClick={() => exportCsv(visaExpiry?.employees ?? [], 'visa-expiry.csv')}>
+                                onClick={() => exportCsv(docRows, `expiry-${docTypeFilter}.csv`)}>
                                 Export CSV
                             </Button>
                         </div>
@@ -496,27 +1126,36 @@ export function ReportsPage() {
                                     id: 'employee',
                                     accessorKey: 'fullName',
                                     header: 'Employee',
-                                    cell: ({ row: { original: e } }: CellContext<VisaExpiryEmployee, unknown>) => (
+                                    cell: ({ row: { original: e } }: CellContext<DocExpiryRow, unknown>) => (
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <InitialsAvatar name={e.fullName || '—'} size="sm" />
                                             <div className="min-w-0">
-                                                <EmployeeLink id={e.id} name={e.fullName || '—'} className="text-sm font-medium truncate block" />
-                                                <p className="text-[11px] text-muted-foreground truncate">{e.designation}</p>
+                                                <EmployeeLink id={e.employeeId} name={e.fullName || '—'} className="text-sm font-medium truncate block" />
+                                                <p className="text-[11px] text-muted-foreground truncate">{e.designation ?? '—'}</p>
                                             </div>
                                         </div>
                                     ),
                                 },
-                                { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
-                                { accessorKey: 'nationality', header: 'Nationality', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
-                                { accessorKey: 'visaExpiry', header: 'Visa Expiry', cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => <span className="text-sm">{formatDate(getValue() as string)}</span> },
+                                { accessorKey: 'department', header: 'Department', cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => <span className="text-sm">{(getValue() as string | null) ?? '—'}</span> },
+                                {
+                                    accessorKey: 'docType', header: 'Document',
+                                    cell: ({ row: { original: e } }: CellContext<DocExpiryRow, unknown>) => (
+                                        <div className="flex flex-col">
+                                            <Badge variant="secondary" className={cn('text-[10px] w-fit', DOC_TYPE_TONE[e.docType])}>
+                                                {DOC_TYPE_LABEL[e.docType]}
+                                            </Badge>
+                                            {e.docNumber && <span className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{e.docNumber}</span>}
+                                        </div>
+                                    ),
+                                },
+                                { accessorKey: 'expiryDate', header: 'Expiry', cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => <span className="text-sm tabular-nums">{formatDate(getValue() as string)}</span> },
                                 {
                                     accessorKey: 'daysLeft', header: 'Days Left',
-                                    cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
-                                        const d = getValue() as number | null
-                                        if (d === null) return <span className="text-muted-foreground text-sm">—</span>
+                                    cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => {
+                                        const d = getValue() as number
                                         return (
                                             <span className={cn('text-sm font-semibold',
-                                                d < 0 ? 'text-destructive' : d <= 30 ? 'text-destructive' : d <= 60 ? 'text-warning' : 'text-success'
+                                                d < 0 ? 'text-destructive' : d <= 30 ? 'text-destructive' : d <= 60 ? 'text-warning' : 'text-success',
                                             )}>
                                                 {d < 0 ? 'Expired' : `${d}d`}
                                             </span>
@@ -525,21 +1164,16 @@ export function ReportsPage() {
                                 },
                                 {
                                     accessorKey: 'urgency', header: 'Urgency',
-                                    cell: ({ getValue }: CellContext<VisaExpiryEmployee, unknown>) => {
+                                    cell: ({ getValue }: CellContext<DocExpiryRow, unknown>) => {
                                         const u = getValue() as string
                                         const v: 'destructive' | 'warning' | 'success' = u === 'expired' ? 'destructive' : u === 'critical' ? 'destructive' : u === 'urgent' ? 'warning' : 'success'
                                         return <Badge variant={v} className="text-[11px]">{labelFor(u)}</Badge>
                                     },
                                 },
                             ]}
-                            data={visaReportRows as unknown as VisaExpiryEmployee[]}
+                            data={docRows}
                             pageSize={10}
-                            onRowClick={(row) => navigate(`/employees/${row.id}`)}
-                            advancedFilter={{
-                                search: visaReportSearch,
-                                filters: VISA_REPORT_FILTERS,
-                                placeholder: 'Search employees…',
-                            }}
+                            onRowClick={(row) => navigate(`/employees/${row.employeeId}`)}
                         />
                     </Card>
                 </TabsContent>

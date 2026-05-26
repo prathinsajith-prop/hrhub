@@ -21,6 +21,7 @@ import { CSS } from '@dnd-kit/utilities'
 
 import { Card, Input, Label } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -421,14 +422,16 @@ export function RecruitmentStagesTab() {
                         {[0, 1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 rounded-lg" />)}
                     </div>
                 ) : localStages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <Workflow className="size-10 text-muted-foreground/40 mb-3" />
-                        <p className="text-sm font-medium">No stages yet</p>
-                        <p className="text-xs text-muted-foreground mt-1">Add a stage to get started, or reset to system defaults.</p>
-                        <Button type="button" size="sm" className="mt-3" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
-                            Add your first stage
-                        </Button>
-                    </div>
+                    <EmptyState
+                        icon={Workflow}
+                        title="No stages yet"
+                        description="Add a stage to get started, or reset to system defaults."
+                        action={(
+                            <Button type="button" size="sm" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
+                                Add your first stage
+                            </Button>
+                        )}
+                    />
                 ) : (
                     <DndContext
                         sensors={sensors}

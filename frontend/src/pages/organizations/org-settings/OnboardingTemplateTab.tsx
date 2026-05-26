@@ -23,6 +23,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { Card, Badge, Input, NumericInput, Label } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, ConfirmDialog, toast } from '@/components/ui/overlays'
 import { FormField } from '@/components/shared/FormField'
 import { cn } from '@/lib/utils'
@@ -371,12 +372,16 @@ export function OnboardingTemplateTab() {
                         {[0, 1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-12 rounded-lg" />)}
                     </div>
                 ) : localSteps.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                        <ListOrdered className="size-10 text-muted-foreground/40 mb-3" />
-                        <p className="text-sm font-medium">{t('orgSettings.onboardingTemplate.noSteps')}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{t('orgSettings.onboardingTemplate.noStepsHint')}</p>
-                        <Button type="button" size="sm" className="mt-3" onClick={openCreate}>{t('orgSettings.onboardingTemplate.addFirstStep')}</Button>
-                    </div>
+                    <EmptyState
+                        icon={ListOrdered}
+                        title={t('orgSettings.onboardingTemplate.noSteps')}
+                        description={t('orgSettings.onboardingTemplate.noStepsHint')}
+                        action={(
+                            <Button type="button" size="sm" onClick={openCreate}>
+                                {t('orgSettings.onboardingTemplate.addFirstStep')}
+                            </Button>
+                        )}
+                    />
                 ) : (
                     <DndContext
                         sensors={sensors}

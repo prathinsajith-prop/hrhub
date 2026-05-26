@@ -155,3 +155,56 @@ export function useCommitAttendanceImport() {
         onError: () => {},
     })
 }
+
+// ─── Bulk mapping update ─────────────────────────────────────────────────────
+//
+// Mirrors the assets / jobs bulk-import hooks: preview mutation + commit
+// mutation. The preview echoes the resolved employee name and any errors
+// per row so the dialog can render a green/red table.
+
+export interface BulkMappingRowInput {
+    rowNumber: number
+    employeeNo?: string | null
+    mappingId?: string | null
+    label?: string | null
+}
+
+export interface BulkMappingRowResult {
+    rowNumber: number
+    ok: boolean
+    errors: string[]
+    employeeName?: string
+    mappingId?: string
+    resolved?: {
+        employeeId: string
+        mapperId: string
+        label: string | null
+    }
+}
+
+export interface BulkMappingValidationResponse {
+    rows: BulkMappingRowResult[]
+    summary: { total: number; valid: number; invalid: number }
+}
+
+export interface BulkMappingCreateResponse extends BulkMappingValidationResponse {
+    created: number
+    skipped: number
+}
+
+export function useValidateBulkMappings() {
+    return useMutation({
+        mutationFn: (rows: BulkMappingRowInput[]) =>
+            api.post<BulkMappingValidationResponse>('/attendance/mappings/bulk-validate', { rows }),
+    })
+}
+
+export function useBulkCreateMappings() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (rows: BulkMappingRowInput[]) =>
+            api.post<BulkMappingCreateResponse>('/attendance/mappings/bulk', { rows }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['biometric-mappings'] }),
+        onError: (err: Error) => toast.error('Bulk import failed', err?.message ?? 'Unexpected error'),
+    })
+}

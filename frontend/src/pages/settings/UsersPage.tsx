@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type KeyboardEvent } from 'react'
 import {
     Users, Plus, CheckCircle2, Shield, ShieldOff, ShieldCheck,
     Search, MailCheck, UserPlus, Check, Mail, Clock,
-    AlertCircle, MinusCircle, KeyRound, Timer, Pencil,
+    AlertCircle, MinusCircle, KeyRound, Timer, Pencil, UserX, UserCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
 import { cn, formatDate } from '@/lib/utils'
 import { ConfirmDialog, toast } from '@/components/ui/overlays'
@@ -21,6 +20,7 @@ import {
     type InvitableEmployee, type TenantUser,
 } from '@/hooks/useSettings'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { CopyableEmail, MultiRoleToggle, MULTI_ROLE_OPTIONS, MULTI_ROLE_OPTIONS_WITH_SUPER } from '@/components/shared'
@@ -48,12 +48,171 @@ function initials(name: string) {
     return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
+/**
+ * Build a "branch → division → department" path string for a leaf
+ * department name by walking the org-unit parent chain. Returns the bare
+ * department name if no ancestors are found, or `null` when the input
+ * isn't a known department.
+ *
+ * Memoise the returned function at the call site with `useMemo` so we
+ * don't rebuild the id-index on every render.
+ */
+function buildDepartmentPathLookup(orgUnits: OrgUnit[]): (departmentName: string | null | undefined) => string | null {
+    const byId = new Map<string, OrgUnit>()
+    for (const u of orgUnits) byId.set(u.id, u)
+    // The user model carries `department` as a string — match by name so we
+    // don't need an extra id on the user payload. Tenant-wide unique names
+    // for departments is the existing convention.
+    const departmentsByName = new Map<string, OrgUnit>()
+    for (const u of orgUnits) {
+        if (u.type === 'department') departmentsByName.set(u.name.toLowerCase(), u)
+    }
+    return (departmentName) => {
+        if (!departmentName) return null
+        const dept = departmentsByName.get(departmentName.toLowerCase())
+        if (!dept) return departmentName // not a known department — render as-is
+        const chain: string[] = []
+        let cursor: OrgUnit | null = dept
+        // Walk parents until we hit the root. Cap at 6 hops as a paranoia
+        // guard against a malformed cycle in the data.
+        for (let i = 0; i < 6 && cursor; i++) {
+            chain.unshift(cursor.name)
+            cursor = cursor.parentId ? byId.get(cursor.parentId) ?? null : null
+        }
+        return chain.join(' → ')
+    }
+}
+
 const ROLE_LABEL: Record<UserRole, string> = {
     super_admin: 'Super Admin',
     hr_manager: 'HR Manager',
     pro_officer: 'PRO Officer',
     dept_head: 'Department Manager',
     employee: 'Employee',
+}
+
+/**
+ * Inline role-chip row that renders EVERY assignable role and styles the
+ * ones the user currently holds as filled badges. Clicking a chip toggles
+ * that role for the user — same mutation as the Manage Access modal, just
+ * without leaving the list.
+ *
+ * Constraints enforced inline:
+ *   - At least one role must remain selected (last chip is non-clickable).
+ *   - When `disabled` is true (read-only viewers, or row belongs to caller)
+ *     all chips render as static badges.
+ *   - Super Admin chip is only visible when the caller is themselves a
+ *     super admin (matches the Manage Access modal's `availableOptions`).
+ */
+function RoleChipToggleRow({
+    user,
+    canManage,
+    disabled,
+}: {
+    user: TenantUser
+    canManage: boolean
+    disabled: boolean
+}) {
+    const { t } = useTranslation()
+    const updateUser = useUpdateUser()
+    const callerRole = useAuthStore((s) => s.user?.role)
+    const callerIsSuperAdmin = callerRole === 'super_admin'
+    const availableOptions = callerIsSuperAdmin ? MULTI_ROLE_OPTIONS_WITH_SUPER : MULTI_ROLE_OPTIONS
+
+    const assigned = useMemo<UserRole[]>(
+        () => ((user.roles?.length ? user.roles : [user.role]) as UserRole[]),
+        [user.roles, user.role],
+    )
+    const assignedSet = useMemo(() => new Set(assigned), [assigned])
+    const interactive = canManage && !disabled
+
+    async function toggleRole(role: UserRole) {
+        const isActive = assignedSet.has(role)
+        // Prevent removing the last role — every user must keep at least one.
+        if (isActive && assigned.length === 1) {
+            toast.error('A user must keep at least one role.')
+            return
+        }
+        const next: UserRole[] = isActive ? assigned.filter((r) => r !== role) : [...assigned, role]
+        const optLabel =
+            MULTI_ROLE_OPTIONS_WITH_SUPER.find((o) => o.id === role)?.label ?? ROLE_LABEL[role] ?? role
+        try {
+            await updateUser.mutateAsync({ id: user.id, roles: next, role: next[0] })
+            // Errors get auto-toasted via the global MutationCache; success
+            // toasts must be explicit so HR sees the action landed. The
+            // user's name goes in the toast title and the role in the body
+            // so HR knows immediately *who* was changed and *what*.
+            const userName = user.name || user.email
+            toast.success(
+                isActive
+                    ? t('settingsDetail.users.roleRemovedTitle', {
+                        name: userName, role: optLabel,
+                        defaultValue: `${optLabel} removed from ${userName}`,
+                    })
+                    : t('settingsDetail.users.roleAssignedTitle', {
+                        name: userName, role: optLabel,
+                        defaultValue: `${optLabel} assigned to ${userName}`,
+                    }),
+            )
+        } catch {
+            // No-op — the MutationCache handler already surfaced the error.
+        }
+    }
+
+    return (
+        <div className="flex items-center gap-1 flex-wrap min-w-0">
+            {availableOptions.map((opt) => {
+                const role = opt.id as UserRole
+                const active = assignedSet.has(role)
+                const isLastActive = active && assigned.length === 1
+                // Static badge when caller can't manage — keeps the visual
+                // grammar identical to the editable case so the column never
+                // shifts on permission changes.
+                if (!interactive) {
+                    return active ? (
+                        <span
+                            key={role}
+                            className={cn(
+                                'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border whitespace-nowrap',
+                                ROLE_BADGE_STYLE[role] ?? 'border-border text-foreground/70',
+                            )}
+                        >
+                            {opt.label}
+                        </span>
+                    ) : null
+                }
+                return (
+                    <button
+                        key={role}
+                        type="button"
+                        onClick={() => void toggleRole(role)}
+                        disabled={isLastActive || updateUser.isPending}
+                        title={
+                            active
+                                ? isLastActive
+                                    ? 'A user must keep at least one role'
+                                    : `Remove ${opt.label}`
+                                : `Assign ${opt.label}`
+                        }
+                        className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border whitespace-nowrap transition-all',
+                            active
+                                ? cn(
+                                    ROLE_BADGE_STYLE[role] ?? 'border-border text-foreground/70',
+                                    'shadow-sm',
+                                    !isLastActive && 'hover:opacity-70 hover:scale-[0.97]',
+                                )
+                                : 'border-dashed border-border bg-transparent text-muted-foreground/70 hover:text-foreground hover:border-foreground/40 hover:bg-muted/40',
+                            isLastActive && 'cursor-not-allowed opacity-90',
+                            updateUser.isPending && 'cursor-progress',
+                        )}
+                    >
+                        {opt.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
 }
 
 type PermGroupKey = 'people' | 'time' | 'payroll' | 'compliance' | 'hiring' | 'assets' | 'admin' | 'reports' | 'other'
@@ -476,6 +635,11 @@ export function UsersPage() {
     const { user: me } = useAuthStore()
     const canManageUsers = can('manage_users')
     const { data: tenantUsers, isLoading } = useTenantUsers()
+    // Org-unit tree is loaded so we can render the user's full
+    // branch → division → department path instead of just the leaf name.
+    // Cached at 5min so it doesn't refetch when switching tabs.
+    const { data: orgUnits = [] } = useOrgUnits()
+    const departmentPath = useMemo(() => buildDepartmentPathLookup(orgUnits), [orgUnits])
     const updateUser = useUpdateUser()
     const resendInvite = useResendUserInvite()
     const [showInvite, setShowInvite] = useState(false)
@@ -676,19 +840,73 @@ export function UsersPage() {
                         <div className="divide-y border rounded-lg overflow-hidden">
                             {filteredUsers.map((u) => {
                                 const isSelf = u.id === me?.id
+                                // Resolve the user's full org path (Branch → Division → Department)
+                                // so the row carries hierarchy context instead of just the leaf
+                                // department name. Falls back to the bare department name when
+                                // the user sits at the root or the unit hasn't loaded yet.
+                                const fullPath = departmentPath(u.department) ?? u.department ?? null
+                                // Whole-row click opens the Manage Access modal — the
+                                // same destination as the shield button. Saves HR from
+                                // having to hit the tiny icon target. Gated by the
+                                // same permission as the button (can-manage + not-self)
+                                // so read-only viewers and the user's own row stay
+                                // inert. Inline interactive elements (role chips, the
+                                // shield button, the email-copy control) stop
+                                // propagation in their own handlers, so the row click
+                                // only fires from "dead space".
+                                const rowClickable = canManageUsers && !isSelf
+                                const openAccess = () => { if (rowClickable) setAccessTarget(u) }
+                                // Only wire interactive props when the row is
+                                // clickable. Always-on handlers tripped the
+                                // `no-static-element-interactions` lint even though
+                                // they short-circuited internally — and conceptually,
+                                // a non-clickable row shouldn't claim keyboard /
+                                // mouse semantics at all.
+                                const interactiveProps = rowClickable ? {
+                                    role: 'button' as const,
+                                    tabIndex: 0,
+                                    onClick: openAccess,
+                                    onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            // Skip when focus is inside an interactive
+                                            // child (chip / button / link) — let that
+                                            // element own the key event.
+                                            if (e.target !== e.currentTarget) return
+                                            e.preventDefault()
+                                            openAccess()
+                                        }
+                                    },
+                                } : {}
                                 return (
-                                    <div key={u.id} className={cn(
-                                        'flex items-center justify-between gap-3 px-4 py-3 transition-colors',
+                                    <div
+                                        key={u.id}
+                                        {...interactiveProps}
+                                        className={cn(
+                                        // Three-column row: identity (left, flex) — roles (middle,
+                                        // flex) — actions (right, intrinsic). The middle column
+                                        // surfaces every assigned role inline so HR can scan
+                                        // who-has-what without opening a popover.
+                                        'grid items-center gap-4 px-4 py-3 transition-colors',
+                                        'grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]',
                                         u.isActive ? 'hover:bg-muted/30' : 'bg-muted/20 opacity-70',
+                                        rowClickable && 'cursor-pointer focus:bg-muted/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring',
                                     )}>
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        {/* ── Left: identity ─────────────────────────────────── */}
+                                        <div className="flex items-center gap-3 min-w-0">
                                             <Avatar className="size-9 shrink-0">
                                                 {u.avatarUrl && <AvatarImage src={u.avatarUrl} alt={u.name} />}
                                                 <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
                                                     {initials(u.name)}
                                                 </AvatarFallback>
                                             </Avatar>
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
+                                                {/* Name line — name on the left, status icon
+                                                    cluster on the right. A thin vertical bar
+                                                    visually separates the two so the cluster
+                                                    reads as "status of THIS user" and never
+                                                    bleeds into the email/path subline below.
+                                                    Icons collapse into a tight 1px gap so two
+                                                    chips look like one unit, not two ornaments. */}
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="text-sm font-medium truncate">{u.name}</p>
                                                     {isSelf && (
@@ -696,54 +914,102 @@ export function UsersPage() {
                                                             {t('settingsDetail.users.youLabel')}
                                                         </span>
                                                     )}
-                                                    {!u.isActive && (
-                                                        <Badge variant="secondary" className="text-[10px]">{t('common.inactive')}</Badge>
-                                                    )}
+                                                    <span aria-hidden className="h-3.5 w-px bg-border/60" />
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <FeatureFlagChip
+                                                            icon={Timer}
+                                                            enabled={u.attendancePunchEnabled !== false}
+                                                            onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
+                                                            offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
+                                                        />
+                                                        <FeatureFlagChip
+                                                            icon={Pencil}
+                                                            enabled={u.attendanceManualEntryEnabled !== false}
+                                                            onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
+                                                            offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
+                                                        />
+                                                        {/* Active/inactive uses the same visual
+                                                            grammar as the feature flags — a 5x5
+                                                            ring-pill. Both states render so HR
+                                                            can confirm at a glance: emerald
+                                                            check = active, rose X = inactive.
+                                                            Hiding the active state used to feel
+                                                            "clean" but it left HR inferring
+                                                            health from absence, which is the
+                                                            opposite of self-evident. */}
+                                                        <span
+                                                            title={u.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                                            aria-label={u.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                                            className={cn(
+                                                                'inline-flex items-center justify-center size-5 rounded-md ring-1',
+                                                                u.isActive
+                                                                    ? 'bg-emerald-50 text-emerald-600 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-900/60'
+                                                                    : 'bg-rose-50 text-rose-600 ring-rose-200/70 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-900/60',
+                                                            )}
+                                                        >
+                                                            {u.isActive ? <UserCheck className="size-3" /> : <UserX className="size-3" />}
+                                                        </span>
+                                                    </span>
                                                 </div>
+                                                {/* Email + designation + full org path.
+                                                    CopyableEmail's copy button is an interactive
+                                                    target — wrap in stopPropagation so copying
+                                                    the email doesn't also trigger the row-level
+                                                    open-Manage-Access click. */}
                                                 <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5 flex-wrap">
-                                                    <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
-                                                    {(u.designation || u.department) && (
+                                                    <span onClick={(e) => e.stopPropagation()}>
+                                                        <CopyableEmail email={u.email} className="text-xs text-muted-foreground" />
+                                                    </span>
+                                                    {u.designation && (
                                                         <>
                                                             <span aria-hidden className="opacity-50">·</span>
-                                                            <span className="opacity-80 truncate">
-                                                                {[u.designation, u.department].filter(Boolean).join(' · ')}
-                                                            </span>
+                                                            <span className="opacity-80 truncate">{u.designation}</span>
+                                                        </>
+                                                    )}
+                                                    {fullPath && (
+                                                        <>
+                                                            <span aria-hidden className="opacity-50">·</span>
+                                                            <span className="opacity-80 truncate" title={fullPath}>{fullPath}</span>
                                                         </>
                                                     )}
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
+                                        {/* ── Middle: every assignable role as a toggle chip ─
+                                             Filled = assigned, dashed-outline = unassigned. Click
+                                             a chip to flip its state — same backend mutation as
+                                             the Manage Access modal. Hidden on narrow screens so
+                                             the action button can't get pushed off the row. */}
+                                        <div className="hidden md:flex min-w-0" onClick={(e) => e.stopPropagation()}>
+                                            <RoleChipToggleRow
+                                                user={u}
+                                                canManage={canManageUsers}
+                                                disabled={isSelf}
+                                            />
+                                        </div>
+
+                                        {/* ── Right: status chips + last-login + manage-access ────
+                                             Status icons (self-punch / manual entry) and the
+                                             Inactive badge live here, grouped with the action
+                                             button so HR scans "state + controls" in one place.
+                                             stopPropagation: clicks inside this cluster
+                                             (shield button, future per-icon controls) should
+                                             NOT also fire the row-level "open Manage Access"
+                                             — the shield already targets the same modal,
+                                             and a double-trigger feels janky. */}
+                                        <div
+                                            className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            {/* Last-login is purely informational — kept compact
+                                                so the action button stays the dominant element. */}
                                             <span
                                                 className="hidden md:inline text-[11px] text-muted-foreground tabular-nums"
                                                 title={u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : undefined}
                                             >
                                                 {formatLastLogin(u.lastLoginAt, t)}
                                             </span>
-
-                                            {/* Feature switches — small icon chips so HR can see
-                                                punch / manual-entry state at a glance without
-                                                opening Manage Access. Green = on, slate = off.
-                                                Tooltip surfaces the long-form label on hover. */}
-                                            <FeatureFlagChip
-                                                icon={Timer}
-                                                enabled={u.attendancePunchEnabled !== false}
-                                                onLabel={t('settingsDetail.users.flagPunchOn', { defaultValue: 'Self check-in / check-out enabled' })}
-                                                offLabel={t('settingsDetail.users.flagPunchOff', { defaultValue: 'Self check-in / check-out disabled' })}
-                                            />
-                                            <FeatureFlagChip
-                                                icon={Pencil}
-                                                enabled={u.attendanceManualEntryEnabled !== false}
-                                                onLabel={t('settingsDetail.users.flagManualOn', { defaultValue: 'Manual attendance entry enabled' })}
-                                                offLabel={t('settingsDetail.users.flagManualOff', { defaultValue: 'Manual attendance entry disabled' })}
-                                            />
-
-                                            {/* Roles popover — click to see the full assigned set.
-                                                Keeps the row tidy when employees stack many roles. */}
-                                            <RolesPopoverButton
-                                                roles={(u.roles?.length ? u.roles : [u.role]) as string[]}
-                                            />
 
                                             {canManageUsers && !isSelf ? (
                                                 <Button
@@ -954,69 +1220,25 @@ function FeatureFlagChip({
     onLabel: string
     offLabel: string
 }) {
+    // Single visual signal — colour fill — to show state. The old design
+    // layered a tiny absolute-positioned check / minus dot on top of every
+    // icon, which made a row of two chips read as "what are all these dots?"
+    // before HR could parse the actual icon. One signal per chip is enough:
+    // emerald = enabled, muted = disabled. Tooltip carries the precise
+    // meaning for anyone who hovers.
     return (
         <span
             title={enabled ? onLabel : offLabel}
             aria-label={enabled ? onLabel : offLabel}
             className={cn(
-                'relative inline-flex items-center justify-center size-7 rounded-md border transition-colors',
+                'inline-flex items-center justify-center size-5 rounded-md transition-colors ring-1',
                 enabled
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-300'
-                    : 'bg-muted/40 border-border text-muted-foreground/60',
+                    ? 'bg-emerald-50 text-emerald-600 ring-emerald-200/70 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-900/60'
+                    : 'bg-muted/30 text-muted-foreground/50 ring-border/60',
             )}
         >
-            <Icon className="size-3.5" />
-            {enabled ? (
-                <span className="absolute -top-1 -right-1 inline-flex size-3 items-center justify-center rounded-full bg-emerald-500 text-white shadow ring-2 ring-background">
-                    <Check className="size-2" />
-                </span>
-            ) : (
-                <span className="absolute -top-1 -right-1 inline-flex size-3 items-center justify-center rounded-full bg-muted text-muted-foreground border border-border">
-                    <MinusCircle className="size-2" />
-                </span>
-            )}
+            <Icon className="size-3" />
         </span>
-    )
-}
-
-/**
- * Click-to-reveal popover that surfaces a user's full role list. Lives on the
- * row instead of inline chips so HR stays focused on the user's *identity*
- * and can drill into roles only when they need to.
- */
-function RolesPopoverButton({ roles }: { roles: string[] }) {
-    const { t } = useTranslation()
-    if (roles.length === 0) return null
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border bg-background text-[11px] font-medium text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-                >
-                    <KeyRound className="size-3" />
-                    {t('settingsDetail.users.rolesCount', { count: roles.length, defaultValue: '{{count}} role(s)' })}
-                </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-1 pb-1.5">
-                    {t('settingsDetail.users.assignedRoles', { defaultValue: 'Assigned roles' })}
-                </p>
-                <div className="flex flex-col gap-1">
-                    {roles.map((r) => (
-                        <span
-                            key={r}
-                            className={cn(
-                                'text-[11px] font-semibold px-2 py-1 rounded-md border',
-                                ROLE_BADGE_STYLE[r as UserRole] ?? 'bg-muted text-muted-foreground border-border',
-                            )}
-                        >
-                            {ROLE_LABEL[r as UserRole] ?? r}
-                        </span>
-                    ))}
-                </div>
-            </PopoverContent>
-        </Popover>
     )
 }
 
@@ -1090,39 +1312,75 @@ function ManageUserAccessModal({
     return (
         <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
             <DialogContent className="sm:max-w-lg p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
-                {/* Header */}
+                {/* Header — identity block.
+                    The active/inactive indicator went through two iterations:
+                    first as a chunky pill in the top-right corner (clashed
+                    with the X close); then as a dot-chip inline with the
+                    name (got pushed off-screen when the name was long).
+                    Final form is a small absolute-positioned status dot
+                    on the avatar — the universal "online indicator" pattern
+                    from chat apps. It's instantly readable, never collides
+                    with the close button, and survives any name length. The
+                    Last login meta strip in the body re-states "Active"/
+                    "Inactive" in words for users who want the explicit
+                    label rather than the colour cue. */}
                 <DialogHeader className="px-6 py-5 border-b">
                     <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="size-10 shrink-0">
-                            {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                                {initials(user.name)}
-                            </AvatarFallback>
-                        </Avatar>
+                        <div className="relative shrink-0">
+                            <Avatar className="size-10">
+                                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                    {initials(user.name)}
+                                </AvatarFallback>
+                            </Avatar>
+                            <span
+                                title={user.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                aria-label={user.isActive ? (t('common.active') as string) : (t('common.inactive') as string)}
+                                className={cn(
+                                    'absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-background',
+                                    user.isActive ? 'bg-emerald-500' : 'bg-rose-500',
+                                )}
+                            />
+                        </div>
                         <div className="min-w-0 flex-1">
-                            <DialogTitle className="text-sm font-semibold truncate">{user.name}</DialogTitle>
-                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+                            <DialogTitle className="text-sm font-semibold truncate">
+                                {user.name}
+                            </DialogTitle>
+                            <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
                                 <Mail className="size-3 shrink-0" />
-                                {user.email}
+                                <span className="truncate">{user.email}</span>
                             </p>
                         </div>
-                        <Badge
-                            variant={user.isActive ? 'success' : 'destructive'}
-                            className="text-[10px] shrink-0"
-                        >
-                            {user.isActive ? t('common.active') : t('common.inactive')}
-                        </Badge>
                     </div>
                 </DialogHeader>
 
                 {/* Body */}
                 <div className="overflow-y-auto px-6 py-5 space-y-5">
-                    {/* Meta strip */}
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <Clock className="size-3.5 shrink-0" />
-                        <span>
+                    {/* Meta strip — last login + explicit Active/Inactive
+                        label. The avatar dot is the at-a-glance cue; this
+                        text is the screen-reader-friendly fallback for
+                        anyone who can't (or doesn't want to) parse the
+                        colour. Separator dot ties them visually. */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5">
+                            <Clock className="size-3.5 shrink-0" />
                             {t('settingsDetail.users.lastLogin', { defaultValue: 'Last login' })}:{' '}
                             {user.lastLoginAt ? formatDate(user.lastLoginAt) : t('settingsDetail.users.lastLoginNever')}
+                        </span>
+                        <span aria-hidden className="opacity-40">·</span>
+                        <span className="inline-flex items-center gap-1.5">
+                            <span
+                                className={cn(
+                                    'size-1.5 rounded-full',
+                                    user.isActive ? 'bg-emerald-500' : 'bg-rose-500',
+                                )}
+                            />
+                            <span className={cn(
+                                'font-medium',
+                                user.isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400',
+                            )}>
+                                {user.isActive ? t('common.active') : t('common.inactive')}
+                            </span>
                         </span>
                     </div>
 

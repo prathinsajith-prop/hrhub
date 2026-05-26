@@ -12,10 +12,13 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Fingerprint, ArrowLeft, Plus, Trash2, Copy, Send, Pencil,
-    Webhook, KeyRound, Code2, Terminal, ShieldCheck,
+    Webhook, KeyRound, Code2, Terminal, ShieldCheck, Upload,
 } from 'lucide-react'
+import { BulkMappingsImportDialog } from './BulkMappingsImportDialog'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, Input, Label } from '@/components/ui/primitives'
@@ -78,6 +81,7 @@ function BiometricMappingTab() {
     const { data, isLoading } = useBiometricMappings()
     const remove = useDeleteMapping()
     const [addOpen, setAddOpen] = useState(false)
+    const [bulkOpen, setBulkOpen] = useState(false)
     const [editing, setEditing] = useState<BiometricMapping | null>(null)
     const [removing, setRemoving] = useState<BiometricMapping | null>(null)
     const rows = data ?? []
@@ -91,10 +95,16 @@ function BiometricMappingTab() {
                         {t('biometric.mapping.subtitle', 'Each row links a biometric device user (or external system ID) to an HRHub employee — so punch imports can resolve which row belongs to which person.')}
                     </p>
                 </div>
-                <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5 shrink-0">
-                    <Plus className="size-4" />
-                    {t('biometric.mapping.add', 'Add mapping')}
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)} className="gap-1.5">
+                        <Upload className="size-4" />
+                        {t('biometric.mapping.bulkImport', 'Bulk import')}
+                    </Button>
+                    <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+                        <Plus className="size-4" />
+                        {t('biometric.mapping.add', 'Add mapping')}
+                    </Button>
+                </div>
             </div>
 
             <Card>
@@ -111,17 +121,26 @@ function BiometricMappingTab() {
                         </thead>
                         <tbody className="divide-y">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">{t('common.loading', 'Loading...')}</td></tr>
+                                // Render 3 placeholder rows that match the column shape so the
+                                // table doesn't collapse during the fetch.
+                                Array.from({ length: 3 }).map((_, i) => (
+                                    <tr key={`bm-skel-${i}`}>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-24" /></td>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-40" /></td>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-32" /></td>
+                                        <td className="px-3 py-3"><Skeleton className="h-4 w-20" /></td>
+                                        <td className="px-3 py-3 text-right"><Skeleton className="h-7 w-16 ms-auto" /></td>
+                                    </tr>
+                                ))
                             ) : rows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-3 py-12 text-center">
-                                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                            <Fingerprint className="size-8 opacity-30" />
-                                            <p>{t('biometric.mapping.empty', 'No mappings yet')}</p>
-                                            <p className="text-[11px] text-muted-foreground/80 max-w-md">
-                                                {t('biometric.mapping.emptyHint', 'Add a mapping for each biometric / device user ID that you want to recognise during punch imports.')}
-                                            </p>
-                                        </div>
+                                    <td colSpan={5} className="px-3 py-0">
+                                        <EmptyState
+                                            icon={Fingerprint}
+                                            title={t('biometric.mapping.empty', 'No mappings yet')}
+                                            description={t('biometric.mapping.emptyHint', 'Add a mapping for each biometric / device user ID that you want to recognise during punch imports.')}
+                                            size="sm"
+                                        />
                                     </td>
                                 </tr>
                             ) : rows.map((r) => (
@@ -172,6 +191,7 @@ function BiometricMappingTab() {
             </Card>
 
             <AddMappingDialog open={addOpen} onOpenChange={setAddOpen} />
+            <BulkMappingsImportDialog open={bulkOpen} onOpenChange={setBulkOpen} />
             <EditMappingDialog
                 mapping={editing}
                 onClose={() => setEditing(null)}
