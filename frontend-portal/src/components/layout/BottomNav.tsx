@@ -5,7 +5,6 @@ import {
     FileCheck2,
     FileText,
     Home,
-    MessageSquare,
     MoreHorizontal,
     Receipt,
     ShieldCheck,
@@ -16,7 +15,6 @@ import {
 } from 'lucide-react'
 
 import { useViewModeStore } from '@/store/viewModeStore'
-import { useMyOpenExit } from '@/hooks/useMyExit'
 import { ROUTES } from '@/lib/routes'
 import { cn } from '@/lib/utils'
 import {
@@ -62,16 +60,8 @@ export function BottomNav() {
     const mode = useViewModeStore((s) => s.mode)
     const { pathname } = useLocation()
     const navigate = useNavigate()
-    // Conditionally inject the Exit Interview entry into the overflow menu
-    // when the signed-in employee has an in-flight exit they need to fill in.
-    const { data: myExit } = useMyOpenExit()
-    const showExitInterview = mode !== 'manager' && !!myExit && !myExit.interviewSubmitted
-
     const items = mode === 'manager' ? MANAGER_ITEMS : EMPLOYEE_ITEMS
-    const baseMore = mode === 'manager' ? MANAGER_MORE : EMPLOYEE_MORE
-    const moreItems = showExitInterview
-        ? [{ to: ROUTES.employeeExitInterview, label: 'nav.exitInterview', icon: MessageSquare }, ...baseMore]
-        : baseMore
+    const moreItems = mode === 'manager' ? MANAGER_MORE : EMPLOYEE_MORE
 
     const moreActive = moreItems.some((m) => pathname === m.to || pathname.startsWith(m.to + '/'))
 

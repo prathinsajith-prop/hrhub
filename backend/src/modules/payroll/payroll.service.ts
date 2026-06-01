@@ -605,15 +605,32 @@ function buildPayslipsAndTotals(
         // them here so the breakdown sums exactly to the persisted column
         // totals. Empty when the employee was on the legacy fallback path.
 
-        let workedDays = daysInMonth
+        // Proration window — the slice of the month the employee was
+        // actually on payroll, expressed as [firstWorkedDay, lastWorkedDay]
+        // day-of-month boundaries.
+        //
+        // The previous implementation clamped a single running counter:
+        // `workedDays = daysInMonth - joinDay + 1`, then
+        // `Math.min(workedDays, endDay)`. That produced the wrong total
+        // when an employee BOTH joined and left in the same month — e.g.
+        // join 10th + contract-end 20th gave `min(22, 20) = 20` days
+        // instead of the correct 11 (the 10th through the 20th inclusive),
+        // overpaying by 9 days of salary. Computing the two boundaries
+        // independently and taking the inclusive span fixes every
+        // combination: full month, join-only, leave-only, and both.
+        let firstWorkedDay = 1
+        let lastWorkedDay = daysInMonth
         const joinDate = parseLocalDate(emp.joinDate)
         const contractEndDate = parseLocalDate(emp.contractEndDate)
         if (joinDate && joinDate > monthStart && joinDate <= monthEnd) {
-            workedDays = daysInMonth - joinDate.getDate() + 1
+            firstWorkedDay = joinDate.getDate()
         }
         if (contractEndDate && contractEndDate >= monthStart && contractEndDate <= monthEnd) {
-            workedDays = Math.min(workedDays, contractEndDate.getDate())
+            lastWorkedDay = contractEndDate.getDate()
         }
+        // Inclusive span, floored at 0 (defensive — getPayableEmployees
+        // already excludes anyone whose window doesn't overlap the period).
+        const workedDays = Math.max(0, lastWorkedDay - firstWorkedDay + 1)
 
         const prorateRatio = workedDays / daysInMonth
         const baseEarnings = (basic + housing + transport + other) * prorateRatio
@@ -631,9 +648,20 @@ function buildPayslipsAndTotals(
         const gross = baseEarnings + additions
         const net = Math.max(0, gross - deductions)
 
-        totalGross += gross
-        totalDeductions += deductions
-        totalNet += net
+        // Round to the cent BEFORE accumulating the run totals. Each payslip
+        // is persisted with `.toFixed(2)` (rounded), so if the run total
+        // summed the raw unrounded floats it could drift a cent or two away
+        // from "sum of what HR sees on the payslips" — and a payroll total
+        // that doesn't foot to its line items is an audit red flag. Summing
+        // the same rounded figures guarantees the run total reconciles
+        // exactly with the payslip column it represents.
+        const grossRounded = Math.round(gross * 100) / 100
+        const deductionsRounded = Math.round(deductions * 100) / 100
+        const netRounded = Math.round(net * 100) / 100
+
+        totalGross += grossRounded
+        totalDeductions += deductionsRounded
+        totalNet += netRounded
 
         const earningsBreakdown = resolved && resolved.hasBasic
             ? resolved.earnings.map(e => ({

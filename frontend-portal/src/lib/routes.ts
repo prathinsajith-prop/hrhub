@@ -3,9 +3,6 @@ export const ROUTES = {
     forgotPassword: '/forgot-password',
     resetPassword: '/reset-password',
     notAuthorized: '/not-authorized',
-    /** Public token-link landing page for the "complete your exit interview"
-     *  email flow. No login required — auth comes from the signed token. */
-    publicExitInterview: (token = ':token') => `/exit-interview/by-token/${token}`,
 
     // Employee mode
     employeeHome: '/me',
@@ -15,7 +12,6 @@ export const ROUTES = {
     employeeAttendance: '/me/attendance',
     employeeDocuments: '/me/documents',
     employeePerformance: '/me/performance',
-    employeeExitInterview: '/me/exit-interview',
     notifications: '/notifications',
 
     // Manager mode (dept_head only)

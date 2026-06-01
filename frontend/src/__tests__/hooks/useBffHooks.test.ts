@@ -144,9 +144,11 @@ describe('useReportsSummary', () => {
         apiMock.get.mockResolvedValue(mockSummary)
         const { result } = renderHook(() => useReportsSummary(90), { wrapper: makeWrapper() })
         await waitFor(() => expect(result.current.data).toBeDefined())
-        expect(result.current.data?.headcount.total).toBe(50)
-        expect(result.current.data?.payrollSummary.ytdGross).toBe(500_000)
-        expect(result.current.data?.visaExpiry.expired).toBe(1)
-        expect(result.current.data?.proCosts.ytdTotal).toBe(25_000)
+        // Each summary field is nullable (BFF uses Promise.allSettled) — the
+        // mock returns full data, so optional chaining just narrows the type.
+        expect(result.current.data?.headcount?.total).toBe(50)
+        expect(result.current.data?.payrollSummary?.ytdGross).toBe(500_000)
+        expect(result.current.data?.visaExpiry?.expired).toBe(1)
+        expect(result.current.data?.proCosts?.ytdTotal).toBe(25_000)
     })
 })
