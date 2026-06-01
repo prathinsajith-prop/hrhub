@@ -197,6 +197,8 @@
     "savedThem": "I've saved them",
     "regenerate": "Regenerate backup codes",
     "copyCodes": "Copy codes",
+    "downloadCodes": "Download",
+    "codesGeneratedOn": "Generated",
     "copied": "Copied",
     "enabledToast": "Two-factor authentication enabled",
     "disabledToast": "Two-factor authentication disabled",

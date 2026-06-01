@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Copy, KeyRound, Loader2, Smartphone } from 'lucide-react'
+import { Copy, Download, KeyRound, Loader2, Smartphone } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
 import {
@@ -125,21 +125,50 @@ export function TwoFactorCard() {
 function BackupCodes({ codes }: { codes: string[] }) {
     const { t } = useTranslation()
     const [copied, setCopied] = useState(false)
+
     function copy() {
         navigator.clipboard?.writeText(codes.join('\n')).then(() => {
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
         }).catch(() => {})
     }
+
+    /** Save the codes as a plain-text file (AWS-style), with a dated header + note. */
+    function download() {
+        const stamp = new Date().toISOString().slice(0, 10)
+        const body = [
+            `${t('app.name', { defaultValue: 'HRHub' })} — ${t('security.mfaTitle')}`,
+            `${t('security.codesGeneratedOn', { defaultValue: 'Generated' })}: ${stamp}`,
+            '',
+            t('security.backupCodesDesc'),
+            '',
+            ...codes,
+            '',
+        ].join('\n')
+        const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }))
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `hrhub-backup-codes-${stamp}.txt`
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+    }
+
     return (
         <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/40 dark:bg-amber-950/30">
             <p className="text-xs text-amber-800 dark:text-amber-200">{t('security.backupCodesDesc')}</p>
             <div className="grid grid-cols-2 gap-1.5 font-mono text-sm">
                 {codes.map((c) => <span key={c} className="rounded bg-background/70 px-2 py-1 text-center tracking-wider">{c}</span>)}
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={copy} className="w-full">
-                <Copy className="size-3.5" /> {copied ? t('security.copied') : t('security.copyCodes')}
-            </Button>
+            <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={copy} className="flex-1">
+                    <Copy className="size-3.5" /> {copied ? t('security.copied') : t('security.copyCodes')}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={download} className="flex-1">
+                    <Download className="size-3.5" /> {t('security.downloadCodes')}
+                </Button>
+            </div>
         </div>
     )
 }

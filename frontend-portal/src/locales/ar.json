@@ -197,6 +197,8 @@
     "savedThem": "لقد حفظتها",
     "regenerate": "إعادة إنشاء الرموز الاحتياطية",
     "copyCodes": "نسخ الرموز",
+    "downloadCodes": "تنزيل",
+    "codesGeneratedOn": "تاريخ الإنشاء",
     "copied": "تم النسخ",
     "enabledToast": "تم تفعيل المصادقة الثنائية",
     "disabledToast": "تم تعطيل المصادقة الثنائية",
