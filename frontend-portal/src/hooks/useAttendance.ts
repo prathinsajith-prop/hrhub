@@ -23,7 +23,17 @@ function buildQuery(params: Record<string, QueryPrimitive> | ListParams): string
 export function useAttendance(params: ListParams = {}) {
     const tenantId = useAuthStore((s) => s.user?.tenantId)
     return useQuery({
-        queryKey: ['portal', 'attendance', tenantId, params],
+        queryKey: [
+            'portal',
+            'attendance',
+            tenantId,
+            params.startDate,
+            params.endDate,
+            params.employeeId,
+            params.status,
+            params.limit,
+            params.offset,
+        ],
         queryFn: () => api.get<PaginatedResponse<AttendanceRecord>>(`/attendance${buildQuery(params)}`),
         enabled: !!tenantId,
     })
@@ -93,7 +103,7 @@ export function useCheckIn() {
     const employeeId = useAuthStore((s) => s.user?.employeeId ?? undefined)
     return useMutation({
         mutationFn: (body: PunchBody = {}) =>
-            api.post<{ data: AttendanceRecord }>('/attendance/check-in', body).then((r) => r.data),
+            api.post<{ data: AttendanceRecord; punch: AttendancePunch }>('/attendance/check-in', body),
         onSuccess: (_data, body) => {
             pushOptimisticPunch(qc, tenantId, body.employeeId ?? employeeId, 'in', body)
             qc.invalidateQueries({ queryKey: ['portal', 'attendance'] })
@@ -109,7 +119,7 @@ export function useCheckOut() {
     const employeeId = useAuthStore((s) => s.user?.employeeId ?? undefined)
     return useMutation({
         mutationFn: (body: PunchBody = {}) =>
-            api.post<{ data: AttendanceRecord }>('/attendance/check-out', body).then((r) => r.data),
+            api.post<{ data: AttendanceRecord; punch: AttendancePunch }>('/attendance/check-out', body),
         onSuccess: (_data, body) => {
             pushOptimisticPunch(qc, tenantId, body.employeeId ?? employeeId, 'out', body)
             qc.invalidateQueries({ queryKey: ['portal', 'attendance'] })
