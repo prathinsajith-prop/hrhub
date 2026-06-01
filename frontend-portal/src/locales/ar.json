@@ -39,6 +39,8 @@
     "backupCode": "رمز احتياطي",
     "verify": "تحقّق",
     "verifying": "جارٍ التحقق…",
+    "invalidCode": "رمز التحقق غير صحيح أو منتهي الصلاحية. حاول مرة أخرى.",
+    "mfaAutoSubmitHint": "أدخل الأرقام الستة للتحقق تلقائيًا",
     "useBackupCode": "استخدام رمز احتياطي",
     "useAuthenticator": "استخدام تطبيق المصادقة",
     "backToSignIn": "العودة لتسجيل الدخول"
