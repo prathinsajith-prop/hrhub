@@ -248,6 +248,26 @@ export default async function (fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         await resendInvite(request.user.tenantId, id)
+
+        const [emp] = await db
+            .select({ firstName: employees.firstName, lastName: employees.lastName })
+            .from(employees)
+            .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: id,
+            entityName: emp ? `${emp.firstName} ${emp.lastName}` : undefined,
+            action: 'invite',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+
         return reply.code(200).send({ message: 'Invite resent' })
     })
 
@@ -677,6 +697,21 @@ export default async function (fastify: any): Promise<void> {
         }
 
         const failed = rows.length - created
+
+        if (created > 0) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                action: 'import',
+                metadata: { count: created },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
+
         return reply.code(created > 0 || failed === 0 ? 201 : 400).send({ created, failed, errors: results })
     })
 
@@ -749,6 +784,7 @@ export default async function (fastify: any): Promise<void> {
             entityId: updated.id,
             entityName: `${updated.firstName} ${updated.lastName}`,
             action: 'update',
+            metadata: { kind: 'profile', subKind: 'self-update' },
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
