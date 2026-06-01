@@ -295,6 +295,23 @@ export default async function salaryRevisionsRoutes(fastify: any): Promise<void>
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
 
+        // Mirror onto the employee's Updates tab. The ActivityFeed renders
+        // entityType:'employee' rows whose metadata.kind is in the handled set
+        // — reuse the already-handled 'payroll' kind so the salary change
+        // surfaces under the employee without inventing a new kind.
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: id,
+            action: 'update',
+            metadata: { kind: 'payroll', subKind: 'update' },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+
         return reply.code(201).send({ data: revision })
     })
 }
