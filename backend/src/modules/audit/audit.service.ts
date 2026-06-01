@@ -2,6 +2,7 @@ import { db } from '../../db/index.js'
 import { loginHistory, activityLogs } from '../../db/schema/index.js'
 import { desc, sql } from 'drizzle-orm'
 import { Conditions } from '../../lib/filters.js'
+import { maskAuditChanges } from './audit.changes.js'
 
 /**
  * Canonical activity classification. Extends the original set with the
@@ -127,6 +128,11 @@ export async function recordActivity(params: RecordActivityParams): Promise<void
     const meta: Record<string, unknown> = { ...(params.metadata ?? {}) }
     if (params.requestId && meta.requestId === undefined) meta.requestId = params.requestId
     if (meta.module === undefined) meta.module = params.module ?? params.entityType
+    // Defence in depth: redact sensitive identifiers (IBAN/account/passport/
+    // Emirates ID/SWIFT) from EVERY change-set at the single write point, so no
+    // call site can ever persist them unmasked (idempotent — safe if a caller
+    // already masked). Copy first so the caller's object isn't mutated.
+    const changes = params.changes ? maskAuditChanges({ ...params.changes }) : null
     await db.insert(activityLogs).values({
         tenantId: params.tenantId,
         userId: params.userId ?? null,
@@ -136,7 +142,7 @@ export async function recordActivity(params: RecordActivityParams): Promise<void
         entityId: params.entityId,
         entityName: params.entityName,
         action: params.action,
-        changes: params.changes ?? null,
+        changes,
         metadata: Object.keys(meta).length > 0 ? meta : null,
         ipAddress: params.ipAddress,
         userAgent: params.userAgent?.slice(0, 500),

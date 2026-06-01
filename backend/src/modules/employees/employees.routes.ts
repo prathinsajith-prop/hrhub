@@ -8,7 +8,7 @@ import { recordActivity } from '../audit/audit.service.js'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { db } from '../../db/index.js'
 import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users, orgUnits, gradeLevels, sponsoringEntities } from '../../db/schema/index.js'
-import { maskAuditChanges, resolveReferenceNames } from '../audit/audit.changes.js'
+import { resolveReferenceNames } from '../audit/audit.changes.js'
 import { eq, and, sql, inArray } from 'drizzle-orm'
 import { loadPrivacyPolicy, maskEmployeeForViewer, viewerCanBypassPrivacy, effectiveVisibility, type PrivacyOverrides } from '../../lib/privacy.js'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
@@ -618,10 +618,9 @@ export default async function (fastify: any): Promise<void> {
         if (assignmentInputs && assignmentInputs.length > 0) payrollChanged = true
 
         // Resolve FK changes (division/branch/grade/sponsor/manager) to readable
-        // from→to NAMES so those changes are no longer dark in the audit trail,
-        // then mask sensitive identifiers (IBAN/account/passport/Emirates ID).
+        // from→to NAMES so those changes are no longer dark in the audit trail.
+        // Sensitive-field masking is handled centrally in recordActivity().
         // Kept fire-and-forget so the name lookups never delay the response.
-        maskAuditChanges(changes)
         // A resolution failure must not suppress the audit entry — degrade to {}.
         resolveReferenceNames(request.user.tenantId, before, updated)
             .catch(() => ({}))
