@@ -21,7 +21,7 @@ import {
 import { sendEmail, onboardingUploadLinkEmail } from '../../plugins/email.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { db } from '../../db/index.js'
-import { onboardingChecklists, onboardingSteps, onboardingStepRequiredDocs, documents, tenants, employees } from '../../db/schema/index.js'
+import { onboardingChecklists, onboardingSteps, onboardingStepRequiredDocs, onboardingTemplateSteps, documents, tenants, employees } from '../../db/schema/index.js'
 import { eq, and, isNull, inArray, ne } from 'drizzle-orm'
 import { buildS3Key, uploadObject } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
@@ -57,6 +57,49 @@ function getStepSuggestions(title: string) {
         if (lower.includes(key)) return docs
     }
     return []
+}
+
+/**
+ * Audit helper — every mutating route in this module funnels through this so
+ * we never miss an entry in `activity_logs`. Read-only GET routes are NOT
+ * audited (auth + RBAC already gate access). Fire-and-forget — never awaited.
+ *
+ * Org-scoped only: onboarding mutations use onboarding-related entityTypes
+ * (`onboarding`, `onboarding_checklist`, `onboarding_step`,
+ * `onboarding_step_required_doc`, `onboarding_template_step`,
+ * `onboarding_template_step_required_doc`, `onboarding_template_steps`). We do
+ * NOT emit an `employee` mirror here — the frontend ActivityFeed has no
+ * onboarding kind yet, so a mirror would render as a generic fallback.
+ */
+function audit(request: any, params: {
+    entityType:
+        | 'onboarding'
+        | 'onboarding_checklist'
+        | 'onboarding_step'
+        | 'onboarding_step_required_doc'
+        | 'onboarding_template_step'
+        | 'onboarding_template_step_required_doc'
+        | 'onboarding_template_steps'
+    entityId: string
+    entityName?: string
+    action: 'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'invite'
+    metadata?: Record<string, unknown>
+    changes?: Record<string, { from: unknown; to: unknown }>
+}) {
+    return recordActivity({
+        tenantId: request.user.tenantId,
+        userId: request.user.id,
+        actorName: request.user.name,
+        actorRole: request.user.role,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        entityName: params.entityName,
+        action: params.action,
+        changes: params.changes,
+        metadata: params.metadata,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+    }).catch(() => { })
 }
 
 /**
@@ -147,6 +190,12 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request: any, reply: any) => {
         const created = await createTemplateStep(request.user.tenantId, request.body as never)
+        audit(request, {
+            entityType: 'onboarding_template_step',
+            entityId: created.id,
+            entityName: created.title,
+            action: 'create',
+        })
         return reply.code(201).send({ data: created })
     })
 
@@ -165,8 +214,25 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request: any, reply: any) => {
         const { stepId } = request.params as { stepId: string }
+        const [before] = await db.select({ title: onboardingTemplateSteps.title, owner: onboardingTemplateSteps.owner, slaDays: onboardingTemplateSteps.slaDays })
+            .from(onboardingTemplateSteps)
+            .where(and(eq(onboardingTemplateSteps.id, stepId), eq(onboardingTemplateSteps.tenantId, request.user.tenantId)))
+            .limit(1)
         const row = await updateTemplateStep(request.user.tenantId, stepId, request.body as never)
         if (!row) return reply.code(404).send({ message: 'Template step not found' })
+        const changes: Record<string, { from: unknown; to: unknown }> = {}
+        if (before) {
+            for (const key of ['title', 'owner', 'slaDays'] as const) {
+                if ((row as any)[key] !== (before as any)[key]) changes[key] = { from: (before as any)[key], to: (row as any)[key] }
+            }
+        }
+        audit(request, {
+            entityType: 'onboarding_template_step',
+            entityId: row.id,
+            entityName: row.title,
+            action: 'update',
+            changes: Object.keys(changes).length > 0 ? changes : undefined,
+        })
         return reply.send({ data: row })
     })
 
@@ -174,6 +240,12 @@ export default async function (fastify: any): Promise<void> {
         const { stepId } = request.params as { stepId: string }
         const row = await deleteTemplateStep(request.user.tenantId, stepId)
         if (!row) return reply.code(404).send({ message: 'Template step not found' })
+        audit(request, {
+            entityType: 'onboarding_template_step',
+            entityId: row.id,
+            entityName: row.title,
+            action: 'delete',
+        })
         return reply.code(204).send()
     })
 
@@ -192,35 +264,25 @@ export default async function (fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const { orderedIds } = request.body as { orderedIds: string[] }
         const data = await reorderTemplateSteps(request.user.tenantId, orderedIds)
-        recordActivity({
-            tenantId: request.user.tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
+        audit(request, {
             entityType: 'onboarding_template_steps',
             entityId: request.user.tenantId,
             entityName: `${data.length} steps`,
             action: 'update',
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => { })
+            metadata: { reordered: data.length },
+        })
         return reply.send({ data })
     })
 
     fastify.post('/template-steps/reset', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const data = await resetTemplateSteps(request.user.tenantId)
-        recordActivity({
-            tenantId: request.user.tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
+        audit(request, {
             entityType: 'onboarding_template_steps',
             entityId: request.user.tenantId,
             entityName: 'reset to defaults',
             action: 'update',
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => { })
+            metadata: { stepCount: data.length },
+        })
         return reply.send({ data })
     })
 
@@ -250,7 +312,15 @@ export default async function (fastify: any): Promise<void> {
             if (result.error === 'employee_not_found') return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
             if (result.error === 'already_exists') return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Onboarding checklist already exists for this employee' })
         }
-        return reply.code(201).send({ data: (result as any).checklist })
+        const checklist = (result as any).checklist
+        audit(request, {
+            entityType: 'onboarding_checklist',
+            entityId: checklist.id,
+            entityName: `Checklist for employee ${checklist.employeeId}`,
+            action: 'create',
+            metadata: { employeeId: checklist.employeeId, useTemplate: (request.body as any)?.useTemplate ?? false },
+        })
+        return reply.code(201).send({ data: checklist })
     })
 
     fastify.get('/', { ...auth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
@@ -281,8 +351,29 @@ export default async function (fastify: any): Promise<void> {
         },
     }, async (request, reply) => {
         const { checklistId, stepId } = request.params as { checklistId: string; stepId: string }
+        const [before] = await db.select({ status: onboardingSteps.status, notes: onboardingSteps.notes, completedDate: onboardingSteps.completedDate })
+            .from(onboardingSteps)
+            .where(and(eq(onboardingSteps.id, stepId), eq(onboardingSteps.checklistId, checklistId)))
+            .limit(1)
         const result = await updateStep(request.user.tenantId, checklistId, stepId, request.body as never)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Step not found' })
+        const updatedStep = (result as any).step
+        const changes: Record<string, { from: unknown; to: unknown }> = {}
+        if (before) {
+            for (const key of ['status', 'notes', 'completedDate'] as const) {
+                if (updatedStep[key] !== (before as any)[key]) changes[key] = { from: (before as any)[key], to: updatedStep[key] }
+            }
+        }
+        // A status change to `completed` is a step completion; treat as submit.
+        const action = updatedStep.status === 'completed' && before?.status !== 'completed' ? 'submit' : 'update'
+        audit(request, {
+            entityType: 'onboarding_step',
+            entityId: updatedStep.id,
+            entityName: updatedStep.title,
+            action,
+            changes: Object.keys(changes).length > 0 ? changes : undefined,
+            metadata: { checklistId, progress: (result as any).progress },
+        })
         return reply.send({ data: result })
     })
 
@@ -305,6 +396,13 @@ export default async function (fastify: any): Promise<void> {
         const { checklistId } = request.params as { checklistId: string }
         const result = await addStep(request.user.tenantId, checklistId, request.body as never)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Checklist not found' })
+        audit(request, {
+            entityType: 'onboarding_step',
+            entityId: result.id,
+            entityName: result.title,
+            action: 'create',
+            metadata: { checklistId },
+        })
         return reply.code(201).send({ data: result })
     })
 
@@ -312,6 +410,13 @@ export default async function (fastify: any): Promise<void> {
         const { checklistId, stepId } = request.params as { checklistId: string; stepId: string }
         const result = await deleteStep(request.user.tenantId, checklistId, stepId)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Step not found' })
+        audit(request, {
+            entityType: 'onboarding_step',
+            entityId: result.id,
+            entityName: result.title,
+            action: 'delete',
+            metadata: { checklistId },
+        })
         return reply.code(204).send()
     })
 
@@ -389,6 +494,14 @@ export default async function (fastify: any): Promise<void> {
         emailOpts.to = row.employeeEmail
         const result = await sendEmail(emailOpts)
 
+        audit(request, {
+            entityType: 'onboarding_checklist',
+            entityId: checklistId,
+            entityName: `Upload link for ${employeeName}`,
+            action: 'invite',
+            metadata: { employeeId: row.employeeId, email: row.employeeEmail, expiresInDays, tokenId: tokenRow.id, emailSent: result.ok },
+        })
+
         return reply.send({
             data: {
                 sent: result.ok,
@@ -413,6 +526,13 @@ export default async function (fastify: any): Promise<void> {
         const { tokenId } = request.params as { tokenId: string }
         const revoked = await revokeUploadToken(request.user.tenantId, tokenId, request.user.id)
         if (!revoked) return reply.code(404).send({ message: 'Token not found or already revoked' })
+        audit(request, {
+            entityType: 'onboarding_checklist',
+            entityId: (revoked as any).checklistId ?? tokenId,
+            entityName: 'Upload link revoked',
+            action: 'update',
+            metadata: { tokenId },
+        })
         return reply.send({ data: revoked })
     })
 
@@ -745,6 +865,13 @@ export default async function (fastify: any): Promise<void> {
         const { stepId } = request.params as { stepId: string }
         const created = await addRequiredDoc(request.user.tenantId, stepId, request.body as any)
         if (!created) return reply.code(404).send({ message: 'Step not found' })
+        audit(request, {
+            entityType: 'onboarding_step_required_doc',
+            entityId: created.id,
+            entityName: `${created.category}/${created.docType}`,
+            action: 'create',
+            metadata: { stepId },
+        })
         return reply.code(201).send({ data: created })
     })
 
@@ -752,6 +879,13 @@ export default async function (fastify: any): Promise<void> {
         const { requiredDocId } = request.params as { requiredDocId: string }
         const deleted = await deleteRequiredDoc(request.user.tenantId, requiredDocId)
         if (!deleted) return reply.code(404).send({ message: 'Required-doc not found' })
+        audit(request, {
+            entityType: 'onboarding_step_required_doc',
+            entityId: deleted.id,
+            entityName: `${deleted.category}/${deleted.docType}`,
+            action: 'delete',
+            metadata: { stepId: deleted.stepId },
+        })
         return reply.send({ data: deleted })
     })
 
@@ -785,6 +919,13 @@ export default async function (fastify: any): Promise<void> {
         const { stepId } = request.params as { stepId: string }
         const created = await addTemplateRequiredDoc(request.user.tenantId, stepId, request.body as any)
         if (!created) return reply.code(404).send({ message: 'Template step not found' })
+        audit(request, {
+            entityType: 'onboarding_template_step_required_doc',
+            entityId: created.id,
+            entityName: `${created.category}/${created.docType}`,
+            action: 'create',
+            metadata: { templateStepId: stepId },
+        })
         return reply.code(201).send({ data: created })
     })
 
@@ -792,12 +933,26 @@ export default async function (fastify: any): Promise<void> {
         const { requiredDocId } = request.params as { requiredDocId: string }
         const deleted = await deleteTemplateRequiredDoc(request.user.tenantId, requiredDocId)
         if (!deleted) return reply.code(404).send({ message: 'Required-doc not found' })
+        audit(request, {
+            entityType: 'onboarding_template_step_required_doc',
+            entityId: deleted.id,
+            entityName: `${deleted.category}/${deleted.docType}`,
+            action: 'delete',
+            metadata: { templateStepId: deleted.templateStepId },
+        })
         return reply.send({ data: deleted })
     })
 
     fastify.post('/:checklistId/seed-required-docs', { ...writeAuth, schema: { tags: ['Onboarding'] } }, async (request: any, reply: any) => {
         const { checklistId } = request.params as { checklistId: string }
         const result = await seedRequiredDocsFromTemplate(request.user.tenantId, checklistId)
+        audit(request, {
+            entityType: 'onboarding_checklist',
+            entityId: checklistId,
+            entityName: 'Seeded required docs from template',
+            action: 'update',
+            metadata: { seeded: result.seeded },
+        })
         return reply.send({ data: result })
     })
 
