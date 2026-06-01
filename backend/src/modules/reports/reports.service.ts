@@ -44,7 +44,18 @@ export async function getHeadcountReport(tenantId: string) {
     })
 }
 
-export async function getPayrollSummaryReport(tenantId: string) {
+/** Optional `{ startDate, endDate }` (ISO YYYY-MM-DD) window for range-aware reports. */
+export type ReportRange = { startDate: string; endDate: string }
+
+export async function getPayrollSummaryReport(tenantId: string, range?: ReportRange) {
+    // A payroll run is keyed by (year, month). When a range is supplied we
+    // keep runs whose month-start falls between the range's first month and
+    // its end date — i.e. every run that overlaps the selected window.
+    const rangeWhere = range
+        ? sql`make_date(${payrollRuns.year}, ${payrollRuns.month}, 1) >= date_trunc('month', ${range.startDate}::date)
+              AND make_date(${payrollRuns.year}, ${payrollRuns.month}, 1) <= ${range.endDate}::date`
+        : undefined
+
     const runs = await db
         .select({
             id: payrollRuns.id,
@@ -57,9 +68,11 @@ export async function getPayrollSummaryReport(tenantId: string) {
             employeeCount: payrollRuns.totalEmployees,
         })
         .from(payrollRuns)
-        .where(eq(payrollRuns.tenantId, tenantId))
+        .where(and(eq(payrollRuns.tenantId, tenantId), rangeWhere))
         .orderBy(desc(payrollRuns.year), desc(payrollRuns.month))
-        .limit(12)
+        // No range → trailing 12 runs (legacy). With a range, show every run
+        // in-window (capped high so a wide "last year" still returns fully).
+        .limit(range ? 120 : 12)
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const trend = runs.map(r => ({
@@ -582,8 +595,15 @@ export async function getTurnoverReport(
 // the average days-to-complete for the ones that finished. Drives the
 // "Onboarding" tab on the reports page.
 
-export async function getOnboardingReport(tenantId: string) {
+export async function getOnboardingReport(tenantId: string, range?: ReportRange) {
     return withLongTimeout(async (tx) => {
+        // Range filters on the checklist startDate (when onboarding began).
+        const rangeWhere = range
+            ? and(
+                gte(onboardingChecklists.startDate, range.startDate),
+                lte(onboardingChecklists.startDate, range.endDate),
+            )
+            : undefined
         const checklists = await tx
             .select({
                 id: onboardingChecklists.id,
@@ -601,7 +621,7 @@ export async function getOnboardingReport(tenantId: string) {
             })
             .from(onboardingChecklists)
             .innerJoin(employees, eq(employees.id, onboardingChecklists.employeeId))
-            .where(eq(onboardingChecklists.tenantId, tenantId))
+            .where(and(eq(onboardingChecklists.tenantId, tenantId), rangeWhere))
 
         const now = Date.now()
         const STALL_MS = 30 * 86_400_000
@@ -694,11 +714,20 @@ export async function getOnboardingReport(tenantId: string) {
 // per-department average ratings, and the 10 most recent submitted /
 // completed reviews. Excludes soft-deleted rows.
 
-export async function getPerformanceReport(tenantId: string) {
+export async function getPerformanceReport(tenantId: string, range?: ReportRange) {
     return withLongTimeout(async (tx) => {
+        // Range filters on reviewDate (when the review took place). Reviews
+        // with no reviewDate are excluded from a windowed view by nature.
+        const rangeWhere = range
+            ? and(
+                gte(performanceReviews.reviewDate, range.startDate),
+                lte(performanceReviews.reviewDate, range.endDate),
+            )
+            : undefined
         const baseWhere = and(
             eq(performanceReviews.tenantId, tenantId),
             isNull(performanceReviews.deletedAt),
+            rangeWhere,
         )
 
         // Five independent SELECTs run in parallel.
