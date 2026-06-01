@@ -6,7 +6,8 @@
 import { Queue, Worker } from 'bullmq'
 import { log } from '../lib/logger.js'
 import { loadEnv } from '../config/env.js'
-import { runPayroll } from '../modules/payroll/payroll.service.js'
+import { runPayroll, getPayslips, getPayrollRun } from '../modules/payroll/payroll.service.js'
+import { recordActivity } from '../modules/audit/audit.service.js'
 import { broadcastToTenant } from '../lib/ws-registry.js'
 
 export interface PayrollJobData {
@@ -20,7 +21,9 @@ function getRedisConnection() {
     return {
         host: url.hostname,
         port: Number(url.port ?? 6379),
+        username: url.username || undefined,
         password: url.password || undefined,
+        tls: url.protocol === 'rediss:' ? {} : undefined,
         enableReadyCheck: false,
         maxRetriesPerRequest: null as null,
     }
@@ -102,12 +105,45 @@ export async function startPayrollWorker(): Promise<void> {
         }
     )
 
-    worker.on('completed', (job) => {
+    worker.on('completed', async (job) => {
         const { tenantId, payrollRunId } = job.data
         broadcastToTenant(tenantId, {
             type: 'payroll:completed',
             payload: { payrollRunId },
         })
+        // Per-employee audit so each Updates tab + employee portal surfaces the
+        // run that just generated their payslip. Best-effort; no actor context
+        // available inside the worker, so the audit entry is attributed to "System".
+        try {
+            const [run, slips] = await Promise.all([
+                getPayrollRun(tenantId, payrollRunId),
+                getPayslips(tenantId, payrollRunId),
+            ])
+            const period = run ? `${run.month}/${run.year}` : ''
+            for (const s of slips) {
+                if (!s.employeeId) continue
+                recordActivity({
+                    tenantId,
+                    actorName: 'System',
+                    actorRole: 'system',
+                    entityType: 'employee',
+                    entityId: s.employeeId,
+                    entityName: period ? `Payslip ${period}` : 'Payslip',
+                    action: 'approve',
+                    metadata: {
+                        kind: 'payroll',
+                        subKind: 'payslip-generated',
+                        payrollRunId,
+                        payslipId: s.id,
+                        month: run?.month ?? null,
+                        year: run?.year ?? null,
+                        netSalary: (s as any).netSalary != null ? Number((s as any).netSalary) : null,
+                    },
+                }).catch(() => { })
+            }
+        } catch (err) {
+            log.warn({ err, payrollRunId }, 'payroll-worker: per-employee audit pass failed')
+        }
     })
 
     worker.on('failed', (job, err) => {

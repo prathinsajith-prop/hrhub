@@ -3,8 +3,17 @@ import QRCode from 'qrcode'
 import bcrypt from 'bcrypt'
 import crypto from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import { db } from '../../db/index.js'
+import { db } from '../../db/client.js'
 import { users } from '../../db/schema/index.js'
+
+/**
+ * TOTP two-factor authentication for the employee portal.
+ *
+ * Deliberately uses the SAME scheme as the main backend (otplib TOTP, plaintext
+ * base32 secret in `users.totpSecret`, bcrypt-hashed single-use backup codes in
+ * `users.twoFaBackupCodes`) so a user's 2FA works identically across both apps
+ * against the shared `users` table. Do not diverge the crypto here.
+ */
 
 const APP_NAME = 'HRHub'
 const totp = new TOTP({ crypto: new NobleCryptoPlugin(), base32: new ScureBase32Plugin() })
@@ -13,7 +22,7 @@ const totp = new TOTP({ crypto: new NobleCryptoPlugin(), base32: new ScureBase32
  * otplib v13's TOTP.verify() resolves to an object `{ valid, delta, ... }`
  * (NOT a boolean), so a plain truthiness check (`!!result`) accepts ANY code —
  * defeating 2FA entirely. Always check the explicit `valid` flag. Tolerates a
- * boolean return too, in case the library version changes.
+ * boolean return too, in case the lib version changes.
  */
 function isTotpValid(result: unknown): boolean {
     if (typeof result === 'boolean') return result
@@ -63,7 +72,7 @@ export async function verifyAndEnableTotp(userId: string, token: string): Promis
     if (!user?.totpSecret) return { enabled: false }
     if (!isTotpValid(await totp.verify(token, { secret: user.totpSecret }))) return { enabled: false }
     await db.update(users).set({ twoFaEnabled: true, updatedAt: new Date() }).where(eq(users.id, userId))
-    // Auto-issue a fresh set of backup codes when 2FA is first enabled
+    // Auto-issue a fresh set of backup codes when 2FA is first enabled.
     const backupCodes = await issueBackupCodes(userId)
     return { enabled: true, backupCodes }
 }
@@ -135,4 +144,3 @@ export async function regenerateBackupCodes(userId: string, totpCode: string): P
     if (!ok) return null
     return issueBackupCodes(userId)
 }
-

@@ -1181,7 +1181,8 @@
     "directReports": "Direct Reports",
     "noData": "No organizational data available",
     "expand": "Expand All",
-    "collapse": "Collapse All"
+    "collapse": "Collapse All",
+    "selectEmployee": "Search employee…"
   },
   "assets": {
     "title": "Assets",
@@ -1903,6 +1904,15 @@
     "title": "My Profile",
     "description": "Your employment record, documents, and personal details."
   },
+  "myActivity": {
+    "eyebrow": "My account",
+    "shortLabel": "My Activity",
+    "title": "My Activity",
+    "description": "Everything that has happened to your record — leave decisions, payslips, document uploads, profile edits, security changes, and more.",
+    "cardTitle": "Recent activity",
+    "emptyTitle": "Nothing here yet",
+    "emptyDescription": "Your activity will appear here as you submit leave, upload documents, receive payslips, and more."
+  },
   "orgSettings": {
     "structure": {
       "title": "Organization Structure",
@@ -2005,7 +2015,13 @@
       "teamDeleteFailedDesc": "Could not delete team.",
       "deleteTeamTitle": "Delete \"{{name}}\"?",
       "deleteTeamDesc": "All members will be removed from this team. This action cannot be undone.",
-      "deleting": "Deleting…"
+      "deleting": "Deleting…",
+      "filters": "Filters",
+      "clearFilters": "Clear",
+      "allBranches": "All branches",
+      "allDivisions": "All divisions",
+      "allDepartments": "All departments",
+      "allDesignations": "All designations"
     },
     "gradeLevels": {
       "title": "Grade Levels & Sponsoring Entities",

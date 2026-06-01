@@ -475,6 +475,19 @@ export default async function (fastify: any): Promise<void> {
         if (rows.length > 500) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'maximum 500 rows per import' })
         const result = await validateBulkCandidateRows(request.user.tenantId, jobId, normalizeCandidateRows(rows))
         if (!result.jobExists) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found in your organisation.' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'application',
+            entityId: jobId,
+            entityName: `bulk validate: ${rows.length} candidate row(s)`,
+            action: 'view',
+            metadata: { count: rows.length },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.send(result)
     })
 
@@ -999,6 +1012,7 @@ export default async function (fastify: any): Promise<void> {
         // Mark the application completed (no more pipeline stage).
         const updatedApplication = await updateApplication(tenantId, id, { stage: 'hired', notes: `${app.notes ?? ''}\n[Converted to employee ${employeeNo} on ${new Date().toISOString().slice(0, 10)}]`.trim() } as never)
 
+        // Recruitment-side: the candidate was converted (not created) — log as an update on the application.
         recordActivity({
             tenantId,
             userId: request.user.id,
@@ -1007,8 +1021,23 @@ export default async function (fastify: any): Promise<void> {
             entityType: 'application',
             entityId: id,
             entityName: `${app.name} → employee ${employeeNo}`,
-            action: 'create',
+            action: 'update',
             metadata: { employeeId: employee.id, employeeNo },
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        // Employee-mirror: the new hire is a fresh employee record — log a create against
+        // the new employee id so it surfaces on their Updates tab.
+        recordActivity({
+            tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: employee.id,
+            entityName: (employee as any).fullName ?? `${employee.firstName} ${employee.lastName}`.trim(),
+            action: 'create',
+            metadata: { employeeNo, convertedFromApplicationId: id },
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })

@@ -4,6 +4,57 @@ import { tenants, users, employees } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 import { invalidatePrivacyPolicyCache } from '../../lib/privacy.js'
 import { dashboardSummaryCache, dashboardCache, invalidateL1AndL2 } from '../../lib/cache.js'
+import { recordActivity } from '../audit/audit.service.js'
+
+/**
+ * Audit helper — every mutating route in this module funnels through this so
+ * we never miss an entry in `activity_logs`. Read-only routes are NOT audited.
+ * Fire-and-forget: never awaited, never blocks the response.
+ *
+ * NOTE: this module is ORG-scoped — we never emit an `entityType:'employee'`
+ * mirror. NEVER pass secrets, tokens, passwords, SMTP creds, or API keys into
+ * `changes` or `metadata`.
+ */
+function audit(request: any, params: {
+    entityType?: string
+    entityId: string
+    entityName?: string
+    action: 'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'invite'
+    metadata?: Record<string, unknown>
+    changes?: Record<string, { from: unknown; to: unknown }>
+}) {
+    recordActivity({
+        tenantId: request.user.tenantId,
+        userId: request.user.id,
+        actorName: request.user.name,
+        actorRole: request.user.role,
+        entityType: params.entityType ?? 'settings',
+        entityId: params.entityId,
+        entityName: params.entityName,
+        action: params.action,
+        changes: params.changes,
+        metadata: params.metadata,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+    }).catch(() => { })
+}
+
+/**
+ * Build a from/to diff over the given keys, including only fields that
+ * actually changed. Returns undefined when nothing changed (so we omit
+ * `changes` from the audit entry rather than logging an empty object).
+ */
+function diffChanges(before: any, after: any, keys: string[]): Record<string, { from: unknown; to: unknown }> | undefined {
+    const changes: Record<string, { from: unknown; to: unknown }> = {}
+    for (const k of keys) {
+        const from = before?.[k]
+        const to = after?.[k]
+        if (JSON.stringify(from) !== JSON.stringify(to)) {
+            changes[k] = { from: from ?? null, to: to ?? null }
+        }
+    }
+    return Object.keys(changes).length > 0 ? changes : undefined
+}
 
 const VALID_ROLES = ['employee', 'dept_head', 'pro_officer', 'hr_manager', 'super_admin'] as const
 type ValidRole = typeof VALID_ROLES[number]
@@ -41,6 +92,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         // to the same DB column.
         const body = request.body as Record<string, string | null>
         const { name, companyCode, tradeLicenseNo, businessType, jurisdiction, industryType, logoUrl, phone, address, companyEmail, companyWebsite } = body
+        const before = await getCompanySettings(request.user.tenantId)
         try {
             const updated = await updateCompanySettings(request.user.tenantId, {
                 name: name as string | undefined,
@@ -53,6 +105,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
                 address: address === undefined ? undefined : address,
                 companyEmail: companyEmail === undefined ? undefined : companyEmail,
                 companyWebsite: companyWebsite === undefined ? undefined : companyWebsite,
+            })
+            audit(request, {
+                entityType: 'settings_company',
+                entityId: request.user.tenantId,
+                entityName: (updated as any)?.name ?? (before as any)?.name,
+                action: 'update',
+                changes: diffChanges(before, updated, ['name', 'companyCode', 'tradeLicenseNo', 'businessType', 'industryType', 'logoUrl', 'phone', 'address', 'companyEmail', 'companyWebsite']),
             })
             return reply.send({ data: updated })
         } catch (err: any) {
@@ -88,6 +147,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         }
         try {
             const result = await inviteUser(request.user.tenantId, { employeeId, role, roles })
+            audit(request, {
+                entityType: 'settings_user',
+                entityId: result.id,
+                entityName: result.name || result.email,
+                action: 'invite',
+                metadata: { employeeId: result.employeeId, role: result.role, roles: roles ?? [result.role], emailSent: result.emailSent },
+            })
             return reply.code(201).send({ data: result })
         } catch (err: any) {
             return reply.code(err.statusCode ?? 500).send({ message: err.message })
@@ -109,6 +175,15 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             }
         }
         const results = await inviteUserBulk(request.user.tenantId, employeeIds, role, roles)
+        for (const ok of results.succeeded) {
+            audit(request, {
+                entityType: 'settings_user',
+                entityId: ok.employeeId,
+                entityName: ok.name || ok.email,
+                action: 'invite',
+                metadata: { employeeId: ok.employeeId, role, roles: roles ?? [role], bulk: true },
+            })
+        }
         return reply.code(207).send({ data: results })
     })
 
@@ -117,6 +192,12 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         const { employeeId } = request.params as { employeeId: string }
         try {
             await resendInvite(request.user.tenantId, employeeId)
+            audit(request, {
+                entityType: 'settings_user',
+                entityId: employeeId,
+                action: 'invite',
+                metadata: { employeeId, resend: true },
+            })
             return reply.send({ message: 'Invite resent' })
         } catch (err: any) {
             return reply.code(err.statusCode ?? 500).send({ message: err.message })
@@ -157,12 +238,33 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             }
         }
 
+        // Capture before-state for the audit diff (role / roles / isActive / attendance flags).
+        const [beforeUser] = await db
+            .select({
+                role: users.role,
+                roles: users.roles,
+                isActive: users.isActive,
+                attendancePunchEnabled: users.attendancePunchEnabled,
+                attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            })
+            .from(users)
+            .where(and(eq(users.id, id), eq(users.tenantId, request.user.tenantId)))
+            .limit(1)
+
         const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled })
         if (!updated) return reply.code(404).send({ message: 'User not found' })
 
         // Invalidate the isActive cache for this user so the change is effective immediately
         const { cacheDel } = await import('../../lib/redis.js')
         await cacheDel(`user:active:${id}`)
+
+        audit(request, {
+            entityType: 'settings_user',
+            entityId: id,
+            entityName: updated.name || updated.email,
+            action: 'update',
+            changes: diffChanges(beforeUser, updated, ['role', 'roles', 'isActive', 'attendancePunchEnabled', 'attendanceManualEntryEnabled']),
+        })
 
         return reply.send({ data: updated })
     })
@@ -190,11 +292,23 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (invalid.length > 0) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Invalid IP/CIDR entries: ${invalid.join(', ')}` })
         }
+        const [before] = await db
+            .select({ ipAllowlist: tenants.ipAllowlist })
+            .from(tenants)
+            .where(eq(tenants.id, request.user.tenantId))
+            .limit(1)
         const [updated] = await db
             .update(tenants)
             .set({ ipAllowlist: ipAllowlist.map(s => s.trim()), updatedAt: new Date() })
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ ipAllowlist: tenants.ipAllowlist })
+        audit(request, {
+            entityType: 'settings_security',
+            entityId: request.user.tenantId,
+            action: 'update',
+            changes: diffChanges(before, updated, ['ipAllowlist']),
+            metadata: { section: 'ip_allowlist' },
+        })
         return reply.send({ data: { ipAllowlist: updated?.ipAllowlist ?? [] } })
     })
 
@@ -223,6 +337,12 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .set({ regionalSettings: merged, updatedAt: new Date() })
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ regionalSettings: tenants.regionalSettings })
+        audit(request, {
+            entityType: 'settings_regional',
+            entityId: request.user.tenantId,
+            action: 'update',
+            changes: diffChanges({ regionalSettings: current?.regionalSettings }, { regionalSettings: updated?.regionalSettings }, ['regionalSettings']),
+        })
         return reply.send({ data: updated?.regionalSettings })
     })
 
@@ -255,6 +375,12 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .set({ securitySettings: merged, updatedAt: new Date() })
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ securitySettings: tenants.securitySettings })
+        audit(request, {
+            entityType: 'settings_security',
+            entityId: request.user.tenantId,
+            action: 'update',
+            changes: diffChanges({ securitySettings: current?.securitySettings }, { securitySettings: updated?.securitySettings }, ['securitySettings']),
+        })
         return reply.send({ data: updated?.securitySettings })
     })
 
@@ -324,6 +450,16 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             invalidateL1AndL2(dashboardSummaryCache.key(request.user.tenantId)),
             invalidateL1AndL2(dashboardCache.key(request.user.tenantId)),
         ])
+        audit(request, {
+            entityType: 'settings_org_policy',
+            entityId: request.user.tenantId,
+            action: 'update',
+            changes: diffChanges(
+                { notificationsEnabled: current?.notificationsEnabled, privacyPolicy: current?.privacyPolicy },
+                { notificationsEnabled: updated?.notificationsEnabled, privacyPolicy: updated?.privacyPolicy },
+                ['notificationsEnabled', 'privacyPolicy'],
+            ),
+        })
         return reply.send({
             data: {
                 notificationsEnabled: updated?.notificationsEnabled ?? true,
@@ -367,6 +503,14 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .set({ privacyOverrides: merged, updatedAt: new Date() })
             .where(and(eq(employees.id, request.user.employeeId), eq(employees.tenantId, request.user.tenantId)))
             .returning({ privacyOverrides: employees.privacyOverrides })
+        audit(request, {
+            entityType: 'settings_privacy',
+            entityId: request.user.employeeId,
+            entityName: request.user.name,
+            action: 'update',
+            changes: diffChanges({ privacyOverrides: current?.privacyOverrides }, { privacyOverrides: updated?.privacyOverrides ?? merged }, ['privacyOverrides']),
+            metadata: { self: true },
+        })
         return reply.send({ data: updated?.privacyOverrides ?? merged })
     })
 
@@ -392,6 +536,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .set({ notifPrefs: prefs, updatedAt: new Date() })
             .where(eq(users.id, request.user.id))
             .returning({ notifPrefs: users.notifPrefs })
+        audit(request, {
+            entityType: 'settings_notifications',
+            entityId: request.user.id,
+            entityName: request.user.name,
+            action: 'update',
+            metadata: { self: true },
+        })
         return reply.send({ data: updated?.notifPrefs ?? {} })
     })
 
@@ -447,6 +598,12 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .set({ leaveSettings: merged, updatedAt: new Date() })
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ leaveSettings: tenants.leaveSettings })
+        audit(request, {
+            entityType: 'settings_leave',
+            entityId: request.user.tenantId,
+            action: 'update',
+            changes: diffChanges({ leaveSettings: row?.leaveSettings }, { leaveSettings: updated?.leaveSettings }, ['leaveSettings']),
+        })
         return reply.send({ data: updated?.leaveSettings })
     })
 
@@ -467,6 +624,14 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         const { sendEmail, mailTestEmail } = await import('../../plugins/email.js')
         const tmpl = mailTestEmail({ recipientName: to })
         const result = await sendEmail({ ...tmpl, to })
+        // Audit the diagnostic action only — NEVER log SMTP/provider credentials.
+        // Recording the recipient + delivery outcome is safe and useful.
+        audit(request, {
+            entityType: 'settings_mail',
+            entityId: request.user.tenantId,
+            action: 'submit',
+            metadata: { kind: 'mail_test', to, delivered: (result as any)?.ok ?? undefined },
+        })
         return reply.send({ data: result })
     })
 }

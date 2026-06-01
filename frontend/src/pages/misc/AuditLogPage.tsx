@@ -10,6 +10,7 @@ import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import type { FilterConfig } from '@/lib/filters'
+import { formatChangeEntries } from '@/lib/activityFormat'
 import {
     ClipboardList,
     Plus,
@@ -73,22 +74,6 @@ const AUDIT_FILTERS: FilterConfig[] = [
 function getInitials(name?: string | null): string {
     if (!name) return 'SY'
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map(n => n[0]?.toUpperCase() ?? '').join('') || 'U'
-}
-
-function stringify(v: unknown): string {
-    if (v === null || v === undefined) return '—'
-    if (typeof v === 'string') return v
-    if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-    try { return JSON.stringify(v) } catch { return '—' }
-}
-
-function formatChanges(changes: Record<string, { from: unknown; to: unknown }> | null) {
-    if (!changes) return []
-    return Object.entries(changes).map(([key, val]) => ({
-        key,
-        from: stringify(val?.from),
-        to: stringify(val?.to),
-    }))
 }
 
 function isToday(d: Date): boolean {
@@ -378,7 +363,9 @@ function ActivityRow({ log }: { log: ActivityLog }) {
     const meta = ACTION_META[log.action] ?? FALLBACK_META
     const Icon = meta.icon
     const created = new Date(log.createdAt)
-    const changes = formatChanges(log.changes)
+    const changes = formatChangeEntries(log.changes)
+    const [expanded, setExpanded] = useState(false)
+    const visibleChanges = expanded ? changes : changes.slice(0, 4)
 
     return (
         <div className="px-4 py-3.5 hover:bg-muted/30 transition-colors">
@@ -389,11 +376,16 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="min-w-0 flex-1">
-                            {/* Kind-aware headline (shared with the employee Updates tab). */}
+                            {/* Kind-aware headline (shared with the employee
+                                Updates tab and the My Activity feed). Falls
+                                back gracefully for kind-less rows that came
+                                in via the dev/audit Phase 0 path — buildActivityHeadline's
+                                generic branch handles them. */}
                             {buildActivityHeadline(log, changes.length, 'hr')}
-                            {/* Entity-type context so non-kind rows (any entityType) still read well.
-                                The headline already shows entityName when present, so only fall back
-                                to the entityId here to avoid repeating the name. */}
+                            {/* Entity-type context line. The headline already
+                                shows entityName when present, so we only
+                                surface the entityId here when there's no name
+                                to avoid duplicating the same string. */}
                             <p className="text-xs text-muted-foreground mt-0.5">
                                 <span className="capitalize">{log.entityType.replace(/_/g, ' ')}</span>
                                 {!log.entityName && log.entityId && (
@@ -432,17 +424,25 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                     </div>
 
                     {changes.length > 0 && (
-                        <div className="mt-3 rounded-lg bg-muted/40 border border-dashed p-2.5 space-y-1">
-                            {changes.slice(0, 4).map(c => (
-                                <div key={c.key} className="flex items-start gap-2 text-[11px]">
-                                    <span className="font-mono font-medium text-muted-foreground shrink-0">{c.key}:</span>
-                                    <span className="font-mono text-red-600/80 line-through truncate max-w-[160px]">{c.from}</span>
-                                    <span className="text-muted-foreground">→</span>
-                                    <span className="font-mono text-emerald-700 truncate max-w-[160px]">{c.to}</span>
+                        <div className="mt-3 rounded-lg bg-muted/30 border p-2.5 space-y-2">
+                            {visibleChanges.map(c => (
+                                <div key={c.key} className="grid grid-cols-[minmax(120px,160px)_1fr] gap-3 text-[12px] items-baseline">
+                                    <span className="font-medium text-muted-foreground truncate">{c.label}</span>
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                        <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[11px] line-through break-all">{c.from}</span>
+                                        <span className="text-muted-foreground shrink-0">→</span>
+                                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-medium break-all">{c.to}</span>
+                                    </div>
                                 </div>
                             ))}
                             {changes.length > 4 && (
-                                <p className="text-[10px] text-muted-foreground pt-0.5">+{changes.length - 4} more change{changes.length - 4 === 1 ? '' : 's'}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setExpanded(v => !v)}
+                                    className="text-[11px] text-primary hover:underline pt-0.5"
+                                >
+                                    {expanded ? 'Show less' : `Show ${changes.length - 4} more change${changes.length - 4 === 1 ? '' : 's'}`}
+                                </button>
                             )}
                         </div>
                     )}

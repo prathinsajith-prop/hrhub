@@ -14,8 +14,43 @@ import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { findById } from '../../repositories/employees.repo.js'
 import { e400, e403 } from '../../lib/errors.js'
 import { buildAppOrJwtAuth } from './external-auth.js'
+import { recordActivity } from '../audit/audit.service.js'
 import { z } from 'zod'
 import { validate, uuidSchema } from '../../lib/validation.js'
+
+// Best-effort audit shim — never blocks the request. The Updates tab on the
+// employee detail page filters by entityType='employee' and entityId, so
+// each punch / attendance edit fires an audit entry against the affected
+// employee with a `kind: 'attendance'` metadata tag for UI rendering.
+function auditAttendance(
+    request: any,
+    employeeId: string,
+    subKind: 'check-in' | 'check-out' | 'manual-punch' | 'delete-punch' | 'update' | 'external-punch',
+    entityName: string | null,
+    action: 'create' | 'update' | 'delete',
+    extraMeta: Record<string, unknown> = {},
+) {
+    recordActivity({
+        tenantId: request.user?.tenantId ?? request.tenantId,
+        userId: request.user?.id,
+        actorName: request.user?.name,
+        actorRole: request.user?.role,
+        entityType: 'employee',
+        entityId: employeeId,
+        entityName: entityName ?? undefined,
+        action,
+        metadata: { kind: 'attendance', subKind, ...extraMeta },
+        ipAddress: request.ip,
+        userAgent: request.headers?.['user-agent'],
+    }).catch(() => { })
+}
+
+function toIsoString(d: Date | string | null | undefined): string | undefined {
+    if (!d) return undefined
+    const dt = typeof d === 'string' ? new Date(d) : d
+    if (Number.isNaN(dt.getTime())) return undefined
+    return dt.toISOString()
+}
 
 // External-punch payload schema — kept up here so the route handler
 // can stay focused on the dual-auth + tenant-scope logic. UUID +
@@ -427,6 +462,12 @@ export async function attendanceRoutes(fastify: any) {
                 deviceId: body.deviceId ?? null,
                 source: 'web',
             }, request.user.id)
+            auditAttendance(request, resolvedEmployeeId, 'check-in', null, 'create', {
+                at: toIsoString((data as any)?.checkIn ?? (data as any)?.date ?? new Date()),
+                date: (data as any)?.date,
+                source: 'web',
+                locationName: body.locationName ?? null,
+            })
             return reply.code(201).send({ data })
         } catch (err: any) {
             const code = err?.statusCode ?? 500
@@ -472,6 +513,12 @@ export async function attendanceRoutes(fastify: any) {
                 deviceId: body.deviceId ?? null,
                 source: 'web',
             }, request.user.id)
+            auditAttendance(request, resolvedEmployeeId, 'check-out', null, 'update', {
+                at: toIsoString((data as any)?.checkOut ?? new Date()),
+                date: (data as any)?.date,
+                source: 'web',
+                locationName: body.locationName ?? null,
+            })
             return reply.send({ data })
         } catch (err: any) {
             const code = err?.statusCode ?? 500
@@ -626,6 +673,15 @@ export async function attendanceRoutes(fastify: any) {
         //   - Both punches were no-ops → duplicate (entire row skipped)
         //   - At least one was fresh → not a duplicate
         const wasDuplicate = !inResult.created && (!outResult || !outResult.created)
+        if (inResult.created || (outResult && outResult.created)) {
+            auditAttendance(request, resolvedEmployeeId, 'manual-punch', body.date ?? null, 'create', {
+                date: body.date,
+                inAt: inResult.created ? toIsoString(inDate) : null,
+                outAt: outResult?.created ? toIsoString((outResult.row as any)?.recordedAt) : null,
+                inTime: body.inTime,
+                outTime: body.outTime ?? null,
+            })
+        }
         return reply.code(201).send({
             data: {
                 inPunch: inResult.row,
@@ -654,6 +710,11 @@ export async function attendanceRoutes(fastify: any) {
         if (!resolvedEmployeeId) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'employeeId required' })
         const row = await deletePunch(request.user.tenantId, resolvedEmployeeId, id)
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Punch not found' })
+        auditAttendance(request, resolvedEmployeeId, 'delete-punch', null, 'delete', {
+            punchId: id,
+            at: toIsoString((row as any)?.recordedAt),
+            punchType: (row as any)?.punchType,
+        })
         return reply.code(204).send()
     })
 
@@ -678,6 +739,12 @@ export async function attendanceRoutes(fastify: any) {
             employeeId, date,
             status: status as 'present' | 'absent' | 'half_day' | 'late' | 'wfh' | 'on_leave',
             checkIn, checkOut, notes,
+        })
+        auditAttendance(request, employeeId, 'update', date, 'update', {
+            date,
+            status,
+            checkIn: checkIn ?? null,
+            checkOut: checkOut ?? null,
         })
         return reply.send({ data })
     })
@@ -732,6 +799,17 @@ export async function attendanceRoutes(fastify: any) {
             locationName: locationName ?? null,
             notes: notes ?? null,
         })
+        auditAttendance(
+            request, employeeId, 'external-punch', null,
+            punchType === 'in' ? 'create' : 'update',
+            {
+                at: toIsoString(timestamp ?? new Date()),
+                punchType,
+                source: source ?? 'biometric',
+                deviceName: deviceName ?? null,
+                locationName: locationName ?? null,
+            },
+        )
         return reply.send({ data })
     })
 

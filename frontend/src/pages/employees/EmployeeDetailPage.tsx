@@ -57,7 +57,8 @@ import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { useLoans } from '@/hooks/useLoans'
 import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
-import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { ActivityFeed } from '@/components/shared/ActivityFeed'
 import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
 import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { useEmployeeTraining, TRAINING_STATUS_STYLE, type TrainingRecord } from '@/hooks/useTraining'
@@ -69,7 +70,7 @@ import { DocumentViewerDialog } from '@/components/shared/DocumentViewerDialog'
 import { toast } from '@/components/ui/overlays'
 import { api } from '@/lib/api'
 import { usePermissions } from '@/hooks/usePermissions'
-import { CopyableEmail, CopyablePhone, ActionBadge, MetaItem } from '@/components/shared'
+import { CopyableEmail, CopyablePhone, MetaItem } from '@/components/shared'
 import { resolveCountryIso, countryNameFromIso, CountrySelect } from '@/components/shared/PhoneInput'
 
 /** Convert an ISO-2 country code into its regional-indicator flag emoji. */
@@ -1033,9 +1034,22 @@ export function EmployeeDetailPage() {
   const addNote = useAddEmployeeNote(id ?? '')
   const deleteNote = useDeleteEmployeeNote(id ?? '')
 
-  // Updates (audit trail for this employee)
-  const { data: auditData, isLoading: auditLoading } = useActivityLogs(
-    canManage && id ? { entityType: 'employee', entityId: id, limit: 100 } : {},
+  // Updates (audit trail for this employee) — infinite scroll, 20 per page
+  const {
+    data: auditPages,
+    isLoading: auditLoading,
+    hasNextPage: auditHasNext,
+    isFetchingNextPage: auditFetchingNext,
+    fetchNextPage: auditFetchNext,
+  } = useInfiniteActivityLogs({
+    entityType: 'employee',
+    entityId: id,
+    pageSize: 20,
+    enabled: canManage && !!id,
+  })
+  const auditLogs = React.useMemo<ActivityLog[]>(
+    () => (auditPages?.pages ?? []).flat(),
+    [auditPages],
   )
 
   // Warnings
@@ -2946,43 +2960,27 @@ export function EmployeeDetailPage() {
           {canManage && (
             <TabsContent value="updates" className="mt-4">
               <Card>
-                <CardHeader><CardTitle className="text-base">Activity History</CardTitle></CardHeader>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Activity History</CardTitle>
+                    {auditLogs.length > 0 && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {auditLogs.length} event{auditLogs.length === 1 ? '' : 's'}{auditHasNext ? '+' : ''}
+                      </span>
+                    )}
+                  </div>
+                </CardHeader>
                 <CardContent className="p-0">
-                  {auditLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={`div-${i}`} className="h-10 rounded bg-muted animate-pulse" />)}</div>
-                  ) : !auditData?.length ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <History className="size-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm font-medium">No activity recorded</p>
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b bg-muted/40">
-                            {['Date', 'Actor', 'Role', 'Action', 'Fields Changed'].map(h => (
-                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(auditData as ActivityLog[]).map(log => (
-                            <tr key={log.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(log.createdAt)}</td>
-                              <td className="px-4 py-2.5 font-medium">{log.actorName ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground capitalize">{log.actorRole?.replace('_', ' ') ?? '—'}</td>
-                              <td className="px-4 py-2.5">
-                                <ActionBadge action={log.action} />
-                              </td>
-                              <td className="px-4 py-2.5 text-muted-foreground">
-                                {log.changes ? Object.keys(log.changes).join(', ') : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <ActivityFeed
+                    logs={auditLogs}
+                    isLoading={auditLoading}
+                    hasNextPage={auditHasNext}
+                    isFetchingNextPage={auditFetchingNext}
+                    fetchNextPage={auditFetchNext}
+                    viewer="hr"
+                    emptyTitle="No activity recorded"
+                    emptyDescription="Edits and updates to this employee will appear here."
+                  />
                 </CardContent>
               </Card>
             </TabsContent>

@@ -1,5 +1,9 @@
 import * as React from 'react'
-import { cn } from '@/lib/utils'
+import { Loader2, History } from 'lucide-react'
+import { ActionBadge } from '@/components/shared/UICommons'
+import type { ActivityLog } from '@/hooks/useAudit'
+import { formatChangeEntries } from '@/lib/activityFormat'
+import { formatDateTime } from '@/lib/utils'
 
 /**
  * Shared activity-feed rendering.
@@ -186,40 +190,229 @@ export function buildActivityHeadline(
     )
 }
 
-/** A single item shown in the {@link ActivityFeed}. */
-export interface ActivityFeedItem extends ActivityHeadlineLog {
-    id: string
-    changeCount?: number
-    timeLabel?: string
+
+function metaPillsFor(log: ActivityLog): { label: string; value: string }[] {
+    const meta = (log.metadata ?? {}) as Record<string, unknown>
+    const pills: { label: string; value: string }[] = []
+    if (meta.kind === 'attendance' && typeof meta.locationName === 'string' && meta.locationName) {
+        pills.push({ label: 'Location', value: String(meta.locationName) })
+    }
+    if (meta.kind === 'attendance' && typeof meta.deviceName === 'string' && meta.deviceName) {
+        pills.push({ label: 'Device', value: String(meta.deviceName) })
+    }
+    if (meta.kind === 'document' && typeof meta.docType === 'string' && meta.docType) {
+        pills.push({ label: 'Doc type', value: String(meta.docType) })
+    }
+    if (meta.kind === 'document' && typeof meta.reason === 'string' && meta.reason) {
+        pills.push({ label: 'Reason', value: String(meta.reason) })
+    }
+    if (meta.kind === 'leave') {
+        if (typeof meta.startDate === 'string' && meta.startDate) pills.push({ label: 'From', value: String(meta.startDate) })
+        if (typeof meta.endDate === 'string' && meta.endDate) pills.push({ label: 'To', value: String(meta.endDate) })
+        if (typeof meta.notes === 'string' && meta.notes) pills.push({ label: 'Notes', value: String(meta.notes) })
+    }
+    if (meta.kind === 'loan') {
+        if (typeof meta.reason === 'string' && meta.reason) pills.push({ label: 'Reason', value: String(meta.reason) })
+        if (typeof meta.notes === 'string' && meta.notes) pills.push({ label: 'Notes', value: String(meta.notes) })
+        if (typeof meta.startDate === 'string' && meta.startDate) pills.push({ label: 'Starts', value: String(meta.startDate) })
+    }
+    if (meta.kind === 'transfer') {
+        if (typeof meta.toDesignation === 'string' && meta.toDesignation) pills.push({ label: 'New designation', value: String(meta.toDesignation) })
+        if (typeof meta.transferDate === 'string' && meta.transferDate) pills.push({ label: 'Effective', value: String(meta.transferDate) })
+        if (typeof meta.reason === 'string' && meta.reason) pills.push({ label: 'Reason', value: String(meta.reason) })
+    }
+    if (meta.kind === 'exit') {
+        if (typeof meta.exitType === 'string' && meta.exitType) pills.push({ label: 'Type', value: String(meta.exitType).replace(/_/g, ' ') })
+        if (typeof meta.exitDate === 'string' && meta.exitDate) pills.push({ label: 'Exit date', value: String(meta.exitDate) })
+        if (typeof meta.reason === 'string' && meta.reason) pills.push({ label: 'Reason', value: String(meta.reason) })
+        if (meta.override === true) pills.push({ label: 'Override', value: 'yes' })
+    }
+    if (meta.kind === 'visa') {
+        if (typeof meta.visaType === 'string' && meta.visaType) pills.push({ label: 'Visa type', value: String(meta.visaType).replace(/_/g, ' ') })
+        if (typeof meta.fromStepLabel === 'string' && typeof meta.toStepLabel === 'string') pills.push({ label: 'Stage', value: `${meta.fromStepLabel} → ${meta.toStepLabel}` })
+        if (typeof meta.reason === 'string' && meta.reason) pills.push({ label: 'Reason', value: String(meta.reason) })
+    }
+    if (meta.kind === 'asset') {
+        if (typeof meta.assignedDate === 'string' && meta.assignedDate) pills.push({ label: 'Assigned', value: String(meta.assignedDate) })
+        if (typeof meta.expectedReturnDate === 'string' && meta.expectedReturnDate) pills.push({ label: 'Due', value: String(meta.expectedReturnDate) })
+        if (typeof meta.actualReturnDate === 'string' && meta.actualReturnDate) pills.push({ label: 'Returned', value: String(meta.actualReturnDate) })
+    }
+    if (meta.kind === 'payroll') {
+        if (typeof meta.month === 'number' && typeof meta.year === 'number') {
+            pills.push({ label: 'Period', value: `${String(meta.month).padStart(2, '0')}/${meta.year}` })
+        }
+    }
+    if (meta.kind === 'profile' && meta.subKind === 'change-rejected' && typeof meta.reason === 'string' && meta.reason) {
+        pills.push({ label: 'Reason', value: String(meta.reason) })
+    }
+    return pills
 }
 
-interface ActivityFeedProps {
-    items: ActivityFeedItem[]
-    viewer?: ActivityViewer
-    className?: string
+export interface ActivityRowProps {
+    log: ActivityLog
+    /** "hr" shows the actor name + IP; "self" shortens it for the employee portal. */
+    viewer?: 'hr' | 'self'
+}
+
+export function ActivityRow({ log, viewer = 'hr' }: ActivityRowProps) {
+    const [expanded, setExpanded] = React.useState(false)
+    const changes = formatChangeEntries(log.changes)
+    const visibleChanges = expanded ? changes : changes.slice(0, 3)
+    const initials = (log.actorName ?? '?')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(n => n[0]?.toUpperCase() ?? '')
+        .join('') || '?'
+    const pills = metaPillsFor(log)
+
+    return (
+        <div className="px-4 py-3.5 hover:bg-muted/30 transition-colors">
+            <div className="flex items-start gap-3">
+                <div className="size-9 rounded-full bg-primary/10 text-primary text-[11px] font-semibold flex items-center justify-center shrink-0">
+                    {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0 flex-1">
+                            {/* Headline already includes the actor name (or
+                                "You" / "System") so we don't prepend an
+                                actorLabel here anymore — that used to
+                                double-print the name once buildActivityHeadline
+                                was promoted to emit a full sentence. */}
+                            <p className="text-sm leading-snug">
+                                {buildActivityHeadline(log, changes.length, viewer)}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground flex-wrap">
+                                <ActionBadge action={log.action} />
+                                {viewer === 'hr' && log.actorRole && (
+                                    <span className="capitalize">· {log.actorRole.replace(/_/g, ' ')}</span>
+                                )}
+                                {viewer === 'hr' && log.ipAddress && (
+                                    <span className="font-mono text-[10px]">· {log.ipAddress}</span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                            <p className="text-[11px] text-muted-foreground tabular-nums">
+                                {formatDateTime(log.createdAt)}
+                            </p>
+                        </div>
+                    </div>
+
+                    {changes.length > 0 && (
+                        <div className="mt-2.5 rounded-lg bg-muted/30 border p-2.5 space-y-2">
+                            {visibleChanges.map(c => (
+                                <div key={c.key} className="grid grid-cols-[minmax(120px,180px)_1fr] gap-3 text-[12px] items-baseline">
+                                    <span className="font-medium text-muted-foreground truncate">{c.label}</span>
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                        <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[11px] line-through break-all">
+                                            {c.from}
+                                        </span>
+                                        <span className="text-muted-foreground shrink-0">→</span>
+                                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-medium break-all">
+                                            {c.to}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                            {changes.length > 3 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setExpanded(v => !v)}
+                                    className="text-[11px] text-primary hover:underline pt-0.5"
+                                >
+                                    {expanded ? 'Show less' : `Show ${changes.length - 3} more change${changes.length - 3 === 1 ? '' : 's'}`}
+                                </button>
+                            )}
+                        </div>
+                    )}
+                    {pills.length > 0 && (
+                        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                            {pills.map(p => (
+                                <span key={p.label} className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-muted/60 text-foreground/80">
+                                    <span className="text-muted-foreground">{p.label}:</span>
+                                    <span className="font-medium">{p.value}</span>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export interface ActivityFeedProps {
+    logs: ActivityLog[]
+    isLoading: boolean
+    hasNextPage: boolean
+    isFetchingNextPage: boolean
+    fetchNextPage: () => void
+    viewer?: 'hr' | 'self'
+    emptyTitle?: string
+    emptyDescription?: string
 }
 
 /**
- * Lightweight vertical activity feed. Renders each item's kind-aware headline
- * via {@link buildActivityHeadline}. Pages that need richer rows (diff view,
- * IP, avatars) compose `buildActivityHeadline` directly instead.
+ * Activity list + IntersectionObserver-driven infinite scroll. Owns its own
+ * sentinel ref so callers can drop it into any container without wiring.
  */
-export function ActivityFeed({ items, viewer = 'hr', className }: ActivityFeedProps) {
-    if (items.length === 0) {
+export function ActivityFeed({
+    logs,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    viewer = 'hr',
+    emptyTitle = 'No activity yet',
+    emptyDescription = 'Recent updates will appear here.',
+}: ActivityFeedProps) {
+    const sentinelRef = React.useRef<HTMLDivElement | null>(null)
+    React.useEffect(() => {
+        const el = sentinelRef.current
+        if (!el) return
+        const io = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage()
+            }
+        }, { rootMargin: '200px' })
+        io.observe(el)
+        return () => io.disconnect()
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
+    if (isLoading) {
         return (
-            <p className={cn('text-sm text-muted-foreground', className)}>No activity yet.</p>
+            <div className="p-4 space-y-2">
+                {[1, 2, 3, 4, 5].map(i => (
+                    <div key={`act-skel-${i}`} className="h-16 rounded bg-muted animate-pulse" />
+                ))}
+            </div>
+        )
+    }
+    if (!logs.length) {
+        return (
+            <div className="text-center py-12 text-muted-foreground">
+                <History className="size-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm font-medium">{emptyTitle}</p>
+                <p className="text-xs mt-0.5">{emptyDescription}</p>
+            </div>
         )
     }
     return (
-        <ul className={cn('divide-y rounded-xl border bg-card', className)}>
-            {items.map(item => (
-                <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
-                    {buildActivityHeadline(item, item.changeCount ?? 0, viewer)}
-                    {item.timeLabel ? (
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{item.timeLabel}</span>
-                    ) : null}
-                </li>
-            ))}
-        </ul>
+        <div className="divide-y">
+            {logs.map(log => <ActivityRow key={log.id} log={log} viewer={viewer} />)}
+            <div ref={sentinelRef} className="h-6" />
+            {isFetchingNextPage && (
+                <div className="flex justify-center items-center gap-2 py-4 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" /> Loading more…
+                </div>
+            )}
+            {!hasNextPage && logs.length >= 20 && (
+                <div className="text-center py-3 text-[11px] text-muted-foreground/70">
+                    End of activity
+                </div>
+            )}
+        </div>
     )
 }
