@@ -1,11 +1,19 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { CalendarDays, Check, Clock, Copy, Eye, EyeOff, KeyRound, Languages, Loader2, Mail, Phone, Pencil, Save, ShieldCheck, Smartphone, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
 import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
 import { useChangePassword } from '@/hooks/useChangePassword'
+import {
+    useTwoFactorStatus,
+    useSetupTwoFactor,
+    useVerifyTwoFactor,
+    useDisableTwoFactor,
+    useRegenerateBackupCodes,
+} from '@/hooks/useTwoFactor'
+import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -208,6 +216,7 @@ export function EmployeeProfilePage() {
                 <TabsContent value="settings" className="space-y-4">
                     <LanguageCard />
                     <SecurityCard />
+                    <TwoFactorCard />
                 </TabsContent>
             </Tabs>
         </div>
@@ -544,5 +553,245 @@ function ProfileSkeleton() {
             <Skeleton className="h-40" />
             <Skeleton className="h-40" />
         </div>
+    )
+}
+
+// ── Two-factor authentication ────────────────────────────────────────────────
+
+function TwoFactorCard() {
+    const { t } = useTranslation()
+    const { data: status, isLoading } = useTwoFactorStatus()
+    const [enableOpen, setEnableOpen] = useState(false)
+    const [disableOpen, setDisableOpen] = useState(false)
+    const [regenOpen, setRegenOpen] = useState(false)
+    const enabled = status?.enabled ?? false
+
+    return (
+        <Card className="overflow-hidden border-border/70">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
+                <div className="flex items-center gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <Smartphone className="size-5" />
+                    </span>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-semibold">{t('security.mfaTitle')}</h3>
+                            {!isLoading && (
+                                <Badge variant={enabled ? 'default' : 'secondary'} className="text-[10px]">
+                                    {enabled ? t('security.mfaOn') : t('security.mfaOff')}
+                                </Badge>
+                            )}
+                        </div>
+                        <p className="max-w-md text-xs text-muted-foreground">{t('security.mfaDesc')}</p>
+                        {enabled && (
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                                {t('security.backupCodesRemaining', { count: status?.backupCodesRemaining ?? 0 })}
+                            </p>
+                        )}
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    {enabled ? (
+                        <>
+                            <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
+                                <KeyRound className="size-3.5" /> {t('security.regenerate')}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setDisableOpen(true)}>
+                                {t('security.disable')}
+                            </Button>
+                        </>
+                    ) : (
+                        <Button size="sm" disabled={isLoading} onClick={() => setEnableOpen(true)}>
+                            {t('security.enable')}
+                        </Button>
+                    )}
+                </div>
+            </CardContent>
+            {enableOpen && <EnableTwoFactorDialog open={enableOpen} onOpenChange={setEnableOpen} />}
+            {disableOpen && <CodePromptDialog open={disableOpen} onOpenChange={setDisableOpen} mode="disable" />}
+            {regenOpen && <CodePromptDialog open={regenOpen} onOpenChange={setRegenOpen} mode="regenerate" />}
+        </Card>
+    )
+}
+
+/** Shows a one-time list of backup codes with copy-to-clipboard. */
+function BackupCodes({ codes }: { codes: string[] }) {
+    const { t } = useTranslation()
+    const [copied, setCopied] = useState(false)
+    function copy() {
+        navigator.clipboard?.writeText(codes.join('\n')).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+        }).catch(() => {})
+    }
+    return (
+        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/40 dark:bg-amber-950/30">
+            <p className="text-xs text-amber-800 dark:text-amber-200">{t('security.backupCodesDesc')}</p>
+            <div className="grid grid-cols-2 gap-1.5 font-mono text-sm">
+                {codes.map((c) => <span key={c} className="rounded bg-background/70 px-2 py-1 text-center tracking-wider">{c}</span>)}
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={copy} className="w-full">
+                <Copy className="size-3.5" /> {copied ? t('security.copied') : t('security.copyCodes')}
+            </Button>
+        </div>
+    )
+}
+
+function EnableTwoFactorDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+    const { t } = useTranslation()
+    const setup = useSetupTwoFactor()
+    const verify = useVerifyTwoFactor()
+    const [code, setCode] = useState('')
+    const [error, setError] = useState<string | null>(null)
+    const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
+
+    // Kick off setup once when the dialog opens (state-during-render pattern,
+    // guarded so it fires a single time).
+    const [started, setStarted] = useState(false)
+    if (open && !started) {
+        setStarted(true)
+        setup.mutate(undefined, { onError: () => setError(t('common.error', { defaultValue: 'Something went wrong' })) })
+    }
+
+    function onVerify(e: FormEvent) {
+        e.preventDefault()
+        setError(null)
+        verify.mutate(code.replace(/\D/g, ''), {
+            onSuccess: (res) => {
+                setBackupCodes(res.backupCodes)
+                toast.success(t('security.enabledToast'))
+            },
+            onError: (err) => setError(err instanceof ApiError ? err.message : t('security.invalidCode')),
+        })
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{t('security.mfaTitle')}</DialogTitle>
+                </DialogHeader>
+
+                {backupCodes ? (
+                    <div className="space-y-3">
+                        <p className="text-sm font-medium">{t('security.backupCodesTitle')}</p>
+                        <BackupCodes codes={backupCodes} />
+                        <Button className="w-full" onClick={() => onOpenChange(false)}>{t('security.savedThem')}</Button>
+                    </div>
+                ) : (
+                    <form className="space-y-4" onSubmit={onVerify}>
+                        {error ? (
+                            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
+                        ) : null}
+                        <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t('security.setupStep1')}</p>
+                            <div className="flex justify-center">
+                                {setup.isPending || !setup.data ? (
+                                    <Skeleton className="size-44 rounded-xl" />
+                                ) : (
+                                    <img src={setup.data.qrDataUrl} alt="2FA QR code" className="size-44 rounded-xl border bg-white p-2" />
+                                )}
+                            </div>
+                            {setup.data?.secret && (
+                                <p className="text-center text-[11px] text-muted-foreground">
+                                    {t('security.orEnterSecret')}<br />
+                                    <code className="select-all font-mono text-xs tracking-wider text-foreground">{setup.data.secret}</code>
+                                </p>
+                            )}
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="enableCode">{t('security.setupStep2')}</Label>
+                            <Input
+                                id="enableCode"
+                                value={code}
+                                onChange={(e) => { setCode(e.target.value); if (error) setError(null) }}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                placeholder="123456"
+                                maxLength={6}
+                                className="text-center text-lg tracking-[0.3em]"
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t('security.cancel')}</Button>
+                            <Button type="submit" disabled={verify.isPending || code.replace(/\D/g, '').length < 6}>
+                                {verify.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                                {t('security.confirmEnable')}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                )}
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+/** Prompts for a current TOTP code to either disable 2FA or regenerate backup codes. */
+function CodePromptDialog({ open, onOpenChange, mode }: { open: boolean; onOpenChange: (v: boolean) => void; mode: 'disable' | 'regenerate' }) {
+    const { t } = useTranslation()
+    const disable = useDisableTwoFactor()
+    const regen = useRegenerateBackupCodes()
+    const [code, setCode] = useState('')
+    const [error, setError] = useState<string | null>(null)
+    const [newCodes, setNewCodes] = useState<string[] | null>(null)
+    const pending = disable.isPending || regen.isPending
+
+    function onSubmit(e: FormEvent) {
+        e.preventDefault()
+        setError(null)
+        const token = code.replace(/\D/g, '')
+        if (mode === 'disable') {
+            disable.mutate(token, {
+                onSuccess: () => { toast.success(t('security.disabledToast')); onOpenChange(false) },
+                onError: (err) => setError(err instanceof ApiError ? err.message : t('security.invalidCode')),
+            })
+        } else {
+            regen.mutate(token, {
+                onSuccess: (res) => setNewCodes(res.backupCodes),
+                onError: (err) => setError(err instanceof ApiError ? err.message : t('security.invalidCode')),
+            })
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{mode === 'disable' ? t('security.disable') : t('security.regenerate')}</DialogTitle>
+                </DialogHeader>
+                {newCodes ? (
+                    <div className="space-y-3">
+                        <BackupCodes codes={newCodes} />
+                        <Button className="w-full" onClick={() => onOpenChange(false)}>{t('security.savedThem')}</Button>
+                    </div>
+                ) : (
+                    <form className="space-y-4" onSubmit={onSubmit}>
+                        {error ? (
+                            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
+                        ) : null}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="promptCode">{t('security.currentCode')}</Label>
+                            <Input
+                                id="promptCode"
+                                value={code}
+                                onChange={(e) => { setCode(e.target.value); if (error) setError(null) }}
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                placeholder="123456"
+                                maxLength={6}
+                                className="text-center text-lg tracking-[0.3em]"
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t('security.cancel')}</Button>
+                            <Button type="submit" disabled={pending || code.replace(/\D/g, '').length < 6}>
+                                {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+                                {mode === 'disable' ? t('security.disable') : t('security.regenerate')}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                )}
+            </DialogContent>
+        </Dialog>
     )
 }

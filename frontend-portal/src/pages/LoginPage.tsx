@@ -14,14 +14,15 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import type { Tenant, User } from '@/types'
 
-interface LoginResponse {
-    data: {
-        accessToken: string
-        refreshToken: string
-        user: User
-        tenant: Tenant
-    }
+interface AuthTokens {
+    accessToken: string
+    refreshToken: string
+    user: User
+    tenant: Tenant
 }
+/** /auth/login returns either a full session or a 2FA challenge. */
+type LoginResponse = { data: AuthTokens | { requiresMfa: true; mfaToken: string } }
+type ChallengeResponse = { data: AuthTokens }
 
 export function LoginPage() {
     const { t } = useTranslation()
@@ -37,6 +38,11 @@ export function LoginPage() {
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [capsLock, setCapsLock] = useState(false)
+
+    // 2FA challenge state — set once the password step returns requiresMfa.
+    const [mfaToken, setMfaToken] = useState<string | null>(null)
+    const [mfaCode, setMfaCode] = useState('')
+    const [useBackupCode, setUseBackupCode] = useState(false)
 
     // Auto-focus the email field on first render — most natural starting point.
     useEffect(() => {
@@ -59,6 +65,32 @@ export function LoginPage() {
         setCapsLock(on)
     }
 
+    /** Persist the session and route to the right landing page. Shared by the
+     *  password path and the 2FA challenge path. */
+    function finalizeLogin(tokens: AuthTokens) {
+        const { user, tenant, accessToken, refreshToken } = tokens
+        // HR/super_admin/pro_officer-only accounts belong in the admin app.
+        if (isAdminRoleOnly(user) || !canUsePortal(user)) {
+            login(user, tenant, accessToken, refreshToken, keepSignedIn)
+            navigate(ROUTES.notAuthorized, { replace: true })
+            return
+        }
+        login(user, tenant, accessToken, refreshToken, keepSignedIn)
+        const canManage = canSwitchToManager(user)
+        setMode(canManage ? 'manager' : 'employee')
+        navigate(canManage ? ROUTES.managerHome : ROUTES.employeeHome, { replace: true })
+    }
+
+    function toErrorMessage(err: unknown): string {
+        return err instanceof ApiError
+            ? err.statusCode === 401
+                ? t('auth.invalidCredentials')
+                : err.message
+            : err instanceof Error
+              ? err.message
+              : t('auth.invalidCredentials')
+    }
+
     async function onSubmit(e: FormEvent) {
         e.preventDefault()
         if (submitting) return
@@ -66,39 +98,43 @@ export function LoginPage() {
         setError(null)
         try {
             const res = await api.post<LoginResponse>('/auth/login', { email: email.trim(), password })
-            const { user, tenant, accessToken, refreshToken } = res.data
-
-            // HR/super_admin/pro_officer-only accounts belong in the admin app.
-            if (isAdminRoleOnly(user) || !canUsePortal(user)) {
-                login(user, tenant, accessToken, refreshToken, keepSignedIn)
-                navigate(ROUTES.notAuthorized, { replace: true })
+            if ('requiresMfa' in res.data) {
+                // Password OK — switch to the 2FA challenge step.
+                setMfaToken(res.data.mfaToken)
+                setMfaCode('')
+                setUseBackupCode(false)
                 return
             }
-
-            login(user, tenant, accessToken, refreshToken, keepSignedIn)
-
-            // Determine landing mode.
-            //  - If the user can manage a team (dept_head), default to MANAGER on every login —
-            //    that's their unique privilege and where the most actionable work lives. They
-            //    can still flip to Employee mode at any time via the top-bar pill.
-            //  - If they can't manage, force Employee mode (in case a stale store had 'manager').
-            const canManage = canSwitchToManager(user)
-            if (canManage) setMode('manager')
-            else setMode('employee')
-            navigate(canManage ? ROUTES.managerHome : ROUTES.employeeHome, { replace: true })
+            finalizeLogin(res.data)
         } catch (err) {
-            const message =
-                err instanceof ApiError
-                    ? err.statusCode === 401
-                        ? t('auth.invalidCredentials')
-                        : err.message
-                    : err instanceof Error
-                      ? err.message
-                      : t('auth.invalidCredentials')
-            setError(message)
+            setError(toErrorMessage(err))
         } finally {
             setSubmitting(false)
         }
+    }
+
+    async function onMfaSubmit(e: FormEvent) {
+        e.preventDefault()
+        if (submitting || !mfaToken) return
+        setSubmitting(true)
+        setError(null)
+        try {
+            const endpoint = useBackupCode ? '/auth/2fa/backup-challenge' : '/auth/2fa/challenge'
+            const code = useBackupCode ? mfaCode.trim().toUpperCase() : mfaCode.replace(/\D/g, '')
+            const res = await api.post<ChallengeResponse>(endpoint, { mfaToken, code })
+            finalizeLogin(res.data)
+        } catch (err) {
+            setError(toErrorMessage(err))
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    function cancelMfa() {
+        setMfaToken(null)
+        setMfaCode('')
+        setUseBackupCode(false)
+        setError(null)
     }
 
     return (
@@ -125,11 +161,87 @@ export function LoginPage() {
                 <div className="rounded-3xl border border-white/60 bg-white/80 p-7 shadow-[0_24px_60px_-24px_rgba(99,102,241,0.35)] backdrop-blur-xl sm:p-8 dark:border-white/10 dark:bg-card/75">
                     <div className="space-y-1.5 text-center">
                         <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-[26px]">
-                            {t('auth.welcomeBack')}
+                            {mfaToken ? t('auth.mfaTitle') : t('auth.welcomeBack')}
                         </h1>
-                        <p className="text-sm text-muted-foreground">{t('auth.welcomeBackSub')}</p>
+                        <p className="text-sm text-muted-foreground">
+                            {mfaToken
+                                ? useBackupCode
+                                    ? t('auth.mfaBackupSub')
+                                    : t('auth.mfaSub')
+                                : t('auth.welcomeBackSub')}
+                        </p>
                     </div>
 
+                    {mfaToken ? (
+                        <form className="mt-7 space-y-4" onSubmit={onMfaSubmit} noValidate>
+                            {error ? (
+                                <div
+                                    role="alert"
+                                    aria-live="polite"
+                                    className="flex items-start gap-2.5 rounded-xl border border-rose-200/60 bg-rose-50/70 px-3.5 py-3 text-sm text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200"
+                                >
+                                    <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                                    <span>{error}</span>
+                                </div>
+                            ) : null}
+
+                            <div className="space-y-1.5">
+                                <Label htmlFor="mfaCode" className="text-sm font-medium">
+                                    {useBackupCode ? t('auth.backupCode') : t('auth.verificationCode')}
+                                </Label>
+                                <Input
+                                    id="mfaCode"
+                                    name="mfaCode"
+                                    autoFocus
+                                    value={mfaCode}
+                                    onChange={(e) => {
+                                        setMfaCode(e.target.value)
+                                        if (error) setError(null)
+                                    }}
+                                    inputMode={useBackupCode ? 'text' : 'numeric'}
+                                    autoComplete="one-time-code"
+                                    placeholder={useBackupCode ? 'XXXXX-XXXXX' : '123456'}
+                                    maxLength={useBackupCode ? 11 : 6}
+                                    required
+                                    className="h-12 rounded-xl bg-white/90 text-center text-lg tracking-[0.3em] shadow-sm dark:bg-card/70"
+                                />
+                            </div>
+
+                            <Button
+                                type="submit"
+                                className="h-12 w-full rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-[15px] font-semibold text-white shadow-lg shadow-indigo-300/40 transition-transform hover:from-indigo-600 hover:to-sky-600 hover:shadow-xl active:translate-y-[1px] disabled:translate-y-0"
+                                disabled={submitting || mfaCode.trim().length < (useBackupCode ? 8 : 6)}
+                            >
+                                {submitting ? (
+                                    <>
+                                        <Loader2 className="size-4 animate-spin" /> {t('auth.verifying')}
+                                    </>
+                                ) : (
+                                    <>
+                                        {t('auth.verify')}
+                                        <ArrowRight className="size-4" data-rtl-flip />
+                                    </>
+                                )}
+                            </Button>
+
+                            <div className="flex items-center justify-between pt-1 text-xs">
+                                <button
+                                    type="button"
+                                    onClick={() => { setUseBackupCode((v) => !v); setMfaCode(''); setError(null) }}
+                                    className="font-medium text-primary hover:underline"
+                                >
+                                    {useBackupCode ? t('auth.useAuthenticator') : t('auth.useBackupCode')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={cancelMfa}
+                                    className="font-medium text-muted-foreground hover:text-foreground"
+                                >
+                                    {t('auth.backToSignIn')}
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
                     <form className="mt-7 space-y-4" onSubmit={onSubmit} noValidate>
                         {error ? (
                             <div
@@ -255,6 +367,7 @@ export function LoginPage() {
                             )}
                         </Button>
                     </form>
+                    )}
                 </div>
 
                 <p className="mt-5 text-center text-xs text-muted-foreground">

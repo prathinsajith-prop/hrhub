@@ -7,6 +7,7 @@ import { passwordResetTokens, refreshTokens, tenants, users } from '../../db/sch
 import { recordLoginEvent } from '../../lib/audit.js'
 import { passwordResetEmail, sendEmail } from '../../lib/email.js'
 import { loadEnv } from '../../env.js'
+import { verifyTotpCode, verifyAndConsumeBackupCode } from './twofa.service.js'
 
 type AnyFastify = FastifyInstance<any, any, any, any, any>
 
@@ -98,20 +99,104 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
-    if (fresh.twoFaEnabled) {
-        // Portal v1 does not implement 2FA verification. The admin app handles 2FA management.
-        // Surface a clear error so the user knows to use the admin app to disable or to verify there.
-        throw Object.assign(new Error('Two-factor authentication is enabled. Please sign in via the admin app to complete 2FA setup or sign in.'), {
-            statusCode: 412,
-        })
-    }
-
+    // Password is correct — clear any lockout/failed counter regardless of the 2FA path.
     await db
         .update(users)
-        .set({ failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date(), updatedAt: new Date() })
+        .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: new Date() })
         .where(eq(users.id, user.id))
 
+    if (fresh.twoFaEnabled) {
+        // Password verified, but 2FA is on — issue a short-lived, single-purpose
+        // pending token. No real session is granted until the code is verified
+        // via completeMfaLogin / completeMfaLoginWithBackupCode.
+        const mfaToken = fastify.jwt.sign({ sub: user.id, purpose: 'mfa-pending' }, { expiresIn: '5m' })
+        return { requiresMfa: true as const, mfaToken }
+    }
+
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id))
     return issueTokens(fastify, user, input)
+}
+
+/**
+ * Complete a 2FA login challenge — verifies the TOTP code and issues real tokens.
+ * Call after loginUser returned `{ requiresMfa: true, mfaToken }`.
+ */
+export async function completeMfaLogin(
+    fastify: AnyFastify,
+    userId: string,
+    totpCode: string,
+    meta: { ipAddress?: string; userAgent?: string },
+) {
+    const isValid = await verifyTotpCode(userId, totpCode)
+    if (!isValid) {
+        recordLoginEvent({
+            userId,
+            eventType: '2fa_failed',
+            success: false,
+            ipAddress: meta.ipAddress,
+            userAgent: meta.userAgent,
+            failureReason: 'invalid_totp',
+        }).catch(() => {})
+        return null
+    }
+    const [user] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.isActive, true)))
+        .limit(1)
+    if (!user) return null
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id))
+    recordLoginEvent({
+        tenantId: user.tenantId,
+        userId: user.id,
+        email: user.email,
+        eventType: '2fa_success',
+        success: true,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+    }).catch(() => {})
+    return issueTokens(fastify, user, meta)
+}
+
+/**
+ * Complete a 2FA login challenge using a single-use backup recovery code,
+ * for when the authenticator app is unavailable.
+ */
+export async function completeMfaLoginWithBackupCode(
+    fastify: AnyFastify,
+    userId: string,
+    backupCode: string,
+    meta: { ipAddress?: string; userAgent?: string },
+) {
+    const isValid = await verifyAndConsumeBackupCode(userId, backupCode)
+    if (!isValid) {
+        recordLoginEvent({
+            userId,
+            eventType: '2fa_failed',
+            success: false,
+            ipAddress: meta.ipAddress,
+            userAgent: meta.userAgent,
+            failureReason: 'invalid_backup_code',
+        }).catch(() => {})
+        return null
+    }
+    const [user] = await db
+        .select()
+        .from(users)
+        .where(and(eq(users.id, userId), eq(users.isActive, true)))
+        .limit(1)
+    if (!user) return null
+    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id))
+    recordLoginEvent({
+        tenantId: user.tenantId,
+        userId: user.id,
+        email: user.email,
+        eventType: '2fa_success',
+        success: true,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+    }).catch(() => {})
+    return issueTokens(fastify, user, meta)
 }
 
 export async function issueTokens(fastify: AnyFastify, user: any, meta: { ipAddress?: string; userAgent?: string }) {

@@ -33,7 +33,7 @@ export interface RecordLoginParams {
     tenantId?: string | null
     userId?: string | null
     email?: string
-    eventType: 'login' | 'logout' | 'failed_login' | 'token_refresh'
+    eventType: 'login' | 'logout' | 'failed_login' | 'token_refresh' | '2fa_success' | '2fa_failed'
     success: boolean
     ipAddress?: string
     userAgent?: string
