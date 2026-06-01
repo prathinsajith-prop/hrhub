@@ -10,7 +10,7 @@ import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
 import { AdvancedSearchBar } from '@/components/filters/AdvancedSearchBar'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import type { FilterConfig } from '@/lib/filters'
-import { actionVerbFor, formatChangeEntries } from '@/lib/activityFormat'
+import { formatChangeEntries } from '@/lib/activityFormat'
 import {
     ClipboardList,
     Plus,
@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { exportAuditLog } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { buildActivityHeadline } from '@/components/shared/ActivityFeed'
 
 type ActionMeta = {
     icon: React.ComponentType<{ className?: string }>
@@ -375,14 +376,22 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="min-w-0 flex-1">
-                            <p className="text-sm">
-                                <span className="font-medium">{log.actorName ?? 'System'}</span>
-                                <span className="text-muted-foreground"> {actionVerbFor(log.action)} </span>
-                                <span className="font-medium capitalize">{log.entityType.replace(/_/g, ' ')}</span>
-                                {(log.entityName || log.entityId) && (
+                            {/* Kind-aware headline (shared with the employee
+                                Updates tab and the My Activity feed). Falls
+                                back gracefully for kind-less rows that came
+                                in via the dev/audit Phase 0 path — buildActivityHeadline's
+                                generic branch handles them. */}
+                            {buildActivityHeadline(log, changes.length, 'hr')}
+                            {/* Entity-type context line. The headline already
+                                shows entityName when present, so we only
+                                surface the entityId here when there's no name
+                                to avoid duplicating the same string. */}
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                <span className="capitalize">{log.entityType.replace(/_/g, ' ')}</span>
+                                {!log.entityName && log.entityId && (
                                     <>
-                                        <span className="text-muted-foreground"> · </span>
-                                        <span className="font-medium truncate">{log.entityName ?? log.entityId}</span>
+                                        <span> · </span>
+                                        <span className="truncate">{log.entityId}</span>
                                     </>
                                 )}
                             </p>

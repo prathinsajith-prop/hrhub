@@ -2,259 +2,194 @@ import * as React from 'react'
 import { Loader2, History } from 'lucide-react'
 import { ActionBadge } from '@/components/shared/UICommons'
 import type { ActivityLog } from '@/hooks/useAudit'
-import { actionVerbFor, formatChangeEntries } from '@/lib/activityFormat'
+import { formatChangeEntries } from '@/lib/activityFormat'
 import { formatDateTime } from '@/lib/utils'
 
 /**
- * Shared employee-activity feed used by:
- *   - HR view: Employee detail page → "Updates" tab
- *   - Employee view: /my/activity page
+ * Shared activity-feed rendering.
  *
- * Reads metadata.kind / metadata.subKind set by backend modules (documents,
- * attendance, payroll, leave, loans, visa, transfers, exit, assets,
- * performance, profile, security) and renders a human-readable headline +
- * context pills + a from/to change list when applicable.
+ * `buildActivityHeadline` turns an audit/activity log entry into a
+ * human-readable, kind-aware headline (e.g. "uploaded a document",
+ * "ran payroll", "completed an onboarding step"). The same headline is
+ * used by the employee "Updates" tab and the global Audit Log page so
+ * rows read consistently everywhere.
+ *
+ * The "kind" of an activity is carried on `log.metadata.kind`, with an
+ * optional finer-grained `log.metadata.subKind`. When no kind is present
+ * the function falls back to a generic "{verb} N fields / this record"
+ * headline derived from the action + change count.
  */
 
-function formatPunchTime(iso?: string | null): string {
-    if (!iso) return ''
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return ''
-    return d.toLocaleString('en-AE', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })
+/** Subset of the activity-log shape that headline rendering depends on. */
+export interface ActivityHeadlineLog {
+    actorName: string | null
+    action: string
+    entityType: string
+    entityName?: string | null
+    metadata?: Record<string, unknown> | null
 }
 
-function buildActivityHeadline(log: ActivityLog, changeCount: number, viewer: 'hr' | 'self'): React.ReactNode {
-    const meta = (log.metadata ?? {}) as Record<string, unknown>
-    const kind = typeof meta.kind === 'string' ? meta.kind : null
-    const subKind = typeof meta.subKind === 'string' ? meta.subKind : null
-    const target = log.entityName
+/** Who is looking at the feed — affects pronoun choice ("you" vs the actor's name). */
+export type ActivityViewer = 'self' | 'hr'
 
-    if (kind === 'document') {
-        const verb = ({
-            upload: 'uploaded document',
-            edit: 'updated document',
-            verify: 'verified document',
-            reject: 'rejected document',
-            delete: 'removed document',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} document`
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb} </span>
-                {target && <span className="font-medium text-foreground">{target}</span>}
-            </>
-        )
+/** Past-tense verb for an audit action ("update" → "updated"). */
+function actionVerb(action: string): string {
+    const map: Record<string, string> = {
+        create: 'created',
+        update: 'updated',
+        delete: 'deleted',
+        approve: 'approved',
+        reject: 'rejected',
+        submit: 'submitted',
+        view: 'viewed',
+        export: 'exported',
+        import: 'imported',
+        login: 'logged into',
+        logout: 'logged out of',
+        archive: 'archived',
+        activate: 'activated',
+        suspend: 'suspended',
+        cancel: 'cancelled',
+        invite: 'invited',
     }
-    if (kind === 'attendance') {
-        const at = typeof meta.at === 'string' ? formatPunchTime(meta.at) : ''
-        const date = typeof meta.date === 'string' ? meta.date : ''
-        const verb = ({
-            'check-in': 'checked in',
-            'check-out': 'checked out',
-            'manual-punch': 'added a manual punch',
-            'delete-punch': 'removed a punch',
-            'update': 'updated attendance',
-            'external-punch': 'recorded a biometric punch',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} attendance`
-        const when = at || date
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb}</span>
-                {when && <span className="text-muted-foreground"> at <span className="font-medium text-foreground tabular-nums">{when}</span></span>}
-            </>
-        )
+    return map[action] ?? action.replace(/_/g, ' ')
+}
+
+function readMetaString(metadata: Record<string, unknown> | null | undefined, key: string): string | undefined {
+    const v = metadata?.[key]
+    return typeof v === 'string' ? v : undefined
+}
+
+/**
+ * Returns the verb phrase for a given activity kind. Returns `null` when the
+ * kind is unknown so the caller can fall back to the generic headline.
+ */
+function kindVerbPhrase(kind: string, subKind: string | undefined, action: string): string | null {
+    switch (kind) {
+        case 'document':
+            if (subKind === 'verify') return 'verified a document'
+            if (subKind === 'delete' || action === 'delete') return 'removed a document'
+            if (subKind === 'expiry') return 'flagged a document expiry'
+            return 'uploaded a document'
+        case 'attendance':
+            if (subKind === 'punch-in') return 'punched in'
+            if (subKind === 'punch-out') return 'punched out'
+            if (subKind === 'import') return 'imported attendance records'
+            return 'updated an attendance record'
+        case 'payroll':
+            if (subKind === 'run') return 'ran payroll'
+            if (subKind === 'approve' || action === 'approve') return 'approved a payroll run'
+            if (subKind === 'payslip') return 'generated a payslip'
+            return 'updated payroll'
+        case 'leave':
+            if (subKind === 'request' || action === 'submit') return 'requested leave'
+            if (subKind === 'approve' || action === 'approve') return 'approved a leave request'
+            if (subKind === 'reject' || action === 'reject') return 'rejected a leave request'
+            if (subKind === 'cancel' || action === 'cancel') return 'cancelled a leave request'
+            return 'updated a leave request'
+        case 'loan':
+            if (subKind === 'request' || action === 'submit') return 'requested a loan'
+            if (subKind === 'approve' || action === 'approve') return 'approved a loan'
+            if (subKind === 'reject' || action === 'reject') return 'rejected a loan'
+            if (subKind === 'repay') return 'recorded a loan repayment'
+            return 'updated a loan'
+        case 'visa':
+            if (subKind === 'advance' || subKind === 'step') return 'advanced a visa application'
+            if (subKind === 'cost') return 'recorded a visa cost'
+            if (action === 'create') return 'started a visa application'
+            return 'updated a visa application'
+        case 'transfer':
+            if (subKind === 'approve' || action === 'approve') return 'approved a transfer'
+            if (action === 'create' || subKind === 'request') return 'requested a transfer'
+            return 'updated a transfer'
+        case 'exit':
+            if (subKind === 'approve' || action === 'approve') return 'approved an exit request'
+            if (subKind === 'reject' || action === 'reject') return 'rejected an exit request'
+            if (subKind === 'settle' || subKind === 'settlement') return 'recorded an exit settlement'
+            if (action === 'create' || subKind === 'request') return 'started an exit request'
+            return 'updated an exit request'
+        case 'asset':
+            if (subKind === 'assign') return 'assigned an asset'
+            if (subKind === 'return' || subKind === 'unassign') return 'returned an asset'
+            if (action === 'create') return 'added an asset'
+            return 'updated an asset'
+        case 'performance':
+            if (subKind === 'submit' || action === 'submit') return 'submitted a performance review'
+            if (subKind === 'rate') return 'rated a performance review'
+            if (action === 'create') return 'started a performance review'
+            return 'updated a performance review'
+        case 'security':
+            if (subKind === 'password' || subKind === 'password-change') return 'changed the password'
+            if (subKind === '2fa-enable') return 'enabled two-factor authentication'
+            if (subKind === '2fa-disable') return 'disabled two-factor authentication'
+            if (action === 'login') return 'signed in'
+            if (action === 'logout') return 'signed out'
+            return 'updated security settings'
+        case 'profile':
+            if (subKind === 'avatar' || subKind === 'photo') return 'updated the profile photo'
+            if (subKind === 'contact') return 'updated contact details'
+            if (subKind === 'bank') return 'updated bank details'
+            return 'updated the profile'
+        case 'onboarding':
+            if (subKind === 'step-complete' || subKind === 'complete') return 'completed an onboarding step'
+            if (action === 'create' || subKind === 'create') return 'started onboarding'
+            return 'updated onboarding'
+        case 'offboarding':
+            // Offboarding mirrors the exit-style verbs.
+            if (subKind === 'approve' || action === 'approve') return 'approved an exit request'
+            if (subKind === 'reject' || action === 'reject') return 'rejected an exit request'
+            if (subKind === 'settle' || subKind === 'settlement') return 'recorded an exit settlement'
+            if (action === 'create' || subKind === 'request') return 'started an exit request'
+            return 'updated an exit request'
+        default:
+            return null
     }
-    if (kind === 'payroll') {
-        // Salary / bank-detail edit (PATCH /employees/:id via Edit Payroll dialog)
-        if (subKind === 'update') {
-            return (
-                <>
-                    <span className="text-muted-foreground"> updated payroll details</span>
-                    {changeCount > 0 && (
-                        <span className="text-muted-foreground"> · {changeCount} field{changeCount === 1 ? '' : 's'}</span>
-                    )}
-                </>
-            )
-        }
-        // Payslip generated by a payroll run
-        const month = typeof meta.month === 'number' ? meta.month : null
-        const year = typeof meta.year === 'number' ? meta.year : null
-        const period = month && year ? `${String(month).padStart(2, '0')}/${year}` : ''
-        const net = typeof meta.netSalary === 'number' ? meta.netSalary : null
-        return (
-            <>
-                <span className="text-muted-foreground"> received {viewer === 'self' ? 'your ' : 'a '}payslip</span>
-                {period && <span className="text-muted-foreground"> for <span className="font-medium text-foreground tabular-nums">{period}</span></span>}
-                {net !== null && <span className="text-muted-foreground"> · net <span className="font-medium text-foreground tabular-nums">AED {net.toLocaleString()}</span></span>}
-            </>
-        )
+}
+
+/** Generic, kind-agnostic verb phrase derived from action + change count. */
+function genericVerbPhrase(action: string, changeCount: number): string {
+    if (action === 'update' && changeCount > 0) {
+        return `updated ${changeCount} field${changeCount === 1 ? '' : 's'}`
     }
-    if (kind === 'leave') {
-        const verb = ({
-            submit: 'submitted a leave request',
-            approve: 'approved leave',
-            reject: 'rejected leave',
-            cancel: 'cancelled leave',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} leave`
-        const leaveType = typeof meta.leaveType === 'string' ? meta.leaveType.replace(/_/g, ' ') : ''
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb}</span>
-                {leaveType && <span className="text-muted-foreground"> · <span className="font-medium text-foreground capitalize">{leaveType}</span></span>}
-            </>
-        )
-    }
-    if (kind === 'loan') {
-        const amount = typeof meta.amount === 'number' ? meta.amount : null
-        const verb = ({
-            request: 'requested a loan',
-            approve: 'approved loan',
-            reject: 'rejected loan',
-            disburse: 'disbursed loan',
-            installment: 'recorded a loan installment',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} loan`
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb}</span>
-                {amount !== null && <span className="text-muted-foreground"> · <span className="font-medium text-foreground tabular-nums">AED {amount.toLocaleString()}</span></span>}
-            </>
-        )
-    }
-    if (kind === 'visa') {
-        const verb = ({
-            create: 'started a visa application',
-            edit: 'updated visa application',
-            advance: 'advanced visa stage',
-            'advance-noop': 'reviewed visa stage',
-            delete: 'removed visa application',
-            cancel: 'cancelled visa application',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} visa`
-        const toLabel = typeof meta.toStepLabel === 'string' ? meta.toStepLabel : ''
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb}</span>
-                {toLabel && <span className="text-muted-foreground"> to <span className="font-medium text-foreground">{toLabel}</span></span>}
-                {!toLabel && target && <span className="text-muted-foreground"> — <span className="font-medium text-foreground">{target}</span></span>}
-            </>
-        )
-    }
-    if (kind === 'transfer') {
-        const fromDept = typeof meta.fromDepartment === 'string' ? meta.fromDepartment : ''
-        const toDept = typeof meta.toDepartment === 'string' ? meta.toDepartment : ''
-        return (
-            <>
-                <span className="text-muted-foreground"> transferred</span>
-                {fromDept && toDept && (
-                    <span className="text-muted-foreground">
-                        {' from '}
-                        <span className="font-medium text-foreground">{fromDept}</span>
-                        {' to '}
-                        <span className="font-medium text-foreground">{toDept}</span>
-                    </span>
-                )}
-                {(!fromDept || !toDept) && target && (
-                    <span className="text-muted-foreground"> effective <span className="font-medium text-foreground">{target}</span></span>
-                )}
-            </>
-        )
-    }
-    if (kind === 'exit') {
-        const verb = ({
-            initiate: 'initiated exit',
-            approve: 'approved exit',
-            reject: 'rejected exit',
-            'settlement-paid': 'marked settlement paid',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} exit`
-        return <span className="text-muted-foreground"> {verb}</span>
-    }
-    if (kind === 'asset') {
-        const verb = subKind === 'return' ? 'returned asset' : 'assigned asset'
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb} </span>
-                {target && <span className="font-medium text-foreground">{target}</span>}
-            </>
-        )
-    }
-    if (kind === 'performance') {
-        const verb = ({
-            create: 'started a performance review',
-            complete: 'completed a performance review',
-            update: 'updated performance review',
-            delete: 'removed performance review',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} performance review`
-        const rating = typeof meta.overallRating === 'number' ? meta.overallRating : null
-        return (
-            <>
-                <span className="text-muted-foreground"> {verb}</span>
-                {target && <span className="text-muted-foreground"> · <span className="font-medium text-foreground">{target}</span></span>}
-                {rating !== null && <span className="text-muted-foreground"> · rating <span className="font-medium text-foreground">{rating}</span></span>}
-            </>
-        )
-    }
-    if (kind === 'security') {
-        const verb = ({
-            'password-change': 'changed password',
-            '2fa-enable': 'enabled two-factor authentication',
-            '2fa-disable': 'disabled two-factor authentication',
-            '2fa-backup-regenerate': 'regenerated backup codes',
-        } as Record<string, string>)[subKind ?? ''] ?? `${actionVerbFor(log.action)} account security`
-        return <span className="text-muted-foreground"> {verb}</span>
-    }
-    if (kind === 'profile') {
-        // category → readable noun. The backend also sets entityName to the
-        // same label for mirrored employee entries, so prefer that when present.
-        const categoryLabel = ({
-            bank_details: 'bank details',
-            contact: 'contact details',
-            personal: 'personal details',
-        } as Record<string, string>)[typeof meta.category === 'string' ? meta.category : ''] ?? (target || 'profile')
-        if (subKind === 'self-update') {
-            return (
-                <>
-                    <span className="text-muted-foreground"> updated </span>
-                    <span className="text-muted-foreground">
-                        {changeCount > 0 ? `${changeCount} profile field${changeCount === 1 ? '' : 's'}` : 'their profile'}
-                    </span>
-                </>
-            )
-        }
-        if (subKind === 'change-request') {
-            return (
-                <>
-                    <span className="text-muted-foreground"> requested a change to </span>
-                    <span className="font-medium text-foreground">{categoryLabel}</span>
-                </>
-            )
-        }
-        if (subKind === 'change-approved') {
-            return (
-                <>
-                    <span className="text-muted-foreground"> approved {viewer === 'self' ? 'your ' : 'a '}</span>
-                    <span className="font-medium text-foreground">{categoryLabel}</span>
-                    <span className="text-muted-foreground"> change</span>
-                </>
-            )
-        }
-        if (subKind === 'change-rejected') {
-            return (
-                <>
-                    <span className="text-muted-foreground"> rejected {viewer === 'self' ? 'your ' : 'a '}</span>
-                    <span className="font-medium text-foreground">{categoryLabel}</span>
-                    <span className="text-muted-foreground"> change</span>
-                </>
-            )
-        }
-    }
+    if (action === 'update') return 'updated this record'
+    return actionVerb(action)
+}
+
+/**
+ * Build a kind-aware headline node for an activity log entry.
+ *
+ * @param log         The activity/audit log entry (needs actorName, action,
+ *                    entityType, optional entityName + metadata.kind/subKind).
+ * @param changeCount Number of changed fields (used by the generic fallback).
+ * @param viewer      'self' renders "You …"; 'hr' (default) renders the actor's name.
+ */
+export function buildActivityHeadline(
+    log: ActivityHeadlineLog,
+    changeCount = 0,
+    viewer: ActivityViewer = 'hr',
+): React.ReactNode {
+    const kind = readMetaString(log.metadata, 'kind')
+    const subKind = readMetaString(log.metadata, 'subKind')
+
+    const phrase = kind ? kindVerbPhrase(kind, subKind, log.action) : null
+    const verbPhrase = phrase ?? genericVerbPhrase(log.action, changeCount)
+
+    const subject = viewer === 'self' ? 'You' : (log.actorName ?? 'System')
 
     return (
-        <>
-            <span className="text-muted-foreground"> {actionVerbFor(log.action)} </span>
-            <span className="text-muted-foreground">
-                {changeCount > 0 ? `${changeCount} field${changeCount === 1 ? '' : 's'}` : 'this record'}
-            </span>
-        </>
+        <span className="text-sm">
+            <span className="font-medium">{subject}</span>
+            <span className="text-muted-foreground"> {verbPhrase}</span>
+            {log.entityName ? (
+                <>
+                    <span className="text-muted-foreground"> · </span>
+                    <span className="font-medium truncate">{log.entityName}</span>
+                </>
+            ) : null}
+        </span>
     )
 }
+
 
 function metaPillsFor(log: ActivityLog): { label: string; value: string }[] {
     const meta = (log.metadata ?? {}) as Record<string, unknown>
@@ -330,7 +265,6 @@ export function ActivityRow({ log, viewer = 'hr' }: ActivityRowProps) {
         .map(n => n[0]?.toUpperCase() ?? '')
         .join('') || '?'
     const pills = metaPillsFor(log)
-    const actorLabel = viewer === 'self' && log.actorName ? log.actorName : (log.actorName ?? 'System')
 
     return (
         <div className="px-4 py-3.5 hover:bg-muted/30 transition-colors">
@@ -341,8 +275,12 @@ export function ActivityRow({ log, viewer = 'hr' }: ActivityRowProps) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="min-w-0 flex-1">
+                            {/* Headline already includes the actor name (or
+                                "You" / "System") so we don't prepend an
+                                actorLabel here anymore — that used to
+                                double-print the name once buildActivityHeadline
+                                was promoted to emit a full sentence. */}
                             <p className="text-sm leading-snug">
-                                <span className="font-semibold text-foreground">{actorLabel}</span>
                                 {buildActivityHeadline(log, changes.length, viewer)}
                             </p>
                             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground flex-wrap">
