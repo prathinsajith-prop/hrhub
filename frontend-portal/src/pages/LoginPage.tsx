@@ -11,6 +11,7 @@ import { canSwitchToManager, canUsePortal, isAdminRoleOnly } from '@/lib/permiss
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { OtpInput } from '@/components/ui/otp-input'
 import { cn } from '@/lib/utils'
 import type { Tenant, User } from '@/types'
 
@@ -187,32 +188,43 @@ export function LoginPage() {
                                 </div>
                             ) : null}
 
-                            <div className="space-y-1.5">
-                                <Label htmlFor="mfaCode" className="text-sm font-medium">
+                            <div className="space-y-2">
+                                <Label htmlFor="mfaCode" className="block text-center text-sm font-medium">
                                     {useBackupCode ? t('auth.backupCode') : t('auth.verificationCode')}
                                 </Label>
-                                <Input
-                                    id="mfaCode"
-                                    name="mfaCode"
-                                    autoFocus
-                                    value={mfaCode}
-                                    onChange={(e) => {
-                                        // Normalise at source: digits-only for TOTP, upper-case for backup.
-                                        const v = useBackupCode
-                                            ? e.target.value.toUpperCase()
-                                            : e.target.value.replace(/\D/g, '').slice(0, 6)
-                                        setMfaCode(v)
-                                        if (error) setError(null)
-                                        // Auto-submit once a full 6-digit TOTP is entered — no extra click.
-                                        if (!useBackupCode && v.length === 6) submitMfa(v)
-                                    }}
-                                    inputMode={useBackupCode ? 'text' : 'numeric'}
-                                    autoComplete="one-time-code"
-                                    placeholder={useBackupCode ? 'XXXXX-XXXXX' : '123456'}
-                                    maxLength={useBackupCode ? 11 : 6}
-                                    required
-                                    className="h-12 rounded-xl bg-white/90 text-center text-lg tracking-[0.3em] shadow-sm dark:bg-card/70"
-                                />
+                                {useBackupCode ? (
+                                    // Backup codes are alphanumeric (XXXXX-XXXXX) — keep a single field.
+                                    <Input
+                                        id="mfaCode"
+                                        name="mfaCode"
+                                        autoFocus
+                                        value={mfaCode}
+                                        onChange={(e) => {
+                                            setMfaCode(e.target.value.toUpperCase())
+                                            if (error) setError(null)
+                                        }}
+                                        inputMode="text"
+                                        autoComplete="one-time-code"
+                                        placeholder="XXXXX-XXXXX"
+                                        maxLength={11}
+                                        required
+                                        className="h-12 rounded-xl bg-white/90 text-center text-lg tracking-[0.3em] shadow-sm dark:bg-card/70"
+                                    />
+                                ) : (
+                                    // TOTP — 6 individual boxes that act as one field, auto-submit on fill.
+                                    <OtpInput
+                                        value={mfaCode}
+                                        invalid={!!error}
+                                        autoFocus
+                                        disabled={submitting}
+                                        aria-label={t('auth.verificationCode')}
+                                        onChange={(v) => {
+                                            setMfaCode(v)
+                                            if (error) setError(null)
+                                        }}
+                                        onComplete={(v) => submitMfa(v)}
+                                    />
+                                )}
                             </div>
 
                             <Button
