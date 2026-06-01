@@ -139,7 +139,7 @@ export default async function (fastify: any): Promise<void> {
     // than one request on first load. All sub-reports run in parallel.
     fastify.get('/summary', {
         schema: { tags: ['Reports'] },
-        preHandler: [fastify.authenticate, (fastify as any).requireRole('hr_manager', 'pro_officer', 'super_admin')],
+        preHandler: [fastify.authenticate, (fastify as any).requireRole('hr_manager', 'super_admin')],
     }, async (request: any, reply: any) => {
         const tenantId: string = request.user.tenantId
         const days = boundedInt((request.query as any).days, 90, 1, 3650)
