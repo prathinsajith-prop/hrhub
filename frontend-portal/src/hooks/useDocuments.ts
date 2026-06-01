@@ -163,7 +163,8 @@ export function usePendingDocuments() {
 export function useApproveDocument() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (id: string) => api.post<{ data: MyDocument }>(`/documents/${id}/approve`, {}),
+        mutationFn: (id: string) =>
+            api.post<{ data: MyDocument }>(`/documents/${id}/approve`, {}).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['portal', 'pending-documents'] })
             qc.invalidateQueries({ queryKey: ['portal', 'my-documents'] })
@@ -175,7 +176,7 @@ export function useRejectDocument() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-            api.post<{ data: MyDocument }>(`/documents/${id}/reject`, { reason }),
+            api.post<{ data: MyDocument }>(`/documents/${id}/reject`, { reason }).then((r) => r.data),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['portal', 'pending-documents'] })
             qc.invalidateQueries({ queryKey: ['portal', 'my-documents'] })
