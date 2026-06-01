@@ -166,18 +166,26 @@ function ReportingChart({ filters }: { filters: OrgFilters }) {
 
     // Employees + their org-unit ids so we can filter by branch/division/department.
     // The /employees/org-chart endpoint only echoes department NAME, so we join
-    // against this list to resolve real ids.
-    const { data: empResp } = useEmployees({ limit: 500 })
+    // against this list to resolve real ids. The org chart renders every node, so
+    // we need the whole roster — request a high cap and flag when it's exceeded.
+    const EMP_FETCH_LIMIT = 1000
+    const { data: empResp, isLoading: empLoading } = useEmployees({ limit: EMP_FETCH_LIMIT })
     const allEmployees = useMemo<Employee[]>(
         () => (Array.isArray(empResp) ? empResp : (empResp as { data?: Employee[] } | undefined)?.data ?? []) as Employee[],
         [empResp],
     )
+    const employeesTotal = (empResp as { total?: number } | undefined)?.total ?? allEmployees.length
+    const employeesTruncated = employeesTotal > allEmployees.length
 
     const list = useMemo(() => (Array.isArray(data) ? data : []), [data])
     const filtersActive = isOrgFiltersActive(filters)
+    // employeeId is matched against node ids directly; the rest need the roster join.
+    const needsEmpData = !!(filters.branchId || filters.divisionId || filters.departmentId || filters.designation)
+    // Filtering before the roster resolves would wrongly prune the whole tree.
+    const filterPending = needsEmpData && empLoading && allEmployees.length === 0
 
     const filteredList = useMemo(() => {
-        if (!filtersActive) return list
+        if (!filtersActive || filterPending) return list
         const byId = new Map(allEmployees.map(e => [e.id, e]))
         const matches = new Set<string>()
         // Walk every node in the tree and decide if it satisfies the filters.
@@ -196,7 +204,7 @@ function ReportingChart({ filters }: { filters: OrgFilters }) {
         }
         visit(list)
         return pruneTree(list, matches, false)
-    }, [list, allEmployees, filters, filtersActive])
+    }, [list, allEmployees, filters, filtersActive, filterPending])
 
     if (isLoading) return (
         <div className="flex gap-8 justify-center py-12">
@@ -234,6 +242,15 @@ function ReportingChart({ filters }: { filters: OrgFilters }) {
 
     return (
         <div className="overflow-x-auto pb-6">
+            {filtersActive && needsEmpData && employeesTruncated && (
+                <div className="mb-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <FilterIcon className="size-3.5 shrink-0" />
+                    <span>
+                        Showing matches from the first {allEmployees.length} of {employeesTotal} employees — some
+                        people may not appear. Narrow with the employee search for an exact match.
+                    </span>
+                </div>
+            )}
             <div className="flex gap-16 justify-center min-w-max py-8 px-6">
                 {filteredList.map((node: OrgNode) => (
                     <EmpCard key={node.id} node={node} currentEmployeeId={currentEmployeeId} />

@@ -149,8 +149,35 @@ export default async function (fastify: any): Promise<void> {
         for (const key of allowed) {
             if (key in body) patch[key] = body[key]
         }
+        const before = await getEmployee(tenantId, employeeId)
         const employee = await updateEmployee(tenantId, employeeId, patch)
         if (!employee) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found.' })
+        // Build a from/to change set so the Updates tab shows the diff —
+        // employee self-edits should be visible to HR and to the employee.
+        const changes: Record<string, { from: unknown; to: unknown }> = {}
+        if (before) {
+            for (const key of Object.keys(patch)) {
+                const from = (before as any)[key] ?? null
+                const to = (employee as any)[key] ?? null
+                if (from !== to) changes[key] = { from, to }
+            }
+        }
+        if (Object.keys(changes).length > 0) {
+            recordActivity({
+                tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: employeeId,
+                entityName: 'My profile',
+                action: 'update',
+                changes,
+                metadata: { kind: 'profile', subKind: 'self-update' },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: employee })
     })
 
@@ -528,13 +555,46 @@ export default async function (fastify: any): Promise<void> {
             }
         }
 
-        const TRACKED = ['firstName', 'lastName', 'email', 'phone', 'department', 'designation', 'status', 'basicSalary', 'contractType', 'nationality', 'jobTitle']
+        // Diff EVERY field the caller actually sent (before vs after), rather
+        // than a fixed allow-list — otherwise payroll edits (housing/transport/
+        // other allowances, total salary, bank details) silently produced an
+        // "updated" entry with no visible change. ID/internal fields are skipped
+        // because they'd render as raw UUIDs; their human-readable denormalized
+        // counterparts (department, designation, managerName) carry the meaning.
+        const DIFF_EXCLUDE = new Set([
+            'gradeLevelId', 'reportingTo', 'sponsoringEntityId', 'shiftId',
+            'divisionId', 'departmentId', 'branchId', 'avatarUrl', 'employeeNo',
+        ])
+        // Fields that mean "this was a payroll / banking change" — drives the
+        // activity headline so the Updates tab + employee portal read cleanly.
+        const PAYROLL_FIELDS = new Set([
+            'basicSalary', 'totalSalary', 'housingAllowance', 'transportAllowance',
+            'otherAllowances', 'paymentMethod', 'bankName', 'accountName',
+            'accountNumber', 'swiftCode', 'bankBranch', 'iban', 'emiratisationCategory',
+        ])
+        const norm = (v: unknown) => {
+            if (v === null || v === undefined || v === '') return null
+            // Normalise numeric strings ("5000.00") and numbers (5000) so a
+            // re-save of the same amount isn't flagged as a change.
+            if (typeof v === 'number') return Number(v)
+            if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v)
+            return v
+        }
         const changes: Record<string, { from: unknown; to: unknown }> = {}
-        for (const key of TRACKED) {
+        let payrollChanged = false
+        for (const key of Object.keys(employeeUpdate)) {
+            if (DIFF_EXCLUDE.has(key)) continue
             const prev = (before as any)?.[key]
             const next = (updated as any)?.[key]
-            if (prev !== next) changes[key] = { from: prev ?? null, to: next ?? null }
+            if (norm(prev) !== norm(next)) {
+                changes[key] = { from: prev ?? null, to: next ?? null }
+                if (PAYROLL_FIELDS.has(key)) payrollChanged = true
+            }
         }
+        // A salary-component assignment change still bumps total/basic on the
+        // employee row, so payrollChanged is already true above when amounts
+        // move. Treat any assignment payload as a payroll touch regardless.
+        if (assignmentInputs && assignmentInputs.length > 0) payrollChanged = true
 
         recordActivity({
             tenantId: request.user.tenantId,
@@ -543,9 +603,10 @@ export default async function (fastify: any): Promise<void> {
             actorRole: request.user.role,
             entityType: 'employee',
             entityId: updated.id,
-            entityName: `${updated.firstName} ${updated.lastName}`,
+            entityName: payrollChanged ? 'Payroll details' : `${updated.firstName} ${updated.lastName}`,
             action: 'update',
             changes: Object.keys(changes).length > 0 ? changes : undefined,
+            metadata: payrollChanged ? { kind: 'payroll', subKind: 'update' } : undefined,
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })

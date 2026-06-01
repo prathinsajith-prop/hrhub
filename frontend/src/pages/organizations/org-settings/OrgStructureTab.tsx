@@ -735,8 +735,7 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
     const [headDialogOpen, setHeadDialogOpen] = useState(false)
     const isDept = unit.type === 'department'
     // Departments stay collapsed by default - open on explicit click.
-    const [userExpanded, setUserExpanded] = useState(!isDept)
-    const expanded = userExpanded
+    const [expanded, setExpanded] = useState(!isDept)
     const [confirmDelete, setConfirmDelete] = useState(false)
     const meta = ORG_TYPE_META[unit.type]
     const Icon = meta.icon
@@ -752,8 +751,8 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                     meta.treeIndent,
                     hasContent ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20',
                 )}
-                onClick={hasContent ? () => setUserExpanded(e => !e) : undefined}
-                onKeyDown={hasContent ? onActivate(() => setUserExpanded(v => !v)) : undefined}
+                onClick={hasContent ? () => setExpanded(e => !e) : undefined}
+                onKeyDown={hasContent ? onActivate(() => setExpanded(v => !v)) : undefined}
                 role={hasContent ? 'button' : undefined}
                 tabIndex={hasContent ? 0 : undefined}
                 aria-expanded={hasContent ? expanded : undefined}
@@ -972,7 +971,7 @@ export function OrgStructureTab() {
                         <Skeleton key={i} className="h-11 rounded-lg" />
                     ))}
                 </div>
-            ) : units.length === 0 ? (
+            ) : roots.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
                     <GitBranch className="size-10 text-muted-foreground" />
                     <div>

@@ -113,6 +113,7 @@ export type RouteKey =
   | 'my/payslips'
   | 'my/profile'
   | 'my/attendance'
+  | 'my/activity'
   | 'assets'
   | 'organizations'
   | 'team'
@@ -327,6 +328,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   'my/payslips': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/profile': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/attendance': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'my/activity': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/complaints': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/training': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'my/loans': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
@@ -434,6 +436,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/my/payslips': 'my/payslips',
     '/my/profile': 'my/profile',
     '/my/attendance': 'my/attendance',
+    '/my/activity': 'my/activity',
     '/organizations': 'organizations',
     '/team': 'team',
     '/users': 'users',

@@ -141,6 +141,11 @@ export function formatChangeValue(field: string, v: unknown): string {
         return String(v)
     }
     if (typeof v === 'string') {
+        // Money columns come back from the DB as numeric strings ("5000.00").
+        // Format them as currency so payroll edits read "AED 5,000", not "5000.00".
+        if (MONEY_FIELD_HINTS.test(field) && v.trim() !== '' && !Number.isNaN(Number(v))) {
+            return formatCurrency(Number(v))
+        }
         if (ISO_DATE_RE.test(v) || DATE_FIELD_HINTS.test(field)) {
             const formatted = formatDate(v)
             if (formatted) return formatted

@@ -109,43 +109,27 @@ export async function triggerDocumentDownload(id: string): Promise<void> {
 }
 
 /**
- * Two-step upload: ask the backend for a presigned PUT URL, push the file
- * straight to S3 with the browser's `fetch`, then POST the document metadata
- * so the backend creates a `documents` row in `under_review` state.
- * Backend forces the pending status regardless of what the client sends —
- * an employee cannot mark their own document as `valid`.
+ * Single-request upload: the file + metadata are sent as multipart/form-data to
+ * the backend, which streams the bytes to S3 server-side and creates a
+ * `documents` row in `under_review` state. The browser never PUTs to S3
+ * directly, so no S3 bucket CORS is required. The backend forces the pending
+ * status regardless of what the client sends — an employee cannot mark their
+ * own document as `valid`.
  */
 export function useUploadMyDocument() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: async (input: UploadDocumentInput) => {
             const { file, category, docType, docNumber, issueDate, expiryDate, notes } = input
-            // 1. presigned PUT
-            const presign = await api.post<{ data: { uploadUrl: string; s3Key: string } }>(
-                '/documents/upload-url',
-                { fileName: file.name, contentType: file.type || 'application/octet-stream' },
-            )
-            // 2. PUT directly to S3 (no Authorization header — signature is in the URL)
-            const putRes = await fetch(presign.data.uploadUrl, {
-                method: 'PUT',
-                headers: { 'Content-Type': file.type || 'application/octet-stream' },
-                body: file,
-            })
-            if (!putRes.ok) {
-                throw new Error(`File upload failed (${putRes.status})`)
-            }
-            // 3. register the document — backend forces status='under_review'
-            return api.post<{ data: MyDocument }>('/documents', {
-                category,
-                docType,
-                fileName: file.name,
-                s3Key: presign.data.s3Key,
-                fileSize: file.size,
-                docNumber,
-                issueDate,
-                expiryDate,
-                notes,
-            })
+            const fd = new FormData()
+            fd.append('file', file)
+            fd.append('category', category)
+            fd.append('docType', docType)
+            if (docNumber) fd.append('docNumber', docNumber)
+            if (issueDate) fd.append('issueDate', issueDate)
+            if (expiryDate) fd.append('expiryDate', expiryDate)
+            if (notes) fd.append('notes', notes)
+            return api.upload<{ data: MyDocument }>('/documents/upload', fd)
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'my-documents'] }),
     })

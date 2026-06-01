@@ -1904,6 +1904,15 @@
     "title": "My Profile",
     "description": "Your employment record, documents, and personal details."
   },
+  "myActivity": {
+    "eyebrow": "My account",
+    "shortLabel": "My Activity",
+    "title": "My Activity",
+    "description": "Everything that has happened to your record — leave decisions, payslips, document uploads, profile edits, security changes, and more.",
+    "cardTitle": "Recent activity",
+    "emptyTitle": "Nothing here yet",
+    "emptyDescription": "Your activity will appear here as you submit leave, upload documents, receive payslips, and more."
+  },
   "orgSettings": {
     "structure": {
       "title": "Organization Structure",

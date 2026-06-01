@@ -4,6 +4,7 @@ import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import jwt from '@fastify/jwt'
+import multipart from '@fastify/multipart'
 import { sql } from 'drizzle-orm'
 
 import { loadEnv } from './env.js'
@@ -78,6 +79,11 @@ async function bootstrap() {
         secret: env.JWT_SECRET,
         sign: { expiresIn: env.JWT_EXPIRES_IN as never },
     })
+
+    // Multipart for server-side file uploads (documents stream through the
+    // backend → S3, so the browser never PUTs to S3 directly and no S3 bucket
+    // CORS is required). 10 MB cap matches the main backend.
+    await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } })
 
     await app.register(authenticatePlugin)
 

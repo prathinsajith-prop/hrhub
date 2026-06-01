@@ -248,6 +248,29 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (body.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: body.employeeId,
+                entityName: asset?.name ?? id,
+                action: 'create',
+                metadata: {
+                    kind: 'asset',
+                    subKind: 'assign',
+                    assetId: id,
+                    assetName: asset?.name ?? null,
+                    assignmentId: assignment.id,
+                    assignedDate: body.assignedDate ?? null,
+                    expectedReturnDate: body.expectedReturnDate ?? null,
+                },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
 
         return reply.code(201).send({ data: assignment })
     })
@@ -262,6 +285,7 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
         const body = request.body as { actualReturnDate?: string; notes?: string }
 
         const updated = await returnAsset(request.user.tenantId, assignmentId, body)
+        const returnAssetName = updated.assetId ? (await getAsset(request.user.tenantId, updated.assetId))?.name ?? null : null
 
         recordActivity({
             tenantId: request.user.tenantId,
@@ -270,11 +294,32 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
             actorRole: request.user.role,
             entityType: 'asset_assignment',
             entityId: updated.id,
-            entityName: updated.assetId,
+            entityName: returnAssetName ?? updated.assetId,
             action: 'update',
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if ((updated as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (updated as any).employeeId,
+                entityName: returnAssetName ?? updated.assetId,
+                action: 'update',
+                metadata: {
+                    kind: 'asset',
+                    subKind: 'return',
+                    assignmentId,
+                    assetId: updated.assetId,
+                    actualReturnDate: body.actualReturnDate ?? null,
+                },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
 
         return reply.send({ data: updated })
     })

@@ -114,6 +114,10 @@ export interface AttendanceLeader {
 
 export interface AttendanceSummaryReport {
     windowDays: number
+    /** Explicit window boundaries — present when the call passed an
+     *  explicit `startDate`/`endDate`. */
+    windowStart?: string
+    windowEnd?: string
     present: number
     late: number
     absent: number
@@ -125,10 +129,39 @@ export interface AttendanceSummaryReport {
     lateLeaderboard: AttendanceLeader[]
 }
 
-export function useAttendanceSummaryReport(days = 90) {
+/**
+ * Date-range filter. When `startDate`/`endDate` are set, they take
+ * precedence over `days` (the legacy rolling-window param). The Reports
+ * page top-bar filter sends a range; older call sites still pass `days`.
+ */
+export interface ReportDateRange {
+    startDate?: string
+    endDate?: string
+    days?: number
+}
+
+function buildRangeQuery(range?: ReportDateRange, fallback?: { key: 'days' | 'months'; value: number }): string {
+    const qs = new URLSearchParams()
+    if (range?.startDate && range?.endDate) {
+        qs.set('startDate', range.startDate)
+        qs.set('endDate', range.endDate)
+    } else if (range?.days) {
+        qs.set('days', String(range.days))
+    } else if (fallback) {
+        qs.set(fallback.key, String(fallback.value))
+    }
+    const s = qs.toString()
+    return s ? `?${s}` : ''
+}
+
+export function useAttendanceSummaryReport(rangeOrDays: ReportDateRange | number = 90) {
+    const range: ReportDateRange = typeof rangeOrDays === 'number' ? { days: rangeOrDays } : rangeOrDays
+    const query = buildRangeQuery(range, { key: 'days', value: 90 })
     return useQuery({
-        queryKey: ['reports', 'attendance-summary', days],
-        queryFn: () => api.get<{ data: AttendanceSummaryReport }>(`/reports/attendance-summary?days=${days}`).then((r) => r.data),
+        // Key on the *resolved* query string so range and rolling-window
+        // calls cache independently and a window change refetches.
+        queryKey: ['reports', 'attendance-summary', query],
+        queryFn: () => api.get<{ data: AttendanceSummaryReport }>(`/reports/attendance-summary${query}`).then((r) => r.data),
         staleTime: 5 * 60_000,
     })
 }
@@ -207,10 +240,16 @@ export interface TurnoverReport {
     windowEnd: string
 }
 
-export function useTurnoverReport(months = 12) {
+export function useTurnoverReport(rangeOrMonths: ReportDateRange | number = 12) {
+    const range: ReportDateRange | undefined =
+        typeof rangeOrMonths === 'number' ? undefined : rangeOrMonths
+    const months = typeof rangeOrMonths === 'number' ? rangeOrMonths : undefined
+    const query = range && range.startDate && range.endDate
+        ? buildRangeQuery(range)
+        : `?months=${months ?? 12}`
     return useQuery({
-        queryKey: ['reports', 'turnover', months],
-        queryFn: () => api.get<{ data: TurnoverReport }>(`/reports/turnover?months=${months}`).then((r) => r.data),
+        queryKey: ['reports', 'turnover', query],
+        queryFn: () => api.get<{ data: TurnoverReport }>(`/reports/turnover${query}`).then((r) => r.data),
         staleTime: 5 * 60_000,
     })
 }
@@ -359,10 +398,12 @@ export interface ReportsSummary {
     documentExpiry: DocumentExpiryReport | null
 }
 
-export function useReportsSummary(days = 90) {
+export function useReportsSummary(rangeOrDays: ReportDateRange | number = 90) {
+    const range: ReportDateRange = typeof rangeOrDays === 'number' ? { days: rangeOrDays } : rangeOrDays
+    const query = buildRangeQuery(range, { key: 'days', value: 90 })
     return useQuery({
-        queryKey: ['reports', 'summary', days],
-        queryFn: () => api.get<ReportsSummary>(`/reports/summary?days=${days}`),
+        queryKey: ['reports', 'summary', query],
+        queryFn: () => api.get<ReportsSummary>(`/reports/summary${query || '?days=90'}`),
         staleTime: 5 * 60_000,
     })
 }
