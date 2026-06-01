@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { CalendarDays, Check, Clock, Copy, Eye, EyeOff, KeyRound, Languages, Loader2, Mail, Phone, Pencil, Save, ShieldCheck, Smartphone, X } from 'lucide-react'
@@ -566,15 +566,28 @@ function twoFaError(err: unknown, fallback: string): string {
 function TwoFactorCard() {
     const { t } = useTranslation()
     const { data: status, isLoading } = useTwoFactorStatus()
+    const setup = useSetupTwoFactor()
     // Inline panels rendered IN the card (no modal): one open at a time.
     const [panel, setPanel] = useState<'none' | 'enroll' | 'disable' | 'regenerate'>('none')
+    // QR + secret captured from the setup response (only while enrolling).
+    const [enrollData, setEnrollData] = useState<{ qrDataUrl: string; secret: string } | null>(null)
     const enabled = status?.enabled ?? false
 
-    // Collapse any open panel whenever the enabled state flips (after enable/disable).
-    const [lastEnabled, setLastEnabled] = useState(enabled)
-    if (enabled !== lastEnabled) {
-        setLastEnabled(enabled)
-        setPanel('none')
+    // NOTE: do NOT auto-close panels when `enabled` flips. Enabling refetches the
+    // status (enabled→true) while the enroll panel is still showing the one-time
+    // backup codes — closing here would destroy them before the user saves them.
+    // Each panel closes itself explicitly (savedThem / disable success / cancel).
+
+    // Trigger /2fa/setup from the CLICK handler (not an effect) so it fires
+    // exactly once on the live component — avoids React StrictMode's
+    // mount/unmount/remount dropping the mutation result. The panel only opens
+    // once we have the QR, so it can never show an empty placeholder.
+    function startEnroll() {
+        if (panel === 'enroll') { setPanel('none'); return }
+        setup.mutate(undefined, {
+            onSuccess: (d) => { setEnrollData({ qrDataUrl: d.qrDataUrl, secret: d.secret }); setPanel('enroll') },
+            onError: () => toast.error(t('security.setupFailed')),
+        })
     }
 
     return (
@@ -612,7 +625,8 @@ function TwoFactorCard() {
                             </Button>
                         </>
                     ) : (
-                        <Button size="sm" disabled={isLoading} onClick={() => setPanel(panel === 'enroll' ? 'none' : 'enroll')}>
+                        <Button size="sm" disabled={isLoading || setup.isPending} onClick={startEnroll}>
+                            {setup.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
                             {t('security.enable')}
                         </Button>
                     )}
@@ -620,9 +634,13 @@ function TwoFactorCard() {
             </CardContent>
 
             {/* Inline panels — rendered in the page, not a modal. */}
-            {panel === 'enroll' && (
+            {panel === 'enroll' && enrollData && (
                 <div className="border-t bg-muted/20 p-5">
-                    <EnrollTwoFactor onCancel={() => setPanel('none')} />
+                    <EnrollTwoFactor
+                        qrDataUrl={enrollData.qrDataUrl}
+                        secret={enrollData.secret}
+                        onCancel={() => { setPanel('none'); setEnrollData(null) }}
+                    />
                 </div>
             )}
             {panel === 'disable' && (
@@ -680,34 +698,15 @@ function CodeInput({ id, value, onChange, placeholder = '123456', maxLength = 6 
     )
 }
 
-/** Inline 2FA enrollment: QR + secret → confirm code → one-time backup codes. */
-function EnrollTwoFactor({ onCancel }: { onCancel: () => void }) {
+/** Inline 2FA enrollment: QR + secret → confirm code → one-time backup codes.
+ *  The QR/secret are passed in as props (already fetched by the parent on click),
+ *  so this component never fires a mount-time mutation and the QR is always ready. */
+function EnrollTwoFactor({ qrDataUrl, secret, onCancel }: { qrDataUrl: string; secret: string; onCancel: () => void }) {
     const { t } = useTranslation()
-    const setup = useSetupTwoFactor()
     const verify = useVerifyTwoFactor()
-    // Hold the QR/secret in LOCAL state (set from the setup response) rather than
-    // reading the mutation object — this is the pattern the main app uses and
-    // renders reliably.
-    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
-    const [secret, setSecret] = useState('')
     const [code, setCode] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
-
-    // Fire /2fa/setup exactly once on mount. Must not run during render or twice —
-    // each call mints a new secret and overwrites the stored one, so a double-fire
-    // would make the shown QR not match the persisted secret. Ref guard is
-    // StrictMode-safe.
-    const setupMutate = setup.mutate
-    const didSetup = useRef(false)
-    useEffect(() => {
-        if (didSetup.current) return
-        didSetup.current = true
-        setupMutate(undefined, {
-            onSuccess: (d) => { setQrDataUrl(d.qrDataUrl); setSecret(d.secret) },
-            onError: () => setError(t('security.setupFailed')),
-        })
-    }, [setupMutate, t])
 
     function onVerify(e: FormEvent) {
         e.preventDefault()
@@ -736,18 +735,12 @@ function EnrollTwoFactor({ onCancel }: { onCancel: () => void }) {
             <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">{t('security.setupStep1')}</p>
                 <div className="flex justify-center">
-                    {qrDataUrl ? (
-                        <img src={qrDataUrl} alt="2FA QR code" className="size-44 rounded-xl border bg-white p-2" />
-                    ) : (
-                        <Skeleton className="size-44 rounded-xl" />
-                    )}
+                    <img src={qrDataUrl} alt="2FA QR code" className="size-44 rounded-xl border bg-white p-2" />
                 </div>
-                {secret && (
-                    <p className="text-center text-[11px] text-muted-foreground">
-                        {t('security.orEnterSecret')}<br />
-                        <code className="select-all font-mono text-xs tracking-wider text-foreground">{secret}</code>
-                    </p>
-                )}
+                <p className="text-center text-[11px] text-muted-foreground">
+                    {t('security.orEnterSecret')}<br />
+                    <code className="select-all font-mono text-xs tracking-wider text-foreground">{secret}</code>
+                </p>
             </div>
             <div className="space-y-1.5">
                 <Label htmlFor="enableCode">{t('security.setupStep2')}</Label>
@@ -780,7 +773,7 @@ function CodePromptInline({ mode, onCancel }: { mode: 'disable' | 'regenerate'; 
         const token = code.replace(/\D/g, '')
         if (mode === 'disable') {
             disable.mutate(token, {
-                onSuccess: () => toast.success(t('security.disabledToast')),
+                onSuccess: () => { toast.success(t('security.disabledToast')); onCancel() },
                 onError: (err) => setError(twoFaError(err, t('security.invalidCode'))),
             })
         } else {
