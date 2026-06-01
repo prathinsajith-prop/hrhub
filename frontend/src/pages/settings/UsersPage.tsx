@@ -1312,24 +1312,15 @@ function ManageUserAccessModal({
     return (
         <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
             <DialogContent className="sm:max-w-lg p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
-                {/* Header — identity block.
-                    The active/inactive indicator went through two iterations:
-                    first as a chunky pill in the top-right corner (clashed
-                    with the X close); then as a dot-chip inline with the
-                    name (got pushed off-screen when the name was long).
-                    Final form is a small absolute-positioned status dot
-                    on the avatar — the universal "online indicator" pattern
-                    from chat apps. It's instantly readable, never collides
-                    with the close button, and survives any name length. The
-                    Last login meta strip in the body re-states "Active"/
-                    "Inactive" in words for users who want the explicit
-                    label rather than the colour cue. */}
-                <DialogHeader className="px-6 py-5 border-b">
+                {/* Header — clean identity card. Avatar with online-style
+                    status dot, name, email. The status word and last-login
+                    chips live below so the header itself stays uncluttered. */}
+                <DialogHeader className="px-6 pt-5 pb-4">
                     <div className="flex items-center gap-3 min-w-0">
                         <div className="relative shrink-0">
-                            <Avatar className="size-10">
+                            <Avatar className="size-11">
                                 {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
-                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                                <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
                                     {initials(user.name)}
                                 </AvatarFallback>
                             </Avatar>
@@ -1343,7 +1334,7 @@ function ManageUserAccessModal({
                             />
                         </div>
                         <div className="min-w-0 flex-1">
-                            <DialogTitle className="text-sm font-semibold truncate">
+                            <DialogTitle className="text-base font-semibold truncate">
                                 {user.name}
                             </DialogTitle>
                             <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
@@ -1354,41 +1345,90 @@ function ManageUserAccessModal({
                     </div>
                 </DialogHeader>
 
-                {/* Body */}
-                <div className="overflow-y-auto px-6 py-5 space-y-5">
-                    {/* Meta strip — last login + explicit Active/Inactive
-                        label. The avatar dot is the at-a-glance cue; this
-                        text is the screen-reader-friendly fallback for
-                        anyone who can't (or doesn't want to) parse the
-                        colour. Separator dot ties them visually. */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                            <Clock className="size-3.5 shrink-0" />
-                            {t('settingsDetail.users.lastLogin', { defaultValue: 'Last login' })}:{' '}
-                            {user.lastLoginAt ? formatDate(user.lastLoginAt) : t('settingsDetail.users.lastLoginNever')}
-                        </span>
-                        <span aria-hidden className="opacity-40">·</span>
-                        <span className="inline-flex items-center gap-1.5">
-                            <span
-                                className={cn(
-                                    'size-1.5 rounded-full',
-                                    user.isActive ? 'bg-emerald-500' : 'bg-rose-500',
-                                )}
-                            />
+                {/* Status / meta strip — single row of chips. Last login on
+                    the left, status pill on the right. Replaces the
+                    awkward "Last login: Never • Inactive" text-with-dot
+                    pattern. */}
+                <div className="px-6 pb-4 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground">
+                        <Clock className="size-3 shrink-0" />
+                        {user.lastLoginAt ? formatDate(user.lastLoginAt) : t('settingsDetail.users.lastLoginNever')}
+                    </span>
+                    {/* Status pill — softer tones, sentence-case label, and
+                        a subtle pulse on the dot when active so HR can tell
+                        the account is live at a glance. The destructive
+                        red pill used to read alarming for what's actually
+                        a calm "this person hasn't been activated yet" state. */}
+                    <span
+                        className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium border',
+                            user.isActive
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-300'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-900/40 dark:border-slate-800 dark:text-slate-300',
+                        )}
+                    >
+                        <span className="relative inline-flex items-center justify-center">
                             <span className={cn(
-                                'font-medium',
-                                user.isActive ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400',
-                            )}>
-                                {user.isActive ? t('common.active') : t('common.inactive')}
-                            </span>
+                                'size-1.5 rounded-full',
+                                user.isActive ? 'bg-emerald-500' : 'bg-slate-400',
+                            )} />
+                            {user.isActive && (
+                                <span className="absolute size-1.5 rounded-full bg-emerald-500 animate-ping opacity-60" aria-hidden />
+                            )}
                         </span>
+                        {user.isActive ? t('common.active') : t('common.inactive')}
+                    </span>
+                    {/* Account-state action lives here next to the status so
+                        it reads as "this is the state — and here's how to
+                        change it". Moves the destructive Deactivate /
+                        Activate out of the footer where it was crowding
+                        Cancel + Save. */}
+                    <div className="ms-auto flex items-center gap-1.5">
+                        {!user.isActive && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[11px] gap-1 border-sky-200 text-sky-700 hover:bg-sky-50 hover:border-sky-300 dark:border-sky-900/60 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                leftIcon={<MailCheck className="size-3" />}
+                                onClick={() => onResendInvite(user.employeeId, user.name)}
+                            >
+                                {t('settingsDetail.users.resendInvite')}
+                            </Button>
+                        )}
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className={cn(
+                                'h-7 text-[11px] gap-1',
+                                user.isActive
+                                    ? 'border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/40'
+                                    : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/40',
+                            )}
+                            leftIcon={user.isActive
+                                ? <ShieldOff className="size-3" />
+                                : <ShieldCheck className="size-3" />}
+                            onClick={() => onToggleActive(user)}
+                        >
+                            {user.isActive
+                                ? t('settingsDetail.users.deactivate')
+                                : t('settingsDetail.users.activate')}
+                        </Button>
                     </div>
+                </div>
 
-                    {/* Roles */}
-                    <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            {t('settingsDetail.users.assignRoles')}
-                        </p>
+                {/* Body */}
+                <div className="overflow-y-auto px-6 pb-5 space-y-5 border-t pt-5">
+                    {/* Roles section — section title + helper, then chips. */}
+                    <div className="space-y-2.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                            <h4 className="text-sm font-semibold flex items-center gap-2">
+                                <KeyRound className="size-3.5 text-muted-foreground" />
+                                {t('settingsDetail.users.assignRoles')}
+                            </h4>
+                            <span className="text-[11px] text-muted-foreground">
+                                {t('settingsDetail.users.atLeastOneRole', { defaultValue: 'At least one role' })}
+                            </span>
+                        </div>
                         <MultiRoleToggle
                             roles={draftRoles}
                             onChange={setDraftRoles}
@@ -1397,95 +1437,89 @@ function ManageUserAccessModal({
                         />
                     </div>
 
-                    {/* Feature switches — both default ON. Toggling either pushes
-                        immediately to the employee portal via /auth/me. */}
-                    <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {/* Feature switches — both default ON. Toggling either
+                        pushes immediately to the employee portal via
+                        /auth/me on next refetch. */}
+                    <div className="space-y-2.5">
+                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                            <Shield className="size-3.5 text-muted-foreground" />
                             {t('settingsDetail.users.featuresLabel', { defaultValue: 'Features' })}
-                        </p>
-                        <div className="rounded-lg border bg-muted/20 divide-y">
+                        </h4>
+                        <div className="rounded-xl border bg-card divide-y">
                             <label
                                 htmlFor="punch-switch"
-                                className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer"
+                                className="flex items-start justify-between gap-3 px-3.5 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
                             >
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium">
-                                        {t('settingsDetail.users.allowSelfPunchTitle', { defaultValue: 'Attendance check-in / check-out' })}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground leading-snug">
-                                        {t('settingsDetail.users.allowSelfPunchDesc', { defaultValue: 'When off, the live check-in / check-out buttons are hidden on the employee portal.' })}
-                                    </p>
+                                <div className="min-w-0 flex items-start gap-2.5">
+                                    <span className="mt-0.5 inline-flex size-7 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 shrink-0">
+                                        <Timer className="size-3.5" />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">
+                                            {t('settingsDetail.users.allowSelfPunchTitle', { defaultValue: 'Attendance check-in / check-out' })}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                                            {t('settingsDetail.users.allowSelfPunchDesc', { defaultValue: 'When off, the live check-in / check-out buttons are hidden on the employee portal.' })}
+                                        </p>
+                                    </div>
                                 </div>
                                 <Switch
                                     id="punch-switch"
                                     checked={draftPunchEnabled}
                                     onCheckedChange={setDraftPunchEnabled}
                                     disabled={updateUser.isPending}
+                                    className="shrink-0 mt-0.5"
                                 />
                             </label>
                             <label
                                 htmlFor="manual-switch"
-                                className="flex items-center justify-between gap-3 px-3 py-2.5 cursor-pointer"
+                                className="flex items-start justify-between gap-3 px-3.5 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
                             >
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium">
-                                        {t('settingsDetail.users.allowManualEntryTitle', { defaultValue: 'Manual entry' })}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground leading-snug">
-                                        {t('settingsDetail.users.allowManualEntryDesc', { defaultValue: 'When off, the back-fill panel that lets the user add a past check-in / check-out is hidden on the employee portal.' })}
-                                    </p>
+                                <div className="min-w-0 flex items-start gap-2.5">
+                                    <span className="mt-0.5 inline-flex size-7 items-center justify-center rounded-md bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 shrink-0">
+                                        <Pencil className="size-3.5" />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">
+                                            {t('settingsDetail.users.allowManualEntryTitle', { defaultValue: 'Manual entry' })}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                                            {t('settingsDetail.users.allowManualEntryDesc', { defaultValue: 'When off, the back-fill panel that lets the user add a past check-in / check-out is hidden on the employee portal.' })}
+                                        </p>
+                                    </div>
                                 </div>
                                 <Switch
                                     id="manual-switch"
                                     checked={draftManualEnabled}
                                     onCheckedChange={setDraftManualEnabled}
                                     disabled={updateUser.isPending}
+                                    className="shrink-0 mt-0.5"
                                 />
                             </label>
                         </div>
                     </div>
                 </div>
 
-                {/* Footer — destructive actions on the left, primary on the right */}
-                <div className="flex items-center justify-between gap-2 px-6 py-4 border-t bg-muted/30">
-                    <div className="flex items-center gap-2">
-                        {!user.isActive && (
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"
-                                leftIcon={<MailCheck className="size-3.5" />}
-                                onClick={() => onResendInvite(user.employeeId, user.name)}
-                            >
-                                {t('settingsDetail.users.resendInvite')}
-                            </Button>
-                        )}
-                        <Button
-                            size="sm"
-                            variant={user.isActive ? 'destructive' : 'success'}
-                            leftIcon={user.isActive
-                                ? <ShieldOff className="size-3.5" />
-                                : <ShieldCheck className="size-3.5" />}
-                            onClick={() => onToggleActive(user)}
-                        >
-                            {user.isActive
-                                ? t('settingsDetail.users.deactivate')
-                                : t('settingsDetail.users.activate')}
-                        </Button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" onClick={onClose}>
-                            {t('common.cancel')}
-                        </Button>
-                        <Button
-                            size="sm"
-                            disabled={!isDirty || draftRoles.length === 0}
-                            loading={updateUser.isPending}
-                            onClick={handleSave}
-                        >
-                            {t('common.save')}
-                        </Button>
-                    </div>
+                {/* Footer — only Cancel + Save. The destructive / invite
+                    actions moved to the status strip above, so this row
+                    has a single intent: commit or back out. */}
+                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-muted/30">
+                    {isDirty && (
+                        <span className="me-auto text-[11px] text-muted-foreground">
+                            {t('settingsDetail.users.unsavedChanges', { defaultValue: 'You have unsaved changes' })}
+                        </span>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={onClose}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button
+                        size="sm"
+                        disabled={!isDirty || draftRoles.length === 0}
+                        loading={updateUser.isPending}
+                        onClick={handleSave}
+                    >
+                        {t('common.save')}
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>
