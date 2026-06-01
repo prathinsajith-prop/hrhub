@@ -166,6 +166,45 @@ describe('buildPayslipsAndTotals', () => {
             // 16 days / 31 days × 31000 = 16000
             expect(result.totalGross).toBeCloseTo(16_000, 2)
         })
+
+        it('prorates a mid-month leaver', () => {
+            // 31-day month, contract ends on the 20th → days 1..20 = 20 days.
+            const resolved: PayslipResolvedEarnings = {
+                basic: 31_000,
+                hasBasic: true,
+                earnings: [{ componentId: 'c-basic', category: 'basic', name: 'Basic', amount: 31_000 }],
+            }
+            const result = buildPayslipsAndTotals(
+                'tenant-1', 'run-1', 2026, 5,
+                [emp({ contractEndDate: '2026-05-20' }) as any],
+                noAdjustments,
+                new Map([['emp-1', resolved]]),
+            )
+            // 20 / 31 × 31000 = 20000
+            expect(result.totalGross).toBeCloseTo(20_000, 2)
+            expect(result.payslipValues[0]!.daysWorked).toBe(20)
+        })
+
+        it('prorates an employee who joins AND leaves in the same month', () => {
+            // Regression: join 10th + contract-end 20th = 11 worked days
+            // (the 10th through the 20th inclusive), NOT 20. The old
+            // single-counter clamp computed min(31-10+1, 20) = 20 and
+            // overpaid by 9 days.
+            const resolved: PayslipResolvedEarnings = {
+                basic: 31_000,
+                hasBasic: true,
+                earnings: [{ componentId: 'c-basic', category: 'basic', name: 'Basic', amount: 31_000 }],
+            }
+            const result = buildPayslipsAndTotals(
+                'tenant-1', 'run-1', 2026, 5,
+                [emp({ joinDate: '2026-05-10', contractEndDate: '2026-05-20' }) as any],
+                noAdjustments,
+                new Map([['emp-1', resolved]]),
+            )
+            // 11 / 31 × 31000 = 11000
+            expect(result.totalGross).toBeCloseTo(11_000, 2)
+            expect(result.payslipValues[0]!.daysWorked).toBe(11)
+        })
     })
 
     describe('breakdown ↔ persisted columns parity', () => {

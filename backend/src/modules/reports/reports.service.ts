@@ -165,43 +165,73 @@ export async function getAttendanceSummaryReport(tenantId: string, days = 90) {
             gte(attendanceRecords.date, cutoff),
         )
 
-        // Per-status totals in one shot.
-        const statusRows = await tx
-            .select({ status: attendanceRecords.status, count: count() })
-            .from(attendanceRecords)
-            .where(baseWhere)
-            .groupBy(attendanceRecords.status)
+        // Five independent SELECTs — run them in parallel against the
+        // shared connection pool. Sequential would cost ~5× latency for
+        // no reason (Drizzle pools the connections; Postgres handles the
+        // concurrent reads). Same pattern across all the new reports.
+        const [statusRows, avgHoursRow, trendRows, deptRows, lateRows] = await Promise.all([
+            tx
+                .select({ status: attendanceRecords.status, count: count() })
+                .from(attendanceRecords)
+                .where(baseWhere)
+                .groupBy(attendanceRecords.status),
+            tx
+                .select({ avgHours: sql<string>`COALESCE(AVG(${attendanceRecords.hoursWorked}), 0)` })
+                .from(attendanceRecords)
+                .where(and(baseWhere, sql`${attendanceRecords.hoursWorked} IS NOT NULL`)),
+            tx
+                .select({
+                    month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${attendanceRecords.date}), 'Mon YYYY')`,
+                    bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${attendanceRecords.date}), 'YYYY-MM')`,
+                    present: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} IN ('present','late','half_day','wfh'))`,
+                    late: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'late')`,
+                    absent: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'absent')`,
+                    total: count(),
+                })
+                .from(attendanceRecords)
+                .where(baseWhere)
+                .groupBy(sql`DATE_TRUNC('month', ${attendanceRecords.date})`)
+                .orderBy(sql`DATE_TRUNC('month', ${attendanceRecords.date})`),
+            tx
+                .select({
+                    department: employees.department,
+                    present: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} IN ('present','late','half_day','wfh'))`,
+                    late: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'late')`,
+                    absent: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'absent')`,
+                    total: count(),
+                })
+                .from(attendanceRecords)
+                .innerJoin(employees, eq(employees.id, attendanceRecords.employeeId))
+                .where(baseWhere)
+                .groupBy(employees.department)
+                .orderBy(desc(count())),
+            tx
+                .select({
+                    employeeId: employees.id,
+                    employeeNo: employees.employeeNo,
+                    fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+                    department: employees.department,
+                    designation: employees.designation,
+                    lateCount: count(),
+                })
+                .from(attendanceRecords)
+                .innerJoin(employees, eq(employees.id, attendanceRecords.employeeId))
+                .where(and(baseWhere, eq(attendanceRecords.status, 'late')))
+                .groupBy(employees.id, employees.employeeNo, employees.firstName, employees.lastName, employees.department, employees.designation)
+                .orderBy(desc(count()))
+                .limit(10),
+        ])
+
         const byStatus: Record<string, number> = {}
         for (const r of statusRows) byStatus[r.status ?? 'unknown'] = Number(r.count)
-
         const present = (byStatus.present ?? 0) + (byStatus.half_day ?? 0) + (byStatus.wfh ?? 0) + (byStatus.late ?? 0)
         const late = byStatus.late ?? 0
         const absent = byStatus.absent ?? 0
         const onLeave = byStatus.on_leave ?? 0
         const totalRecords = present + absent + onLeave
         const attendanceRate = totalRecords > 0 ? Math.round((present / totalRecords) * 1000) / 10 : 0
+        const avgHours = avgHoursRow[0]?.avgHours ?? '0'
 
-        // Avg hours/day — across present rows only (absent/on_leave have null).
-        const [{ avgHours }] = await tx
-            .select({ avgHours: sql<string>`COALESCE(AVG(${attendanceRecords.hoursWorked}), 0)` })
-            .from(attendanceRecords)
-            .where(and(baseWhere, sql`${attendanceRecords.hoursWorked} IS NOT NULL`))
-
-        // Monthly trend — last 12 months attendance rate. Postgres' DATE_TRUNC
-        // is fine here; we don't need a calendar fan-out.
-        const trendRows = await tx
-            .select({
-                month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${attendanceRecords.date}), 'Mon YYYY')`,
-                bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${attendanceRecords.date}), 'YYYY-MM')`,
-                present: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} IN ('present','late','half_day','wfh'))`,
-                late: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'late')`,
-                absent: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'absent')`,
-                total: count(),
-            })
-            .from(attendanceRecords)
-            .where(baseWhere)
-            .groupBy(sql`DATE_TRUNC('month', ${attendanceRecords.date})`)
-            .orderBy(sql`DATE_TRUNC('month', ${attendanceRecords.date})`)
         const trend = trendRows.map((r) => {
             const p = Number(r.present), t = Number(r.total)
             return {
@@ -214,22 +244,6 @@ export async function getAttendanceSummaryReport(tenantId: string, days = 90) {
             }
         })
 
-        // By-department breakdown. Joining on employees gives us the leaf
-        // department name; we don't walk the org tree here — the FE renders
-        // whatever string the backend returns.
-        const deptRows = await tx
-            .select({
-                department: employees.department,
-                present: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} IN ('present','late','half_day','wfh'))`,
-                late: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'late')`,
-                absent: sql<string>`COUNT(*) FILTER (WHERE ${attendanceRecords.status} = 'absent')`,
-                total: count(),
-            })
-            .from(attendanceRecords)
-            .innerJoin(employees, eq(employees.id, attendanceRecords.employeeId))
-            .where(baseWhere)
-            .groupBy(employees.department)
-            .orderBy(desc(count()))
         const byDepartment = deptRows.map((r) => {
             const p = Number(r.present), t = Number(r.total)
             return {
@@ -240,23 +254,6 @@ export async function getAttendanceSummaryReport(tenantId: string, days = 90) {
                 rate: t > 0 ? Math.round((p / t) * 1000) / 10 : 0,
             }
         })
-
-        // Top-10 late arrivals.
-        const lateRows = await tx
-            .select({
-                employeeId: employees.id,
-                employeeNo: employees.employeeNo,
-                fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
-                department: employees.department,
-                designation: employees.designation,
-                lateCount: count(),
-            })
-            .from(attendanceRecords)
-            .innerJoin(employees, eq(employees.id, attendanceRecords.employeeId))
-            .where(and(baseWhere, eq(attendanceRecords.status, 'late')))
-            .groupBy(employees.id, employees.employeeNo, employees.firstName, employees.lastName, employees.department, employees.designation)
-            .orderBy(desc(count()))
-            .limit(10)
         const lateLeaderboard = lateRows.map((r) => ({
             employeeId: r.employeeId,
             employeeNo: r.employeeNo,
@@ -299,70 +296,70 @@ export async function getLeaveSummaryReport(tenantId: string, year?: number) {
             lte(leaveRequests.startDate, yearEnd),
         )
 
-        const statusRows = await tx
-            .select({
-                status: leaveRequests.status,
-                count: count(),
-                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
-            })
-            .from(leaveRequests)
-            .where(baseWhere)
-            .groupBy(leaveRequests.status)
+        // Four independent SELECTs run in parallel — same parallelisation
+        // pattern as getAttendanceSummaryReport.
+        const [statusRows, typeRows, deptRows, takerRows] = await Promise.all([
+            tx
+                .select({
+                    status: leaveRequests.status,
+                    count: count(),
+                    days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+                })
+                .from(leaveRequests)
+                .where(baseWhere)
+                .groupBy(leaveRequests.status),
+            tx
+                .select({
+                    leaveType: leaveRequests.leaveType,
+                    requests: count(),
+                    days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+                })
+                .from(leaveRequests)
+                .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
+                .groupBy(leaveRequests.leaveType)
+                .orderBy(desc(sql`SUM(${leaveRequests.days})`)),
+            tx
+                .select({
+                    department: employees.department,
+                    days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+                    requests: count(),
+                })
+                .from(leaveRequests)
+                .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
+                .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
+                .groupBy(employees.department)
+                .orderBy(desc(sql`SUM(${leaveRequests.days})`))
+                .limit(15),
+            tx
+                .select({
+                    employeeId: employees.id,
+                    employeeNo: employees.employeeNo,
+                    fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
+                    department: employees.department,
+                    designation: employees.designation,
+                    days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
+                    requests: count(),
+                })
+                .from(leaveRequests)
+                .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
+                .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
+                .groupBy(employees.id, employees.employeeNo, employees.firstName, employees.lastName, employees.department, employees.designation)
+                .orderBy(desc(sql`SUM(${leaveRequests.days})`))
+                .limit(10),
+        ])
+
         const byStatus: Record<string, { count: number; days: number }> = {}
         for (const r of statusRows) byStatus[r.status ?? 'unknown'] = { count: Number(r.count), days: Number(r.days) }
-
-        const typeRows = await tx
-            .select({
-                leaveType: leaveRequests.leaveType,
-                requests: count(),
-                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
-            })
-            .from(leaveRequests)
-            .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
-            .groupBy(leaveRequests.leaveType)
-            .orderBy(desc(sql`SUM(${leaveRequests.days})`))
         const byType = typeRows.map((r) => ({
             leaveType: r.leaveType,
             requests: Number(r.requests),
             days: Number(r.days),
         }))
-
-        // Per-department approved days.
-        const deptRows = await tx
-            .select({
-                department: employees.department,
-                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
-                requests: count(),
-            })
-            .from(leaveRequests)
-            .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
-            .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
-            .groupBy(employees.department)
-            .orderBy(desc(sql`SUM(${leaveRequests.days})`))
-            .limit(15)
         const byDepartment = deptRows.map((r) => ({
             department: r.department ?? 'Unassigned',
             days: Number(r.days),
             requests: Number(r.requests),
         }))
-
-        // Top-10 takers.
-        const takerRows = await tx
-            .select({
-                employeeId: employees.id,
-                employeeNo: employees.employeeNo,
-                fullName: sql<string>`${employees.firstName} || ' ' || ${employees.lastName}`,
-                department: employees.department,
-                designation: employees.designation,
-                days: sql<string>`COALESCE(SUM(${leaveRequests.days}), 0)`,
-                requests: count(),
-            })
-            .from(leaveRequests)
-            .innerJoin(employees, eq(employees.id, leaveRequests.employeeId))
-            .where(and(baseWhere, eq(leaveRequests.status, 'approved')))
-            .groupBy(employees.id, employees.employeeNo, employees.firstName, employees.lastName, employees.department, employees.designation)
-            .orderBy(desc(sql`SUM(${leaveRequests.days})`))
-            .limit(10)
         const topTakers = takerRows.map((r) => ({
             employeeId: r.employeeId,
             employeeNo: r.employeeNo,
@@ -412,36 +409,61 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
             eq(employees.isArchived, false),
         )
 
-        // ── Joins per month
-        const joinRows = await tx
-            .select({
-                month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${employees.joinDate}), 'Mon YYYY')`,
-                bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${employees.joinDate}), 'YYYY-MM')`,
-                count: count(),
-            })
-            .from(employees)
-            .where(and(
-                eq(employees.tenantId, tenantId),
-                gte(employees.joinDate, startIso),
-            ))
-            .groupBy(sql`DATE_TRUNC('month', ${employees.joinDate})`)
-            .orderBy(sql`DATE_TRUNC('month', ${employees.joinDate})`)
-
-        // ── Exits per month (approved or completed only)
-        const exitRows = await tx
-            .select({
-                month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${exitRequests.lastWorkingDay}), 'Mon YYYY')`,
-                bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${exitRequests.lastWorkingDay}), 'YYYY-MM')`,
-                count: count(),
-            })
-            .from(exitRequests)
-            .where(and(
-                eq(exitRequests.tenantId, tenantId),
-                gte(exitRequests.lastWorkingDay, startIso),
-                inArray(exitRequests.status, ['approved', 'completed']),
-            ))
-            .groupBy(sql`DATE_TRUNC('month', ${exitRequests.lastWorkingDay})`)
-            .orderBy(sql`DATE_TRUNC('month', ${exitRequests.lastWorkingDay})`)
+        // Six independent SELECTs run in parallel.
+        const exitsBaseWhere = and(
+            eq(exitRequests.tenantId, tenantId),
+            gte(exitRequests.lastWorkingDay, startIso),
+            inArray(exitRequests.status, ['approved', 'completed']),
+        )
+        const [joinRows, exitRows, headcountRow, deptRows, tenureRows, exitTypeRows] = await Promise.all([
+            tx
+                .select({
+                    month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${employees.joinDate}), 'Mon YYYY')`,
+                    bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${employees.joinDate}), 'YYYY-MM')`,
+                    count: count(),
+                })
+                .from(employees)
+                .where(and(
+                    eq(employees.tenantId, tenantId),
+                    gte(employees.joinDate, startIso),
+                ))
+                .groupBy(sql`DATE_TRUNC('month', ${employees.joinDate})`)
+                .orderBy(sql`DATE_TRUNC('month', ${employees.joinDate})`),
+            tx
+                .select({
+                    month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${exitRequests.lastWorkingDay}), 'Mon YYYY')`,
+                    bucket: sql<string>`TO_CHAR(DATE_TRUNC('month', ${exitRequests.lastWorkingDay}), 'YYYY-MM')`,
+                    count: count(),
+                })
+                .from(exitRequests)
+                .where(exitsBaseWhere)
+                .groupBy(sql`DATE_TRUNC('month', ${exitRequests.lastWorkingDay})`)
+                .orderBy(sql`DATE_TRUNC('month', ${exitRequests.lastWorkingDay})`),
+            tx
+                .select({ headcount: count() })
+                .from(employees)
+                .where(baseEmpWhere),
+            tx
+                .select({ department: employees.department, exits: count() })
+                .from(exitRequests)
+                .innerJoin(employees, eq(employees.id, exitRequests.employeeId))
+                .where(exitsBaseWhere)
+                .groupBy(employees.department)
+                .orderBy(desc(count()))
+                .limit(15),
+            tx
+                .select({
+                    joinDate: employees.joinDate,
+                    department: employees.department,
+                })
+                .from(employees)
+                .where(baseEmpWhere),
+            tx
+                .select({ exitType: exitRequests.exitType, count: count() })
+                .from(exitRequests)
+                .where(exitsBaseWhere)
+                .groupBy(exitRequests.exitType),
+        ])
 
         // Merge joins+exits into a single trend keyed by bucket so the FE
         // can render one chart with two series.
@@ -457,37 +479,12 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
         const totalJoins = trend.reduce((s, r) => s + r.joins, 0)
         const totalExits = trend.reduce((s, r) => s + r.exits, 0)
 
-        // Current headcount as the denominator floor for turnover rate.
-        const [{ headcount }] = await tx
-            .select({ headcount: count() })
-            .from(employees)
-            .where(baseEmpWhere)
+        const headcount = headcountRow[0]?.headcount ?? 0
         const denom = Math.max(1, Number(headcount))
         const turnoverRate = Math.round((totalExits / denom) * 1000) / 10
 
-        // Per-department turnover (exits in window, by leaf department name).
-        const deptRows = await tx
-            .select({ department: employees.department, exits: count() })
-            .from(exitRequests)
-            .innerJoin(employees, eq(employees.id, exitRequests.employeeId))
-            .where(and(
-                eq(exitRequests.tenantId, tenantId),
-                gte(exitRequests.lastWorkingDay, startIso),
-                inArray(exitRequests.status, ['approved', 'completed']),
-            ))
-            .groupBy(employees.department)
-            .orderBy(desc(count()))
-            .limit(15)
         const byDepartment = deptRows.map((r) => ({ department: r.department ?? 'Unassigned', exits: Number(r.exits) }))
 
-        // Tenure distribution of the *current* workforce.
-        const tenureRows = await tx
-            .select({
-                joinDate: employees.joinDate,
-                department: employees.department,
-            })
-            .from(employees)
-            .where(baseEmpWhere)
         const buckets = { '<1y': 0, '1–3y': 0, '3–5y': 0, '5y+': 0 } as Record<string, number>
         for (const r of tenureRows) {
             if (!r.joinDate) continue
@@ -499,16 +496,6 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
         }
         const tenureDistribution = Object.entries(buckets).map(([label, count]) => ({ label, count }))
 
-        // Exit type breakdown.
-        const exitTypeRows = await tx
-            .select({ exitType: exitRequests.exitType, count: count() })
-            .from(exitRequests)
-            .where(and(
-                eq(exitRequests.tenantId, tenantId),
-                gte(exitRequests.lastWorkingDay, startIso),
-                inArray(exitRequests.status, ['approved', 'completed']),
-            ))
-            .groupBy(exitRequests.exitType)
         const byExitType = exitTypeRows.map((r) => ({ label: r.exitType ?? 'unknown', count: Number(r.count) }))
 
         return {
@@ -654,78 +641,79 @@ export async function getPerformanceReport(tenantId: string) {
             isNull(performanceReviews.deletedAt),
         )
 
-        const statusRows = await tx
-            .select({ status: performanceReviews.status, count: count() })
-            .from(performanceReviews)
-            .where(baseWhere)
-            .groupBy(performanceReviews.status)
+        // Five independent SELECTs run in parallel.
+        const ratedWhere = and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`)
+        const [statusRows, ratingRows, avgRow, deptRows, recentRows] = await Promise.all([
+            tx
+                .select({ status: performanceReviews.status, count: count() })
+                .from(performanceReviews)
+                .where(baseWhere)
+                .groupBy(performanceReviews.status),
+            tx
+                .select({ rating: performanceReviews.overallRating, count: count() })
+                .from(performanceReviews)
+                .where(ratedWhere)
+                .groupBy(performanceReviews.overallRating)
+                .orderBy(performanceReviews.overallRating),
+            tx
+                .select({ avg: sql<string>`COALESCE(AVG(${performanceReviews.overallRating}), 0)` })
+                .from(performanceReviews)
+                .where(ratedWhere),
+            tx
+                .select({
+                    department: employees.department,
+                    avgRating: sql<string>`COALESCE(AVG(${performanceReviews.overallRating}), 0)`,
+                    count: count(),
+                })
+                .from(performanceReviews)
+                .innerJoin(employees, eq(employees.id, performanceReviews.employeeId))
+                .where(ratedWhere)
+                .groupBy(employees.department)
+                .orderBy(desc(count()))
+                .limit(15),
+            tx
+                .select({
+                    id: performanceReviews.id,
+                    employeeId: performanceReviews.employeeId,
+                    period: performanceReviews.period,
+                    status: performanceReviews.status,
+                    overallRating: performanceReviews.overallRating,
+                    reviewDate: performanceReviews.reviewDate,
+                    employeeNo: employees.employeeNo,
+                    firstName: employees.firstName,
+                    lastName: employees.lastName,
+                    department: employees.department,
+                    designation: employees.designation,
+                })
+                .from(performanceReviews)
+                .innerJoin(employees, eq(employees.id, performanceReviews.employeeId))
+                .where(and(
+                    baseWhere,
+                    inArray(performanceReviews.status, ['submitted', 'acknowledged', 'completed']),
+                ))
+                .orderBy(desc(performanceReviews.updatedAt))
+                .limit(10),
+        ])
+
         const byStatus: Record<string, number> = {}
         for (const r of statusRows) byStatus[r.status ?? 'unknown'] = Number(r.count)
-
         const total = Object.values(byStatus).reduce((s, n) => s + n, 0)
         const completed = (byStatus.completed ?? 0) + (byStatus.acknowledged ?? 0)
         const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
 
-        // Rating distribution (1-5) across non-draft reviews.
-        const ratingRows = await tx
-            .select({ rating: performanceReviews.overallRating, count: count() })
-            .from(performanceReviews)
-            .where(and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`))
-            .groupBy(performanceReviews.overallRating)
-            .orderBy(performanceReviews.overallRating)
         const ratingDistribution = ratingRows.map((r) => ({
             rating: Number(r.rating),
             count: Number(r.count),
         }))
 
-        const [{ avg }] = await tx
-            .select({ avg: sql<string>`COALESCE(AVG(${performanceReviews.overallRating}), 0)` })
-            .from(performanceReviews)
-            .where(and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`))
-        const avgRating = Math.round(Number(avg) * 100) / 100
+        const avgRating = Math.round(Number(avgRow[0]?.avg ?? 0) * 100) / 100
 
-        // Per-department average + count.
-        const deptRows = await tx
-            .select({
-                department: employees.department,
-                avgRating: sql<string>`COALESCE(AVG(${performanceReviews.overallRating}), 0)`,
-                count: count(),
-            })
-            .from(performanceReviews)
-            .innerJoin(employees, eq(employees.id, performanceReviews.employeeId))
-            .where(and(baseWhere, sql`${performanceReviews.overallRating} IS NOT NULL`))
-            .groupBy(employees.department)
-            .orderBy(desc(count()))
-            .limit(15)
         const byDepartment = deptRows.map((r) => ({
             department: r.department ?? 'Unassigned',
             avgRating: Math.round(Number(r.avgRating) * 100) / 100,
             count: Number(r.count),
         }))
 
-        // Recent reviews (last 10 non-draft).
-        const recentRows = await tx
-            .select({
-                id: performanceReviews.id,
-                employeeId: performanceReviews.employeeId,
-                period: performanceReviews.period,
-                status: performanceReviews.status,
-                overallRating: performanceReviews.overallRating,
-                reviewDate: performanceReviews.reviewDate,
-                employeeNo: employees.employeeNo,
-                firstName: employees.firstName,
-                lastName: employees.lastName,
-                department: employees.department,
-                designation: employees.designation,
-            })
-            .from(performanceReviews)
-            .innerJoin(employees, eq(employees.id, performanceReviews.employeeId))
-            .where(and(
-                baseWhere,
-                inArray(performanceReviews.status, ['submitted', 'acknowledged', 'completed']),
-            ))
-            .orderBy(desc(performanceReviews.updatedAt))
-            .limit(10)
         const recent = recentRows.map((r) => ({
             id: r.id,
             employeeId: r.employeeId,

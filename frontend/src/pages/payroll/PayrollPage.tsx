@@ -70,11 +70,11 @@ function periodLabel(month: number, year: number) {
 }
 
 const STATUS_CFG: Record<string, { variant: BadgeVariant; label: string; step: number }> = {
-  draft:         { variant: 'secondary', label: 'Draft',         step: 0 },
-  processing:    { variant: 'info',      label: 'Processing',    step: 1 },
-  approved:      { variant: 'success',   label: 'Approved',      step: 2 },
-  wps_submitted: { variant: 'info',      label: 'WPS Submitted', step: 3 },
-  paid:          { variant: 'success',   label: 'Paid',          step: 4 },
+  draft: { variant: 'secondary', label: 'Draft', step: 0 },
+  processing: { variant: 'info', label: 'Processing', step: 1 },
+  approved: { variant: 'success', label: 'Approved', step: 2 },
+  wps_submitted: { variant: 'info', label: 'WPS Submitted', step: 3 },
+  paid: { variant: 'success', label: 'Paid', step: 4 },
 }
 
 const WORKFLOW_STEPS = ['Draft', 'Processing', 'Approved', 'WPS Submitted', 'Paid']
@@ -194,13 +194,13 @@ function WorkflowBar({ status }: { status: string }) {
             <div className="flex flex-col items-center gap-1 shrink-0">
               <div className={cn(
                 'size-7 rounded-full flex items-center justify-center border-2 transition-all text-xs font-semibold',
-                done  ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' :
-                active ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20' :
-                         'border-border bg-background text-muted-foreground',
+                done ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' :
+                  active ? 'border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/20' :
+                    'border-border bg-background text-muted-foreground',
               )}>
-                {done   ? <CheckCircle2 className="size-3.5" /> :
-                 active ? <CircleDot className="size-3.5" /> :
-                          <span>{i + 1}</span>}
+                {done ? <CheckCircle2 className="size-3.5" /> :
+                  active ? <CircleDot className="size-3.5" /> :
+                    <span>{i + 1}</span>}
               </div>
               <span className={cn(
                 'text-[10px] font-medium whitespace-nowrap',
@@ -392,15 +392,15 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   // Order mirrors Add/Edit Employee Step 3 + Payroll Summary so HR sees the
   // same shape everywhere.
   const breakdown = (ps.earningsBreakdown ?? [])
-      .map((b) => ({ ...b, amount: Number(b.amount) }))
-      .filter((b) => b.amount > 0)
-      .sort((a, b) => {
-          const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
-          const ra = rank[a.category] ?? 99
-          const rb = rank[b.category] ?? 99
-          if (ra !== rb) return ra - rb
-          return a.name.localeCompare(b.name)
-      })
+    .map((b) => ({ ...b, amount: Number(b.amount) }))
+    .filter((b) => b.amount > 0)
+    .sort((a, b) => {
+      const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
+      const ra = rank[a.category] ?? 99
+      const rb = rank[b.category] ?? 99
+      if (ra !== rb) return ra - rb
+      return a.name.localeCompare(b.name)
+    })
   const overtime = Number(ps.overtime)
   const commission = Number(ps.commission ?? 0)
   const additions = overtime + commission
@@ -1232,9 +1232,9 @@ function AdjustmentCategoryPicker({
 
   const filtered = trimmed
     ? pickable.filter((c) =>
-        c.label.toLowerCase().includes(trimmed.toLowerCase())
-        || c.value.toLowerCase().includes(trimmed.toLowerCase()),
-      )
+      c.label.toLowerCase().includes(trimmed.toLowerCase())
+      || c.value.toLowerCase().includes(trimmed.toLowerCase()),
+    )
     : pickable
 
   const additions = filtered.filter((c) => c.kind === 'addition')
@@ -1264,6 +1264,8 @@ function AdjustmentCategoryPicker({
           type="button"
           role="combobox"
           aria-expanded={open}
+          aria-controls="payroll-category-combobox-list"
+          aria-haspopup="listbox"
           className={cn(
             'flex h-9 w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm transition-colors',
             open ? 'border-ring ring-2 ring-ring/20' : 'border-input hover:border-input/80',
@@ -1305,7 +1307,7 @@ function AdjustmentCategoryPicker({
             onValueChange={setSearch}
             className="h-9 text-sm"
           />
-          <CommandList className="max-h-72 overflow-y-auto">
+          <CommandList id="payroll-category-combobox-list" className="max-h-72 overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" />
