@@ -131,11 +131,56 @@ export function humanizeFieldLabel(key: string): string {
 const DATE_FIELD_HINTS = /(date|expiry|dob|joinedAt|createdAt|updatedAt|At)$/i
 const MONEY_FIELD_HINTS = /(salary|allowance|cost|amount|pay|wage|gratuity|deduction|bonus|fee|price)/i
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T|$)/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const SNAKE_ENUM_RE = /^[a-z]+(_[a-z]+)+$/
+
+/** Explicit ID-typed fields whose raw UUID values must never be shown. */
+const ID_FIELDS = new Set([
+    'reportingTo',
+    'managerId',
+    'teamId',
+    'branchId',
+    'divisionId',
+    'orgUnitId',
+    'designationId',
+])
+
+/** True for fields that reference another entity by UUID (a raw UUID is meaningless to a reader). */
+function isIdField(field: string): boolean {
+    return ID_FIELDS.has(field) || /Id$/.test(field)
+}
+
+/** Title-case a snake_case enum value, with a few sensible acronym overrides. */
+function humanizeEnumValue(v: string): string {
+    if (v === 'wfh') return 'WFH'
+    return v
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+}
+
+/** Render a `{ id, name }` / `{ id, label }` denormalized reference, if shaped like one. */
+function denormalizedRefLabel(v: unknown): string | null {
+    if (v && typeof v === 'object' && !Array.isArray(v) && 'id' in v) {
+        const obj = v as { name?: unknown; label?: unknown }
+        if (typeof obj.name === 'string' && obj.name !== '') return obj.name
+        if (typeof obj.label === 'string' && obj.label !== '') return obj.label
+    }
+    return null
+}
 
 /** Format a single from/to value, inferring type from the field name. */
 export function formatChangeValue(field: string, v: unknown): string {
     if (v === null || v === undefined || v === '') return '—'
     if (typeof v === 'boolean') return v ? 'Yes' : 'No'
+
+    // ID-typed fields: prefer a denormalized { id, name } label; otherwise hide raw UUIDs.
+    if (isIdField(field)) {
+        const refLabel = denormalizedRefLabel(v)
+        if (refLabel) return refLabel
+        if (typeof v === 'string' && UUID_RE.test(v)) return '—'
+    }
+
     if (typeof v === 'number') {
         if (MONEY_FIELD_HINTS.test(field)) return formatCurrency(v)
         return String(v)
@@ -150,10 +195,25 @@ export function formatChangeValue(field: string, v: unknown): string {
             const formatted = formatDate(v)
             if (formatted) return formatted
         }
+        // Status / enum codes: humanize status-like fields, snake_case enum values, and
+        // a few known single-token codes (e.g. "wfh"). Free text (spaces, mixed case, etc.)
+        // won't match SNAKE_ENUM_RE and is left untouched.
+        if (/status/i.test(field) || SNAKE_ENUM_RE.test(v) || v === 'wfh') {
+            return humanizeEnumValue(v)
+        }
         return v
     }
     if (Array.isArray(v)) return v.length === 0 ? '—' : `${v.length} item${v.length === 1 ? '' : 's'}`
-    try { return JSON.stringify(v) } catch { return '—' }
+    // Denormalized reference object on a non-ID field (forward-compatible).
+    const refLabel = denormalizedRefLabel(v)
+    if (refLabel) return refLabel
+    // Plain object fallback: never emit "[object Object]"; degrade safely on circular refs.
+    try {
+        const json = JSON.stringify(v)
+        return json === undefined ? '(details)' : json
+    } catch {
+        return '(details)'
+    }
 }
 
 /** Past-tense verb for an audit action ("update" → "updated"). */
@@ -175,6 +235,9 @@ export function actionVerbFor(action: string): string {
         suspend: 'suspended',
         cancel: 'cancelled',
         invite: 'invited',
+        // Audit Phase 0 (merged from development) — extended action set
+        // so the new audit pipeline's classified actions render as proper
+        // English verbs everywhere this helper is consumed.
         assign: 'assigned',
         unassign: 'unassigned',
         upload: 'uploaded',

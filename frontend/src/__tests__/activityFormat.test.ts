@@ -81,6 +81,64 @@ describe('formatChangeValue', () => {
     it('JSON-stringifies plain objects', () => {
         expect(formatChangeValue('meta', { a: 1 })).toBe('{"a":1}')
     })
+
+    // --- ID-typed fields: never leak a raw UUID into the UI ---
+    it('hides raw UUID values on ID-typed fields (em dash)', () => {
+        const uuid = '3f9b2c1a-4d5e-6f7a-8b9c-0d1e2f3a4b5c'
+        expect(formatChangeValue('orgUnitId', uuid)).toBe('—')
+        expect(formatChangeValue('reportingTo', uuid)).toBe('—')
+        expect(formatChangeValue('managerId', uuid)).toBe('—')
+        expect(formatChangeValue('teamId', uuid)).toBe('—')
+        // Any field ending in "Id" is treated as ID-typed.
+        expect(formatChangeValue('vendorId', uuid)).toBe('—')
+    })
+
+    it('does not hide non-UUID strings on ID-typed fields', () => {
+        // A human-readable code on an ID field should still render as-is.
+        expect(formatChangeValue('vendorId', 'ACME-001')).toBe('ACME-001')
+    })
+
+    it('renders the name/label from a denormalized { id, name } reference', () => {
+        const uuid = '3f9b2c1a-4d5e-6f7a-8b9c-0d1e2f3a4b5c'
+        expect(formatChangeValue('orgUnitId', { id: uuid, name: 'Engineering' })).toBe('Engineering')
+        expect(formatChangeValue('designationId', { id: uuid, label: 'Senior Engineer' })).toBe('Senior Engineer')
+        // Works on non-ID fields too (forward-compatible).
+        expect(formatChangeValue('whatever', { id: uuid, name: 'Marketing' })).toBe('Marketing')
+    })
+
+    // --- Enum / status humanization ---
+    it('humanizes snake_case enum values to Title Case', () => {
+        expect(formatChangeValue('attendanceType', 'half_day')).toBe('Half Day')
+        expect(formatChangeValue('docState', 'pending_upload')).toBe('Pending Upload')
+        expect(formatChangeValue('availability', 'on_leave')).toBe('On Leave')
+        expect(formatChangeValue('reviewState', 'under_review')).toBe('Under Review')
+    })
+
+    it('humanizes status-like field values even when single-token', () => {
+        expect(formatChangeValue('employeeStatus', 'active')).toBe('Active')
+    })
+
+    it('special-cases wfh to WFH', () => {
+        expect(formatChangeValue('attendanceType', 'wfh')).toBe('WFH')
+    })
+
+    it('does not mangle free-text strings', () => {
+        expect(formatChangeValue('notes', 'hello world')).toBe('hello world')
+        expect(formatChangeValue('remarks', 'Approved by manager.')).toBe('Approved by manager.')
+    })
+
+    // --- Object fallback never renders [object Object] ---
+    it('never renders [object Object] for plain objects', () => {
+        expect(formatChangeValue('meta', { a: 1, b: 2 })).not.toContain('[object Object]')
+    })
+
+    it('falls back to a safe summary for circular / unstringifiable objects', () => {
+        const circular: Record<string, unknown> = {}
+        circular.self = circular
+        const out = formatChangeValue('meta', circular)
+        expect(out).not.toContain('[object Object]')
+        expect(out).toBe('(details)')
+    })
 })
 
 describe('actionVerbFor', () => {
@@ -96,6 +154,9 @@ describe('actionVerbFor', () => {
         expect(actionVerbFor('frobnicate')).toBe('frobnicate')
     })
 
+    // Audit Phase 0 (merged from development) — the classifier emits these
+    // action codes; the verb map must keep them in lock-step so feeds and
+    // diff views render the right English.
     it('maps the extended classification verbs', () => {
         expect(actionVerbFor('assign')).toBe('assigned')
         expect(actionVerbFor('unassign')).toBe('unassigned')
