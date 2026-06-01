@@ -9,6 +9,17 @@ import { users } from '../../db/schema/index.js'
 const APP_NAME = 'HRHub'
 const totp = new TOTP({ crypto: new NobleCryptoPlugin(), base32: new ScureBase32Plugin() })
 
+/**
+ * otplib v13's TOTP.verify() resolves to an object `{ valid, delta, ... }`
+ * (NOT a boolean), so a plain truthiness check (`!!result`) accepts ANY code —
+ * defeating 2FA entirely. Always check the explicit `valid` flag. Tolerates a
+ * boolean return too, in case the library version changes.
+ */
+function isTotpValid(result: unknown): boolean {
+    if (typeof result === 'boolean') return result
+    return !!(result && typeof result === 'object' && (result as { valid?: boolean }).valid === true)
+}
+
 const BACKUP_CODE_COUNT = 10
 const BACKUP_CODE_BYTES = 5 // 10 hex chars → formatted as XXXXX-XXXXX
 
@@ -50,8 +61,7 @@ export async function setupTotp(userId: string): Promise<{ secret: string; otpau
 export async function verifyAndEnableTotp(userId: string, token: string): Promise<{ enabled: boolean; backupCodes?: string[] }> {
     const [user] = await db.select({ totpSecret: users.totpSecret }).from(users).where(eq(users.id, userId)).limit(1)
     if (!user?.totpSecret) return { enabled: false }
-    const isValid = await totp.verify(token, { secret: user.totpSecret })
-    if (!isValid) return { enabled: false }
+    if (!isTotpValid(await totp.verify(token, { secret: user.totpSecret }))) return { enabled: false }
     await db.update(users).set({ twoFaEnabled: true, updatedAt: new Date() }).where(eq(users.id, userId))
     // Auto-issue a fresh set of backup codes when 2FA is first enabled
     const backupCodes = await issueBackupCodes(userId)
@@ -61,8 +71,7 @@ export async function verifyAndEnableTotp(userId: string, token: string): Promis
 export async function disableTotp(userId: string, token: string): Promise<boolean> {
     const [user] = await db.select({ totpSecret: users.totpSecret, twoFaEnabled: users.twoFaEnabled }).from(users).where(eq(users.id, userId)).limit(1)
     if (!user?.totpSecret || !user.twoFaEnabled) return false
-    const isValid = await totp.verify(token, { secret: user.totpSecret })
-    if (!isValid) return false
+    if (!isTotpValid(await totp.verify(token, { secret: user.totpSecret }))) return false
     await db.update(users).set({
         twoFaEnabled: false,
         totpSecret: null,
@@ -87,8 +96,7 @@ export async function getTotpStatus(userId: string): Promise<{ enabled: boolean;
 export async function verifyTotpCode(userId: string, token: string): Promise<boolean> {
     const [user] = await db.select({ totpSecret: users.totpSecret, twoFaEnabled: users.twoFaEnabled }).from(users).where(eq(users.id, userId)).limit(1)
     if (!user?.totpSecret || !user.twoFaEnabled) return false
-    const result = await totp.verify(token, { secret: user.totpSecret })
-    return !!result
+    return isTotpValid(await totp.verify(token, { secret: user.totpSecret }))
 }
 
 /**

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { CalendarDays, Check, Clock, Copy, Eye, EyeOff, KeyRound, Languages, Loader2, Mail, Phone, Pencil, Save, ShieldCheck, Smartphone, X } from 'lucide-react'
@@ -645,13 +645,18 @@ function EnableTwoFactorDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     const [error, setError] = useState<string | null>(null)
     const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
 
-    // Kick off setup once when the dialog opens (state-during-render pattern,
-    // guarded so it fires a single time).
-    const [started, setStarted] = useState(false)
-    if (open && !started) {
-        setStarted(true)
-        setup.mutate(undefined, { onError: () => setError(t('common.error', { defaultValue: 'Something went wrong' })) })
-    }
+    // Generate the secret + QR exactly ONCE when the dialog mounts. This MUST NOT
+    // run during render or fire twice: each /2fa/setup call mints a fresh secret
+    // and overwrites the stored one, so a double-fire makes the displayed QR not
+    // match the persisted secret → "Invalid or expired token" on a scanned code.
+    // The ref guard survives StrictMode's double-invoked mount effect.
+    const setupMutate = setup.mutate
+    const didSetup = useRef(false)
+    useEffect(() => {
+        if (didSetup.current) return
+        didSetup.current = true
+        setupMutate(undefined, { onError: () => setError(t('security.setupFailed')) })
+    }, [setupMutate, t])
 
     function onVerify(e: FormEvent) {
         e.preventDefault()

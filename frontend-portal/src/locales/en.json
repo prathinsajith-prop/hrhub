@@ -201,7 +201,8 @@
     "enabledToast": "Two-factor authentication enabled",
     "disabledToast": "Two-factor authentication disabled",
     "invalidCode": "Invalid or expired code",
-    "disablePrompt": "Enter a current code to turn 2FA off"
+    "disablePrompt": "Enter a current code to turn 2FA off",
+    "setupFailed": "Couldn't start 2FA setup. Please close and try again."
   },
   "errors": {
     "loadFailed": "Could not load data",
