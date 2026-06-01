@@ -1027,8 +1027,8 @@ export function ReportsPage() {
                 {/* ── Payroll Summary ── */}
                 <TabsContent value="payroll" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <KpiCardCompact label="YTD Gross" value={formatCurrency(payrollSummary?.ytdGross ?? 0)} icon={BarChart3} color="blue" loading={isLoading} />
-                        <KpiCardCompact label="YTD Net" value={formatCurrency(payrollSummary?.ytdNet ?? 0)} icon={CheckCircle2} color="green" loading={isLoading} />
+                        <KpiCardCompact label="Gross (range)" value={formatCurrency(payrollSummary?.ytdGross ?? 0)} icon={BarChart3} color="blue" loading={isLoading} />
+                        <KpiCardCompact label="Net (range)" value={formatCurrency(payrollSummary?.ytdNet ?? 0)} icon={CheckCircle2} color="green" loading={isLoading} />
                         <KpiCardCompact label="Payroll Runs" value={payrollSummary?.totalRuns ?? 0} icon={Calendar} color="amber" loading={isLoading} />
                         <KpiCardCompact label="Avg Net/Run" value={formatCurrency(payrollSummary && payrollSummary.totalRuns > 0 ? payrollSummary.ytdNet / payrollSummary.totalRuns : 0)} icon={Users} color="cyan" loading={isLoading} />
                     </div>
@@ -1217,9 +1217,9 @@ export function ReportsPage() {
                 {/* ── PRO Costs ── */}
                 <TabsContent value="pro-costs" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <KpiCardCompact label="YTD Total" value={formatCurrency(proCosts?.ytdTotal ?? 0)} icon={Receipt} color="blue" loading={isLoading} hint="All categories" />
-                        <KpiCardCompact label="Avg/Employee" value={formatCurrency(proCosts?.avgPerEmployee ?? 0)} icon={TrendingUp} color="purple" loading={isLoading} hint="This year" />
-                        <KpiCardCompact label="Transactions" value={proCosts?.totalTransactions ?? 0} icon={BarChart3} color="amber" loading={isLoading} hint="YTD records" />
+                        <KpiCardCompact label="Total (range)" value={formatCurrency(proCosts?.ytdTotal ?? 0)} icon={Receipt} color="blue" loading={isLoading} hint="All categories" />
+                        <KpiCardCompact label="Avg/Employee" value={formatCurrency(proCosts?.avgPerEmployee ?? 0)} icon={TrendingUp} color="purple" loading={isLoading} hint="In selected range" />
+                        <KpiCardCompact label="Transactions" value={proCosts?.totalTransactions ?? 0} icon={BarChart3} color="amber" loading={isLoading} hint="In selected range" />
                         <KpiCardCompact label="Employees" value={proCosts?.byEmployee.length ?? 0} icon={Users} color="green" loading={isLoading} hint="With costs recorded" />
                     </div>
 
@@ -1234,7 +1234,7 @@ export function ReportsPage() {
                                 </Button>
                             </div>
                             {isLoading ? <ChartSkeleton height={200} /> : proCatData.length === 0 ? (
-                                <p className="text-xs text-muted-foreground text-center py-6">No costs recorded this year</p>
+                                <p className="text-xs text-muted-foreground text-center py-6">No costs recorded in this range</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={Math.max(160, proCatData.length * 36)}>
                                     <BarChart data={proCatData} layout="vertical" margin={{ top: 0, right: 70, left: 0, bottom: 0 }}>
@@ -1255,7 +1255,7 @@ export function ReportsPage() {
                         {/* Monthly trend area chart */}
                         <Card className="p-4">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-sm">Monthly Trend (YTD)</h3>
+                                <h3 className="font-semibold text-sm">Monthly Trend</h3>
                                 <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
                                     onClick={() => exportCsv(proCosts?.byMonth ?? [], 'pro-costs-by-month.csv')}>
                                     Export
@@ -1300,7 +1300,7 @@ export function ReportsPage() {
                         ) : (proCosts?.byEmployee ?? []).length === 0 ? (
                             <div className="py-10 text-center">
                                 <Receipt className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-                                <p className="text-sm text-muted-foreground">No cost records for this year</p>
+                                <p className="text-sm text-muted-foreground">No cost records in this range</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">Add costs via the Visa detail page</p>
                             </div>
                         ) : (

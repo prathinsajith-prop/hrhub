@@ -84,8 +84,13 @@ export async function getPayrollSummaryReport(tenantId: string, range?: ReportRa
         status: r.status,
     }))
 
-    const ytdGross = trend.filter(r => r.period.includes(String(new Date().getFullYear()))).reduce((s, r) => s + r.gross, 0)
-    const ytdNet = trend.filter(r => r.period.includes(String(new Date().getFullYear()))).reduce((s, r) => s + r.net, 0)
+    // Totals reflect what's on the chart: every in-window run when a range is
+    // set, else the current calendar year's runs (legacy "YTD" semantics).
+    // Without this, a "Last Year" range would chart 2025 data but report 0 for
+    // the totals (the old filter hard-coded the current year).
+    const scoped = range ? trend : trend.filter(r => r.period.includes(String(new Date().getFullYear())))
+    const ytdGross = scoped.reduce((s, r) => s + r.gross, 0)
+    const ytdNet = scoped.reduce((s, r) => s + r.net, 0)
 
     return { trend, ytdGross, ytdNet, totalRuns: runs.length }
 }
