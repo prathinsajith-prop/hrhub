@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import { exportAuditLog } from '@/lib/export'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
 import { KpiCardCompact } from '@/components/shared/KpiCard'
+import { buildActivityHeadline } from '@/components/shared/ActivityFeed'
 
 type ActionMeta = {
     icon: React.ComponentType<{ className?: string }>
@@ -109,15 +110,6 @@ function dayLabel(d: Date): string {
 
 function timeLabel(d: Date): string {
     return d.toLocaleTimeString('en-AE', { hour: '2-digit', minute: '2-digit' })
-}
-
-function actionVerb(action: string): string {
-    const map: Record<string, string> = {
-        create: 'created', update: 'updated', delete: 'deleted', approve: 'approved',
-        reject: 'rejected', submit: 'submitted', view: 'viewed', export: 'exported',
-        import: 'imported', login: 'logged into', logout: 'logged out of',
-    }
-    return map[action] ?? action
 }
 
 /** Returns the earliest timestamp (ms) that should be included for the given range, or null for all. */
@@ -397,14 +389,17 @@ function ActivityRow({ log }: { log: ActivityLog }) {
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="min-w-0 flex-1">
-                            <p className="text-sm">
-                                <span className="font-medium">{log.actorName ?? 'System'}</span>
-                                <span className="text-muted-foreground"> {actionVerb(log.action)} </span>
-                                <span className="font-medium capitalize">{log.entityType}</span>
-                                {(log.entityName || log.entityId) && (
+                            {/* Kind-aware headline (shared with the employee Updates tab). */}
+                            {buildActivityHeadline(log, changes.length, 'hr')}
+                            {/* Entity-type context so non-kind rows (any entityType) still read well.
+                                The headline already shows entityName when present, so only fall back
+                                to the entityId here to avoid repeating the name. */}
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                <span className="capitalize">{log.entityType.replace(/_/g, ' ')}</span>
+                                {!log.entityName && log.entityId && (
                                     <>
-                                        <span className="text-muted-foreground"> · </span>
-                                        <span className="font-medium truncate">{log.entityName ?? log.entityId}</span>
+                                        <span> · </span>
+                                        <span className="truncate">{log.entityId}</span>
                                     </>
                                 )}
                             </p>
