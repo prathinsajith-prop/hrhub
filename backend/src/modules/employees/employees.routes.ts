@@ -7,7 +7,8 @@ import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSche
 import { recordActivity } from '../audit/audit.service.js'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { db } from '../../db/index.js'
-import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
+import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users, orgUnits, gradeLevels, sponsoringEntities } from '../../db/schema/index.js'
+import { resolveReferenceNames } from '../audit/audit.changes.js'
 import { eq, and, sql, inArray } from 'drizzle-orm'
 import { loadPrivacyPolicy, maskEmployeeForViewer, viewerCanBypassPrivacy, effectiveVisibility, type PrivacyOverrides } from '../../lib/privacy.js'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
@@ -149,8 +150,35 @@ export default async function (fastify: any): Promise<void> {
         for (const key of allowed) {
             if (key in body) patch[key] = body[key]
         }
+        const before = await getEmployee(tenantId, employeeId)
         const employee = await updateEmployee(tenantId, employeeId, patch)
         if (!employee) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found.' })
+        // Build a from/to change set so the Updates tab shows the diff —
+        // employee self-edits should be visible to HR and to the employee.
+        const changes: Record<string, { from: unknown; to: unknown }> = {}
+        if (before) {
+            for (const key of Object.keys(patch)) {
+                const from = (before as any)[key] ?? null
+                const to = (employee as any)[key] ?? null
+                if (from !== to) changes[key] = { from, to }
+            }
+        }
+        if (Object.keys(changes).length > 0) {
+            recordActivity({
+                tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: employeeId,
+                entityName: 'My profile',
+                action: 'update',
+                changes,
+                metadata: { kind: 'profile', subKind: 'self-update' },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: employee })
     })
 
@@ -221,6 +249,26 @@ export default async function (fastify: any): Promise<void> {
     }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
         await resendInvite(request.user.tenantId, id)
+
+        const [emp] = await db
+            .select({ firstName: employees.firstName, lastName: employees.lastName })
+            .from(employees)
+            .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
+            .limit(1)
+
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: id,
+            entityName: emp ? `${emp.firstName} ${emp.lastName}` : undefined,
+            action: 'invite',
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+
         return reply.code(200).send({ message: 'Invite resent' })
     })
 
@@ -528,27 +576,74 @@ export default async function (fastify: any): Promise<void> {
             }
         }
 
-        const TRACKED = ['firstName', 'lastName', 'email', 'phone', 'department', 'designation', 'status', 'basicSalary', 'contractType', 'nationality', 'jobTitle']
+        // Diff EVERY field the caller actually sent (before vs after), rather
+        // than a fixed allow-list — otherwise payroll edits (housing/transport/
+        // other allowances, total salary, bank details) silently produced an
+        // "updated" entry with no visible change. ID/internal fields are skipped
+        // because they'd render as raw UUIDs; their human-readable denormalized
+        // counterparts (department, designation, managerName) carry the meaning.
+        const DIFF_EXCLUDE = new Set([
+            'gradeLevelId', 'reportingTo', 'sponsoringEntityId', 'shiftId',
+            'divisionId', 'departmentId', 'branchId', 'avatarUrl', 'employeeNo',
+        ])
+        // Fields that mean "this was a payroll / banking change" — drives the
+        // activity headline so the Updates tab + employee portal read cleanly.
+        const PAYROLL_FIELDS = new Set([
+            'basicSalary', 'totalSalary', 'housingAllowance', 'transportAllowance',
+            'otherAllowances', 'paymentMethod', 'bankName', 'accountName',
+            'accountNumber', 'swiftCode', 'bankBranch', 'iban', 'emiratisationCategory',
+        ])
+        const norm = (v: unknown) => {
+            if (v === null || v === undefined || v === '') return null
+            // Normalise numeric strings ("5000.00") and numbers (5000) so a
+            // re-save of the same amount isn't flagged as a change.
+            if (typeof v === 'number') return Number(v)
+            if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v)
+            return v
+        }
         const changes: Record<string, { from: unknown; to: unknown }> = {}
-        for (const key of TRACKED) {
+        let payrollChanged = false
+        for (const key of Object.keys(employeeUpdate)) {
+            if (DIFF_EXCLUDE.has(key)) continue
             const prev = (before as any)?.[key]
             const next = (updated as any)?.[key]
-            if (prev !== next) changes[key] = { from: prev ?? null, to: next ?? null }
+            if (norm(prev) !== norm(next)) {
+                changes[key] = { from: prev ?? null, to: next ?? null }
+                if (PAYROLL_FIELDS.has(key)) payrollChanged = true
+            }
         }
+        // A salary-component assignment change still bumps total/basic on the
+        // employee row, so payrollChanged is already true above when amounts
+        // move. Treat any assignment payload as a payroll touch regardless.
+        if (assignmentInputs && assignmentInputs.length > 0) payrollChanged = true
 
-        recordActivity({
-            tenantId: request.user.tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
-            entityType: 'employee',
-            entityId: updated.id,
-            entityName: `${updated.firstName} ${updated.lastName}`,
-            action: 'update',
-            changes: Object.keys(changes).length > 0 ? changes : undefined,
-            ipAddress: (request as any).ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => { })
+        // Resolve FK changes (division/branch/grade/sponsor/manager) to readable
+        // from→to NAMES so those changes are no longer dark in the audit trail.
+        // Sensitive-field masking is handled centrally in recordActivity().
+        // Kept fire-and-forget so the name lookups never delay the response.
+        // A resolution failure must not suppress the audit entry — degrade to {}.
+        resolveReferenceNames(request.user.tenantId, before, updated)
+            .catch(() => ({}))
+            .then(refChanges => {
+                Object.assign(changes, refChanges)
+                return recordActivity({
+                    tenantId: request.user.tenantId,
+                    userId: request.user.id,
+                    actorName: request.user.name,
+                    actorRole: request.user.role,
+                    entityType: 'employee',
+                    entityId: updated.id,
+                    entityName: payrollChanged ? 'Payroll details' : `${updated.firstName} ${updated.lastName}`,
+                    action: 'update',
+                    changes: Object.keys(changes).length > 0 ? changes : undefined,
+                    metadata: payrollChanged ? { kind: 'payroll', subKind: 'update' } : undefined,
+                    module: 'employees',
+                    requestId: (request as any).requestId,
+                    ipAddress: (request as any).ip,
+                    userAgent: request.headers['user-agent'],
+                })
+            })
+            .catch(() => { })
         return reply.send({ data: updated })
     })
 
@@ -616,6 +711,21 @@ export default async function (fastify: any): Promise<void> {
         }
 
         const failed = rows.length - created
+
+        if (created > 0) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                action: 'import',
+                metadata: { count: created },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
+
         return reply.code(created > 0 || failed === 0 ? 201 : 400).send({ created, failed, errors: results })
     })
 
@@ -688,6 +798,7 @@ export default async function (fastify: any): Promise<void> {
             entityId: updated.id,
             entityName: `${updated.firstName} ${updated.lastName}`,
             action: 'update',
+            metadata: { kind: 'profile', subKind: 'self-update' },
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })

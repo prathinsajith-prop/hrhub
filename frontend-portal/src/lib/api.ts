@@ -35,7 +35,9 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
     const { accessToken } = useAuthStore.getState() as { accessToken: string | null }
 
     const headers: Record<string, string> = { ...(init.headers as Record<string, string>) }
-    if (init.body != null && !headers['Content-Type'] && !headers['content-type']) {
+    // For FormData, let the browser set the multipart Content-Type (with boundary).
+    const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData
+    if (init.body != null && !isFormData && !headers['Content-Type'] && !headers['content-type']) {
         headers['Content-Type'] = 'application/json'
     }
     if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
@@ -68,6 +70,8 @@ export const api = {
     get: <T>(path: string) => request<T>(path, { method: 'GET' }),
     post: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+    upload: <T>(path: string, formData: FormData) =>
+        request<T>(path, { method: 'POST', body: formData }),
     patch: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
     put: <T>(path: string, body?: unknown) =>

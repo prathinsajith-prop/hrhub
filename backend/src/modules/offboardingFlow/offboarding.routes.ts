@@ -160,11 +160,13 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = clearanceSchema.partial().safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await updateClearanceTemplate(request.user.tenantId, request.params.id, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_clearance_template', entityId: data.id, entityName: data.name, action: 'update', metadata: { fields: Object.keys(parse.data) }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return { data }
     })
 
     fastify.delete('/offboarding-flow/clearances/:id', { ...adminAuth, schema: { tags: TAG } }, async (request: any, reply: any) => {
         await deleteClearanceTemplate(request.user.tenantId, request.params.id)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_clearance_template', entityId: request.params.id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(204).send()
     })
 
@@ -178,6 +180,7 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = interviewSchema.safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await createInterviewQuestion(request.user.tenantId, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_interview_question', entityId: data.id, entityName: data.questionText, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data })
     })
 
@@ -185,11 +188,13 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = interviewSchema.partial().safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await updateInterviewQuestion(request.user.tenantId, request.params.id, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_interview_question', entityId: data.id, entityName: data.questionText, action: 'update', metadata: { fields: Object.keys(parse.data) }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return { data }
     })
 
     fastify.delete('/offboarding-flow/interview-questions/:id', { ...adminAuth, schema: { tags: TAG } }, async (request: any, reply: any) => {
         await deleteInterviewQuestion(request.user.tenantId, request.params.id)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_interview_question', entityId: request.params.id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(204).send()
     })
 
@@ -198,6 +203,7 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = z.object({ orderedIds: z.array(z.string().uuid()).max(200) }).safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await reorderInterviewQuestions(request.user.tenantId, parse.data.orderedIds)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_interview_question', entityId: request.user.tenantId, entityName: 'Interview question order', action: 'update', metadata: { count: parse.data.orderedIds.length }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return { data }
     })
 
@@ -211,6 +217,7 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = documentSchema.safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await createExitDocument(request.user.tenantId, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_exit_document', entityId: data.id, entityName: data.name, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data })
     })
 
@@ -218,11 +225,13 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = documentSchema.partial().safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await updateExitDocument(request.user.tenantId, request.params.id, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_exit_document', entityId: data.id, entityName: data.name, action: 'update', metadata: { fields: Object.keys(parse.data) }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return { data }
     })
 
     fastify.delete('/offboarding-flow/documents/:id', { ...adminAuth, schema: { tags: TAG } }, async (request: any, reply: any) => {
         await deleteExitDocument(request.user.tenantId, request.params.id)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_exit_document', entityId: request.params.id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(204).send()
     })
 
@@ -236,6 +245,7 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = workflowSchema.safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await createWorkflow(request.user.tenantId, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_workflow', entityId: data.id, entityName: data.name, action: 'create', metadata: { trigger: data.trigger, actions: data.actions }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(201).send({ data })
     })
 
@@ -243,11 +253,13 @@ export async function offboardingFlowRoutes(fastify: any) {
         const parse = workflowSchema.partial().safeParse(request.body)
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await updateWorkflow(request.user.tenantId, request.params.id, parse.data)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_workflow', entityId: data.id, entityName: data.name, action: 'update', metadata: { fields: Object.keys(parse.data) }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return { data }
     })
 
     fastify.delete('/offboarding-flow/workflows/:id', { ...adminAuth, schema: { tags: TAG } }, async (request: any, reply: any) => {
         await deleteWorkflow(request.user.tenantId, request.params.id)
+        recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'offboarding_workflow', entityId: request.params.id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
         return reply.code(204).send()
     })
 

@@ -33,7 +33,7 @@ export interface RecordLoginParams {
     tenantId?: string | null
     userId?: string | null
     email?: string
-    eventType: 'login' | 'logout' | 'failed_login' | 'token_refresh'
+    eventType: 'login' | 'logout' | 'failed_login' | 'token_refresh' | '2fa_success' | '2fa_failed'
     success: boolean
     ipAddress?: string
     userAgent?: string
@@ -75,6 +75,27 @@ export interface RecordActivityParams {
     userAgent?: string
 }
 
+/** Fields whose values must never be stored verbatim in the audit trail.
+ *  Kept in sync with the main backend's SENSITIVE_AUDIT_FIELDS. */
+const SENSITIVE_AUDIT_FIELDS = new Set(['iban', 'accountNumber', 'passportNo', 'emiratesId', 'swiftCode'])
+
+function maskSensitiveValue(value: unknown): unknown {
+    if (value === null || value === undefined || value === '') return value
+    const s = String(value)
+    return s.length <= 4 ? '••••' : `••••${s.slice(-4)}`
+}
+
+/** Redact sensitive identifiers from a change-set (returns a masked copy). */
+function maskChanges(changes: Record<string, { from: unknown; to: unknown }>) {
+    const out: Record<string, { from: unknown; to: unknown }> = {}
+    for (const [key, val] of Object.entries(changes)) {
+        out[key] = SENSITIVE_AUDIT_FIELDS.has(key)
+            ? { from: maskSensitiveValue(val.from), to: maskSensitiveValue(val.to) }
+            : val
+    }
+    return out
+}
+
 export async function recordActivity(params: RecordActivityParams): Promise<void> {
     await db.insert(activityLogs).values({
         tenantId: params.tenantId,
@@ -85,7 +106,8 @@ export async function recordActivity(params: RecordActivityParams): Promise<void
         entityId: params.entityId,
         entityName: params.entityName,
         action: params.action,
-        changes: params.changes ?? null,
+        // Defence in depth: redact sensitive identifiers at the single write point.
+        changes: params.changes ? maskChanges(params.changes) : null,
         metadata: params.metadata ?? null,
         ipAddress: params.ipAddress,
         userAgent: params.userAgent?.slice(0, 500),

@@ -43,6 +43,17 @@ export const changePasswordSchema = z.object({
     newPassword: z.string().min(8, 'Password must be at least 8 characters').max(128),
 })
 
+// ── 2FA ──────────────────────────────────────────────────────────────────────
+/** A single TOTP/backup code submitted to enable/disable/regenerate. */
+export const totpTokenSchema = z.object({
+    token: z.string().min(6, 'Code is required').max(32),
+})
+/** Completing a login challenge: the pending token + a TOTP or backup code. */
+export const mfaChallengeSchema = z.object({
+    mfaToken: z.string().min(1, 'mfaToken is required'),
+    code: z.string().min(6, 'Code is required').max(32),
+})
+
 export const updateMyProfileSchema = z.object({
     phone: z.string().max(30).optional(),
     mobileNo: z.string().max(30).optional(),

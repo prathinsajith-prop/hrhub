@@ -1,6 +1,36 @@
 import { loginUser, refreshAccessToken, revokeRefreshToken, requestPasswordReset, resetPasswordWithToken, changePassword, completeMfaLogin, completeMfaLoginWithBackupCode, registerTenant } from './auth.service.js'
 import { setupTotp, verifyAndEnableTotp, disableTotp, getTotpStatus, regenerateBackupCodes } from './twofa.service.js'
-import { recordLoginEvent } from '../audit/audit.service.js'
+import { recordLoginEvent, recordActivity } from '../audit/audit.service.js'
+
+/**
+ * Fire-and-forget per-employee audit entry for auth/security events
+ * (password change, 2FA toggle, profile self-update). Surfaces in the
+ * employee detail Updates tab AND the employee portal's My Activity feed.
+ * Silently no-ops when the user has no linked employee record.
+ */
+function auditSelfEvent(
+    request: any,
+    subKind: 'password-change' | '2fa-enable' | '2fa-disable' | '2fa-backup-regenerate' | 'profile-self-update',
+    action: 'update' | 'create' | 'delete',
+    entityName: string,
+    extra: Record<string, unknown> = {},
+) {
+    const employeeId = request.user?.employeeId
+    if (!employeeId) return
+    recordActivity({
+        tenantId: request.user.tenantId,
+        userId: request.user.id,
+        actorName: request.user.name,
+        actorRole: request.user.role,
+        entityType: 'employee',
+        entityId: employeeId,
+        entityName,
+        action,
+        metadata: { kind: 'security', subKind, ...extra },
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'],
+    }).catch(() => { })
+}
 import { validate, loginSchema, forgotPasswordSchema, resetPasswordSchema, changePasswordSchema } from '../../lib/validation.js'
 import { db } from '../../db/index.js'
 import { users, employees } from '../../db/schema/index.js'
@@ -287,6 +317,7 @@ export default async function (fastify: any): Promise<void> {
                         : 'Unable to change password.'
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message })
         }
+        auditSelfEvent(request, 'password-change', 'update', 'Password')
         return reply.send({ data: { ok: true } })
     })
 
@@ -347,6 +378,7 @@ export default async function (fastify: any): Promise<void> {
         if (!token) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'token is required' })
         const result = await verifyAndEnableTotp(request.user.id, token)
         if (!result.enabled) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid or expired token' })
+        auditSelfEvent(request, '2fa-enable', 'update', 'Two-factor authentication')
         // Return plaintext backup codes ONCE — user must save them now
         return reply.send({ data: { enabled: true, backupCodes: result.backupCodes ?? [] } })
     })
@@ -357,6 +389,7 @@ export default async function (fastify: any): Promise<void> {
         if (!token) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'token is required' })
         const ok = await disableTotp(request.user.id, token)
         if (!ok) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid token or 2FA not enabled' })
+        auditSelfEvent(request, '2fa-disable', 'update', 'Two-factor authentication')
         return reply.send({ data: { enabled: false } })
     })
 

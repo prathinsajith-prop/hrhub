@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { User, CalendarDays, CreditCard, FileText, Info } from 'lucide-react'
+import { User, CalendarDays, CreditCard, FileText, Info, History } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -104,11 +104,12 @@ export function EmployeeDashboard() {
       {/* Quick actions */}
       <div className="space-y-3">
         <SectionHeading title={t('dashboard.quickActions')} />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <QuickAction icon={CalendarDays} label={t('dashboard.requestLeave')} onClick={() => navigate('/my/leave')} />
           <QuickAction icon={User} label={t('dashboard.myProfileShort')} onClick={() => navigate('/my/profile')} />
           <QuickAction icon={CreditCard} label={t('dashboard.payslips')} onClick={() => navigate('/my/payslips')} />
           <QuickAction icon={FileText} label={t('dashboard.documents')} onClick={() => navigate('/documents')} />
+          <QuickAction icon={History} label={t('myActivity.shortLabel', { defaultValue: 'My Activity' })} onClick={() => navigate('/my/activity')} />
         </div>
       </div>
 

@@ -84,9 +84,15 @@ export async function deleteVisaCost(tenantId: string, costId: string) {
     return row ?? null
 }
 
-export async function getPROCostReport(tenantId: string) {
+export async function getPROCostReport(tenantId: string, range?: { startDate: string; endDate: string }) {
     const currentYear = new Date().getFullYear()
     const yearStart = `${currentYear}-01-01`
+
+    // Range-aware: when the Reports page sends a window, filter paidDate to
+    // [startDate, endDate]; otherwise keep the YTD floor (legacy contract).
+    const dateWhere = range
+        ? sql`${visaCosts.paidDate} >= ${range.startDate} AND ${visaCosts.paidDate} <= ${range.endDate}`
+        : sql`${visaCosts.paidDate} >= ${yearStart}`
 
     const [allCosts, byCategoryRows, byMonthRows] = await Promise.all([
         // All costs YTD with employee name — exclude orphaned rows (deleted visa)
@@ -110,7 +116,7 @@ export async function getPROCostReport(tenantId: string) {
                 eq(visaCosts.tenantId, tenantId),
                 isNotNull(visaCosts.visaApplicationId),
                 isNull(visaCosts.deletedAt),
-                sql`${visaCosts.paidDate} >= ${yearStart}`,
+                dateWhere,
             ))
             .orderBy(desc(visaCosts.paidDate)),
 
@@ -126,7 +132,7 @@ export async function getPROCostReport(tenantId: string) {
                 eq(visaCosts.tenantId, tenantId),
                 isNotNull(visaCosts.visaApplicationId),
                 isNull(visaCosts.deletedAt),
-                sql`${visaCosts.paidDate} >= ${yearStart}`,
+                dateWhere,
             ))
             .groupBy(visaCosts.category)
             .orderBy(sql`sum(${visaCosts.amount}::numeric) desc`),
@@ -144,7 +150,7 @@ export async function getPROCostReport(tenantId: string) {
                 eq(visaCosts.tenantId, tenantId),
                 isNotNull(visaCosts.visaApplicationId),
                 isNull(visaCosts.deletedAt),
-                sql`${visaCosts.paidDate} >= ${yearStart}`,
+                dateWhere,
             ))
             .groupBy(sql`to_char(${visaCosts.paidDate}, 'Mon YYYY')`, sql`to_char(${visaCosts.paidDate}, 'YYYY-MM')`)
             .orderBy(sql`to_char(${visaCosts.paidDate}, 'YYYY-MM')`),

@@ -79,6 +79,29 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        // Mirror on the employee so the Updates tab + employee portal show it.
+        if (body.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: body.employeeId,
+                entityName: `${body.leaveType} leave`,
+                action: 'submit',
+                metadata: {
+                    kind: 'leave',
+                    subKind: 'submit',
+                    leaveId: (leave as { id: string }).id,
+                    leaveType: body.leaveType,
+                    startDate: body.startDate,
+                    endDate: body.endDate,
+                },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
 
         // Notify HR managers, super admins, and the employee's dept_head (fire-and-forget)
         ;(async () => {
@@ -163,6 +186,27 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if ((updated as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (updated as any).employeeId,
+                entityName: `${(updated as any).leaveType ?? 'Leave'} request`,
+                action: approved ? 'approve' : 'reject',
+                metadata: {
+                    kind: 'leave',
+                    subKind: approved ? 'approve' : 'reject',
+                    leaveId: id,
+                    leaveType: (updated as any).leaveType ?? null,
+                    notes: notes ?? null,
+                },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: updated })
     })
 

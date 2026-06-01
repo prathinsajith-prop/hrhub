@@ -57,6 +57,28 @@ export async function auditRoutes(fastify: any): Promise<void> {
         return reply.send(result)
     })
 
+    // GET /api/v1/audit/my-activity?limit=&offset=
+    // The employee portal calls this to show "what's recently happened to my
+    // record": leave decisions, payslips generated, profile edits, document
+    // verifications, etc. Always scoped to the caller's own employeeId — never
+    // accepts a different entityId, so a non-admin can't snoop on others.
+    fastify.get('/my-activity', { ...auth, schema: { tags: ['Audit'] } }, async (request: any, reply: any) => {
+        const employeeId = request.user.employeeId
+        if (!employeeId) {
+            return reply.send({ data: [], total: 0, limit: 0, offset: 0, hasMore: false })
+        }
+        const { limit = 50, offset = 0 } = (request.query ?? {}) as { limit?: number | string; offset?: number | string }
+        const parsedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100)
+        const parsedOffset = Math.max(Number(offset) || 0, 0)
+        const result = await getActivityLogs(request.user.tenantId, {
+            entityType: 'employee',
+            entityId: employeeId,
+            limit: parsedLimit,
+            offset: parsedOffset,
+        })
+        return reply.send(result)
+    })
+
     // GET /api/v1/audit/export?format=csv|pdf
     fastify.get('/export', { ...adminAuth, schema: { tags: ['Audit'] } }, async (request: any, reply: any) => {
         const parsed = exportQuerySchema.safeParse(request.query)
