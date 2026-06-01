@@ -7,7 +7,8 @@ import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSche
 import { recordActivity } from '../audit/audit.service.js'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { db } from '../../db/index.js'
-import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users } from '../../db/schema/index.js'
+import { entities, employees, employeeSalaryComponents, salaryComponents, tenants, users, orgUnits, gradeLevels, sponsoringEntities } from '../../db/schema/index.js'
+import { maskAuditChanges, resolveReferenceNames } from '../audit/audit.changes.js'
 import { eq, and, sql, inArray } from 'drizzle-orm'
 import { loadPrivacyPolicy, maskEmployeeForViewer, viewerCanBypassPrivacy, effectiveVisibility, type PrivacyOverrides } from '../../lib/privacy.js'
 import { inviteUser, resendInvite } from '../settings/settings.service.js'
@@ -596,20 +597,34 @@ export default async function (fastify: any): Promise<void> {
         // move. Treat any assignment payload as a payroll touch regardless.
         if (assignmentInputs && assignmentInputs.length > 0) payrollChanged = true
 
-        recordActivity({
-            tenantId: request.user.tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
-            entityType: 'employee',
-            entityId: updated.id,
-            entityName: payrollChanged ? 'Payroll details' : `${updated.firstName} ${updated.lastName}`,
-            action: 'update',
-            changes: Object.keys(changes).length > 0 ? changes : undefined,
-            metadata: payrollChanged ? { kind: 'payroll', subKind: 'update' } : undefined,
-            ipAddress: (request as any).ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => { })
+        // Resolve FK changes (division/branch/grade/sponsor/manager) to readable
+        // from→to NAMES so those changes are no longer dark in the audit trail,
+        // then mask sensitive identifiers (IBAN/account/passport/Emirates ID).
+        // Kept fire-and-forget so the name lookups never delay the response.
+        maskAuditChanges(changes)
+        // A resolution failure must not suppress the audit entry — degrade to {}.
+        resolveReferenceNames(request.user.tenantId, before, updated)
+            .catch(() => ({}))
+            .then(refChanges => {
+                Object.assign(changes, refChanges)
+                return recordActivity({
+                    tenantId: request.user.tenantId,
+                    userId: request.user.id,
+                    actorName: request.user.name,
+                    actorRole: request.user.role,
+                    entityType: 'employee',
+                    entityId: updated.id,
+                    entityName: payrollChanged ? 'Payroll details' : `${updated.firstName} ${updated.lastName}`,
+                    action: 'update',
+                    changes: Object.keys(changes).length > 0 ? changes : undefined,
+                    metadata: payrollChanged ? { kind: 'payroll', subKind: 'update' } : undefined,
+                    module: 'employees',
+                    requestId: (request as any).requestId,
+                    ipAddress: (request as any).ip,
+                    userAgent: request.headers['user-agent'],
+                })
+            })
+            .catch(() => { })
         return reply.send({ data: updated })
     })
 
