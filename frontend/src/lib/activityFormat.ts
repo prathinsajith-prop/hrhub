@@ -175,6 +175,12 @@ export function actionVerbFor(action: string): string {
         suspend: 'suspended',
         cancel: 'cancelled',
         invite: 'invited',
+        assign: 'assigned',
+        unassign: 'unassigned',
+        upload: 'uploaded',
+        download: 'downloaded',
+        permission_change: 'changed permissions for',
+        role_change: 'changed the role of',
     }
     return map[action] ?? action.replace(/_/g, ' ')
 }

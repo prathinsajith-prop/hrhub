@@ -737,3 +737,43 @@ html[dir="rtl"] [data-rtl-flip] {
   & > :first-child { margin-top: 0; }
   & > :last-child { margin-bottom: 0; }
 }
+/* ── react-date-range (Reports date-range picker) ──────────────────────────
+   Scoped to .hrhub-rdr so the plugin inherits our font, drops its own outer
+   chrome (it lives inside a shadcn popover), and uses the primary token for
+   the selected preset + today marker. The calendar selection colour is set
+   via the rangeColors prop in DateRangePresets.tsx. */
+.hrhub-rdr,
+.hrhub-rdr .rdrDateRangePickerWrapper,
+.hrhub-rdr .rdrCalendarWrapper,
+.hrhub-rdr .rdrDefinedRangesWrapper,
+.hrhub-rdr .rdrStaticRange,
+.hrhub-rdr .rdrInputRanges,
+.hrhub-rdr .rdrMonthAndYearPickers select {
+  font-family: inherit;
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+.hrhub-rdr .rdrDefinedRangesWrapper {
+  border-right: 1px solid hsl(var(--border));
+  width: 9rem;
+}
+.hrhub-rdr .rdrStaticRange {
+  border-bottom: 0;
+  font-size: 0.8125rem;
+}
+.hrhub-rdr .rdrStaticRange:hover .rdrStaticRangeLabel,
+.hrhub-rdr .rdrStaticRange:focus .rdrStaticRangeLabel {
+  background: hsl(var(--muted));
+}
+.hrhub-rdr .rdrStaticRangeSelected,
+.hrhub-rdr .rdrStaticRangeSelected .rdrStaticRangeLabel {
+  color: hsl(var(--primary)) !important;
+  font-weight: 600;
+}
+.hrhub-rdr .rdrMonthName,
+.hrhub-rdr .rdrWeekDay {
+  color: hsl(var(--muted-foreground));
+}
+.hrhub-rdr .rdrDayToday .rdrDayNumber span:after {
+  background: hsl(var(--primary));
+}

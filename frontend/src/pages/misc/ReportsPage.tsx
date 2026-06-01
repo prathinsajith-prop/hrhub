@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { CellContext } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -6,7 +6,7 @@ import { labelFor } from '@/lib/enums'
 import {
     Calendar, Clock, CheckCircle2, XCircle, Download, BarChart3, Users,
     Shield, AlertTriangle, UserPlus, UserMinus, PauseCircle, Receipt, TrendingUp, RefreshCcw,
-    CalendarCheck, Plane, Timer, Hourglass, GitCommit, ClipboardCheck, Star, AlertOctagon,
+    CalendarCheck, Plane, Timer, Hourglass, GitCommit, ClipboardCheck, Star, AlertOctagon, Info,
 } from 'lucide-react'
 import {
     AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -279,6 +279,20 @@ function ExpiryByDepartmentCard({ rows, loading }: { rows: DocExpiryRow[]; loadi
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Inline note shown on tabs whose data does NOT respond to the top-bar date
+ * range — so the filter never looks broken. Headcount is a live snapshot;
+ * Expiry is forward-looking (next N days); Leave is per calendar year.
+ */
+function RangeNote({ children }: { children: ReactNode }) {
+    return (
+        <div className="flex items-start gap-2 rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+            <Info className="size-3.5 mt-0.5 shrink-0" />
+            <span>{children}</span>
+        </div>
+    )
+}
+
 export function ReportsPage() {
     const { t } = useTranslation()
     const navigate = useNavigate()
@@ -476,6 +490,7 @@ export function ReportsPage() {
 
                 {/* ── Headcount ── */}
                 <TabsContent value="headcount" className="space-y-4">
+                    <RangeNote>Headcount is a live snapshot of who's employed right now — the date range above doesn't apply here.</RangeNote>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <KpiCardCompact label="Total" value={headcount?.total ?? 0} icon={Users} color="blue" loading={isLoading} />
                         <KpiCardCompact label="Active" value={headcount?.byStatus.find(s => s.label === 'active')?.count ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
@@ -917,6 +932,7 @@ export function ReportsPage() {
                     by-department days-taken table, top-takers leaderboard. */}
                 {canViewLeave && (
                     <TabsContent value="leave" className="space-y-4">
+                        <RangeNote>Leave is summarised per calendar year — the date range above doesn't apply to this tab.</RangeNote>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <KpiCardCompact label="Approved Days" value={leaveSummary?.approvedDays ?? 0} icon={CheckCircle2} color="green" loading={isLoading} />
                             <KpiCardCompact label="Pending Requests" value={leaveSummary?.pendingRequests ?? 0} icon={Clock} color="amber" loading={isLoading} />
@@ -1011,8 +1027,8 @@ export function ReportsPage() {
                 {/* ── Payroll Summary ── */}
                 <TabsContent value="payroll" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <KpiCardCompact label="YTD Gross" value={formatCurrency(payrollSummary?.ytdGross ?? 0)} icon={BarChart3} color="blue" loading={isLoading} />
-                        <KpiCardCompact label="YTD Net" value={formatCurrency(payrollSummary?.ytdNet ?? 0)} icon={CheckCircle2} color="green" loading={isLoading} />
+                        <KpiCardCompact label="Gross (range)" value={formatCurrency(payrollSummary?.ytdGross ?? 0)} icon={BarChart3} color="blue" loading={isLoading} />
+                        <KpiCardCompact label="Net (range)" value={formatCurrency(payrollSummary?.ytdNet ?? 0)} icon={CheckCircle2} color="green" loading={isLoading} />
                         <KpiCardCompact label="Payroll Runs" value={payrollSummary?.totalRuns ?? 0} icon={Calendar} color="amber" loading={isLoading} />
                         <KpiCardCompact label="Avg Net/Run" value={formatCurrency(payrollSummary && payrollSummary.totalRuns > 0 ? payrollSummary.ytdNet / payrollSummary.totalRuns : 0)} icon={Users} color="cyan" loading={isLoading} />
                     </div>
@@ -1093,6 +1109,7 @@ export function ReportsPage() {
 
                 {/* ── Visa Expiry ── */}
                 <TabsContent value="expiry" className="space-y-4">
+                    <RangeNote>Expiry is forward-looking — it shows documents due in the next 90 days, so the date range above doesn't apply.</RangeNote>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <KpiCardCompact label="Expired" value={documentExpiry?.byType.total.expired ?? 0} icon={XCircle} color="red" loading={isLoading} />
                         <KpiCardCompact label="Critical (≤30d)" value={documentExpiry?.byType.total.critical ?? 0} icon={Shield} color="red" loading={isLoading} />
@@ -1200,9 +1217,9 @@ export function ReportsPage() {
                 {/* ── PRO Costs ── */}
                 <TabsContent value="pro-costs" className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <KpiCardCompact label="YTD Total" value={formatCurrency(proCosts?.ytdTotal ?? 0)} icon={Receipt} color="blue" loading={isLoading} hint="All categories" />
-                        <KpiCardCompact label="Avg/Employee" value={formatCurrency(proCosts?.avgPerEmployee ?? 0)} icon={TrendingUp} color="purple" loading={isLoading} hint="This year" />
-                        <KpiCardCompact label="Transactions" value={proCosts?.totalTransactions ?? 0} icon={BarChart3} color="amber" loading={isLoading} hint="YTD records" />
+                        <KpiCardCompact label="Total (range)" value={formatCurrency(proCosts?.ytdTotal ?? 0)} icon={Receipt} color="blue" loading={isLoading} hint="All categories" />
+                        <KpiCardCompact label="Avg/Employee" value={formatCurrency(proCosts?.avgPerEmployee ?? 0)} icon={TrendingUp} color="purple" loading={isLoading} hint="In selected range" />
+                        <KpiCardCompact label="Transactions" value={proCosts?.totalTransactions ?? 0} icon={BarChart3} color="amber" loading={isLoading} hint="In selected range" />
                         <KpiCardCompact label="Employees" value={proCosts?.byEmployee.length ?? 0} icon={Users} color="green" loading={isLoading} hint="With costs recorded" />
                     </div>
 
@@ -1217,7 +1234,7 @@ export function ReportsPage() {
                                 </Button>
                             </div>
                             {isLoading ? <ChartSkeleton height={200} /> : proCatData.length === 0 ? (
-                                <p className="text-xs text-muted-foreground text-center py-6">No costs recorded this year</p>
+                                <p className="text-xs text-muted-foreground text-center py-6">No costs recorded in this range</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={Math.max(160, proCatData.length * 36)}>
                                     <BarChart data={proCatData} layout="vertical" margin={{ top: 0, right: 70, left: 0, bottom: 0 }}>
@@ -1238,7 +1255,7 @@ export function ReportsPage() {
                         {/* Monthly trend area chart */}
                         <Card className="p-4">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-sm">Monthly Trend (YTD)</h3>
+                                <h3 className="font-semibold text-sm">Monthly Trend</h3>
                                 <Button size="sm" variant="outline" leftIcon={<Download className="size-3.5" />}
                                     onClick={() => exportCsv(proCosts?.byMonth ?? [], 'pro-costs-by-month.csv')}>
                                     Export
@@ -1283,7 +1300,7 @@ export function ReportsPage() {
                         ) : (proCosts?.byEmployee ?? []).length === 0 ? (
                             <div className="py-10 text-center">
                                 <Receipt className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-                                <p className="text-sm text-muted-foreground">No cost records for this year</p>
+                                <p className="text-sm text-muted-foreground">No cost records in this range</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">Add costs via the Visa detail page</p>
                             </div>
                         ) : (

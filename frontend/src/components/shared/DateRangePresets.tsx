@@ -1,32 +1,35 @@
 import { useMemo, useState } from 'react'
-import { Calendar as CalendarIcon, Check, ChevronDown } from 'lucide-react'
+import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react'
+import {
+    format, parse, isValid,
+    startOfMonth, endOfMonth, subMonths, subDays,
+    startOfYear, endOfYear, subYears,
+} from 'date-fns'
+import {
+    DateRangePicker,
+    createStaticRanges,
+    type Range,
+    type RangeKeyDict,
+} from 'react-date-range'
+// Plugin styles + default theme — this is the exact bootstrap-daterangepicker
+// look. We only override the selection colour (via rangeColors) and a few
+// radii in index.css so it sits inside our shadcn popover cleanly.
+import 'react-date-range/dist/styles.css'
+import 'react-date-range/dist/theme/default.css'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { DatePicker } from '@/components/ui/date-picker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 /**
- * Compact date-range filter used by the Reports page.
+ * Reports date-range filter, built on the `react-date-range` plugin — the
+ * React port of the classic bootstrap-daterangepicker (preset rail on the
+ * left, two-month calendar, range shown in the trigger, Apply / Cancel).
  *
- * Five preset options (Today / This Week / Last Week / This Month / Custom)
- * map to a `{ startDate, endDate }` pair the parent passes down to the
- * report hooks. The presets are computed locally from the user's clock —
- * we deliberately avoid round-tripping to the server for "what is today",
- * because every report query already filters by ISO `YYYY-MM-DD` so the
- * client and server need to agree on the same date label, not the same
- * instant. That agreement is what the user sees on the chart anyway.
- *
- * "This Week" / "Last Week" use **ISO weeks (Mon-Sun)** — that's the
- * convention for UAE business days and is also what every UAE/HR product
- * the team uses (Bayzat, ZenHR) reports against. If a tenant ever needs
- * Sun-Sat we can flip this with a per-tenant locale flag.
- *
- * "Custom" reveals two `DatePicker` inputs in the same popover; commit
- * only fires when both dates are valid AND `start <= end`.
- *
- * Returns ISO `YYYY-MM-DD` strings (no time component) — the backend
- * routes validate this exact shape before reaching the SQL `BETWEEN`.
+ * Presets are still computed locally from the user's clock so the client and
+ * server agree on the same ISO `YYYY-MM-DD` date label (reports filter a
+ * `date` column, not an instant). Returns ISO strings the backend `BETWEEN`
+ * already validates — no backend impact.
  */
 
 export type ReportRangePreset =
@@ -45,22 +48,32 @@ export interface ReportDateRangeValue {
     endDate: string
 }
 
+const ISO = 'yyyy-MM-dd'
+const PRIMARY = 'hsl(221, 83%, 53%)' // matches --primary token
+
 function toIso(d: Date): string {
-    // Use the local-time Y/M/D so "today" matches the user's wall clock,
-    // not UTC. Reports filter on a `date` column (no time component) so
-    // a timezone-shifted `toISOString().slice(0, 10)` would skew the
-    // window by a day for any tenant west of UTC after midnight UTC.
+    // Local Y/M/D so "today" matches the wall clock, not UTC.
     const y = d.getFullYear()
     const m = String(d.getMonth() + 1).padStart(2, '0')
     const day = String(d.getDate()).padStart(2, '0')
     return `${y}-${m}-${day}`
 }
 
+function fromIso(s: string | undefined): Date | undefined {
+    if (!s) return undefined
+    const d = parse(s, ISO, new Date())
+    return isValid(d) ? d : undefined
+}
+
+/** "05/26/2026" trigger label, matching the plugin's display format. */
+function prettyUs(iso: string): string {
+    const d = fromIso(iso)
+    return d ? format(d, 'MM/dd/yyyy') : iso
+}
+
 function startOfIsoWeek(d: Date): Date {
-    // ISO weeks start Monday. JS getDay() returns 0=Sun, 1=Mon, ..., 6=Sat
-    // — shift Sunday to 7 so subtracting (day - 1) lands on Monday.
     const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-    const day = copy.getDay() || 7
+    const day = copy.getDay() || 7 // ISO weeks start Monday
     copy.setDate(copy.getDate() - (day - 1))
     return copy
 }
@@ -77,10 +90,8 @@ export function resolvePreset(preset: ReportRangePreset, now: Date = new Date())
         }
         case 'last_week': {
             const thisWeekStart = startOfIsoWeek(today)
-            const lastWeekEnd = new Date(thisWeekStart)
-            lastWeekEnd.setDate(lastWeekEnd.getDate() - 1)
-            const lastWeekStart = new Date(lastWeekEnd)
-            lastWeekStart.setDate(lastWeekStart.getDate() - 6)
+            const lastWeekEnd = new Date(thisWeekStart); lastWeekEnd.setDate(lastWeekEnd.getDate() - 1)
+            const lastWeekStart = new Date(lastWeekEnd); lastWeekStart.setDate(lastWeekStart.getDate() - 6)
             return { startDate: toIso(lastWeekStart), endDate: toIso(lastWeekEnd) }
         }
         case 'this_month': {
@@ -88,13 +99,11 @@ export function resolvePreset(preset: ReportRangePreset, now: Date = new Date())
             return { startDate: toIso(start), endDate: toIso(today) }
         }
         case 'last_30_days': {
-            const start = new Date(today)
-            start.setDate(start.getDate() - 29)
+            const start = new Date(today); start.setDate(start.getDate() - 29)
             return { startDate: toIso(start), endDate: toIso(today) }
         }
         case 'last_90_days': {
-            const start = new Date(today)
-            start.setDate(start.getDate() - 89)
+            const start = new Date(today); start.setDate(start.getDate() - 89)
             return { startDate: toIso(start), endDate: toIso(today) }
         }
         case 'this_year': {
@@ -102,157 +111,115 @@ export function resolvePreset(preset: ReportRangePreset, now: Date = new Date())
             return { startDate: toIso(start), endDate: toIso(today) }
         }
         case 'custom':
-            // Custom resolves to whatever the user typed — handled by the
-            // controlled inputs, not by this helper. Default to today
-            // so the popover opens against a real range.
             return { startDate: toIso(today), endDate: toIso(today) }
     }
 }
 
-interface PresetSpec {
-    id: ReportRangePreset
-    label: string
+// Sidebar presets matching the classic daterangepicker layout. Windows are
+// capped at "today" (no future dates in a reports filter); "Last Month" is the
+// full previous calendar month. createStaticRanges adds the isSelected matcher.
+function buildStaticRanges() {
+    const today = new Date()
+    return createStaticRanges([
+        { label: 'Today', range: () => ({ startDate: today, endDate: today }) },
+        { label: 'Yesterday', range: () => ({ startDate: subDays(today, 1), endDate: subDays(today, 1) }) },
+        { label: 'Last 7 Days', range: () => ({ startDate: subDays(today, 6), endDate: today }) },
+        { label: 'Last 30 Days', range: () => ({ startDate: subDays(today, 29), endDate: today }) },
+        { label: 'This Month', range: () => ({ startDate: startOfMonth(today), endDate: today }) },
+        { label: 'Last Month', range: () => ({ startDate: startOfMonth(subMonths(today, 1)), endDate: endOfMonth(subMonths(today, 1)) }) },
+        { label: 'This Year', range: () => ({ startDate: startOfYear(today), endDate: today }) },
+        { label: 'Last Year', range: () => ({ startDate: startOfYear(subYears(today, 1)), endDate: endOfYear(subYears(today, 1)) }) },
+    ])
 }
-
-const QUICK_PRESETS: PresetSpec[] = [
-    { id: 'today', label: 'Today' },
-    { id: 'this_week', label: 'This week' },
-    { id: 'last_week', label: 'Last week' },
-    { id: 'this_month', label: 'This month' },
-]
-
-const EXTENDED_PRESETS: PresetSpec[] = [
-    { id: 'last_30_days', label: 'Last 30 days' },
-    { id: 'last_90_days', label: 'Last 90 days' },
-    { id: 'this_year', label: 'This year' },
-]
 
 interface Props {
     value: ReportDateRangeValue
     onChange: (next: ReportDateRangeValue) => void
     className?: string
-    /** Hides the inline preset chips — useful when horizontal space is
-     *  tight and HR should select via the dropdown instead. */
+    /** Reserved for API compatibility; the control is already a single trigger. */
     compact?: boolean
 }
 
-export function DateRangePresets({ value, onChange, className, compact = false }: Props) {
+export function DateRangePresets({ value, onChange, className }: Props) {
     const [open, setOpen] = useState(false)
-    const [customStart, setCustomStart] = useState<string>(value.startDate)
-    const [customEnd, setCustomEnd] = useState<string>(value.endDate)
+    const staticRanges = useMemo(() => buildStaticRanges(), [])
 
-    // Label shown on the trigger when closed.
-    const triggerLabel = useMemo(() => {
-        if (value.preset === 'custom') return `${value.startDate} - ${value.endDate}`
-        const preset = [...QUICK_PRESETS, ...EXTENDED_PRESETS].find((p) => p.id === value.preset)
-        return preset?.label ?? `${value.startDate} - ${value.endDate}`
-    }, [value])
+    // Draft selection edited inside the picker before Apply commits it.
+    const toRange = (v: ReportDateRangeValue): Range => ({
+        startDate: fromIso(v.startDate) ?? new Date(),
+        endDate: fromIso(v.endDate) ?? new Date(),
+        key: 'selection',
+    })
+    const [draft, setDraft] = useState<Range>(() => toRange(value))
 
-    function applyPreset(id: ReportRangePreset) {
-        const { startDate, endDate } = resolvePreset(id)
-        onChange({ preset: id, startDate, endDate })
+    // Re-sync the draft from the external value when it changes (e.g. parent
+    // reset) — state-during-render, no effect needed.
+    const [lastValue, setLastValue] = useState(`${value.startDate}|${value.endDate}`)
+    const valueKey = `${value.startDate}|${value.endDate}`
+    if (valueKey !== lastValue) {
+        setLastValue(valueKey)
+        setDraft(toRange(value))
+    }
+
+    const triggerLabel = useMemo(
+        () => `${prettyUs(value.startDate)} - ${prettyUs(value.endDate)}`,
+        [value],
+    )
+
+    function openChange(next: boolean) {
+        // Reset the draft to the committed value whenever we (re)open so a
+        // prior un-applied edit doesn't linger.
+        if (next) setDraft(toRange(value))
+        setOpen(next)
+    }
+
+    function applyDraft() {
+        const s = draft.startDate ?? new Date()
+        const e = draft.endDate ?? s
+        const startDate = toIso(s <= e ? s : e)
+        const endDate = toIso(s <= e ? e : s)
+        onChange({ preset: 'custom', startDate, endDate })
         setOpen(false)
     }
 
-    function applyCustom() {
-        if (!customStart || !customEnd) return
-        if (customStart > customEnd) return
-        onChange({ preset: 'custom', startDate: customStart, endDate: customEnd })
-        setOpen(false)
-    }
+    const draftLabel = `${draft.startDate ? prettyUs(toIso(draft.startDate)) : ''} - ${draft.endDate ? prettyUs(toIso(draft.endDate)) : ''}`
 
     return (
-        <div className={cn('inline-flex items-center gap-2', className)}>
-            {/* Inline quick-preset chips. On narrow viewports these wrap
-                under the trigger; HR can also pick from the dropdown. */}
-            {!compact && (
-                <div className="hidden md:inline-flex items-center gap-1 rounded-lg border bg-card p-1">
-                    {QUICK_PRESETS.map((p) => {
-                        const active = value.preset === p.id
-                        return (
-                            <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => applyPreset(p.id)}
-                                className={cn(
-                                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                                    active
-                                        ? 'bg-primary text-primary-foreground shadow-sm'
-                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                                )}
-                                title={p.label}
-                            >
-                                {p.label}
-                            </button>
-                        )
-                    })}
-                </div>
-            )}
-
-            {/* Dropdown trigger — always available. Shows the current
-                window label so the inline chips aren't load-bearing. */}
-            <Popover open={open} onOpenChange={setOpen}>
+        <div className={cn('inline-flex items-center', className)}>
+            <Popover open={open} onOpenChange={openChange}>
                 <PopoverTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 gap-2 text-xs font-medium"
-                    >
+                    {/* Input-style trigger showing the active range. */}
+                    <Button variant="outline" size="sm" className="h-9 gap-2 text-xs font-medium tabular-nums">
                         <CalendarIcon className="size-3.5 text-muted-foreground" />
-                        <span className="tabular-nums">{triggerLabel}</span>
+                        <span>{triggerLabel}</span>
                         <ChevronDown className="size-3.5 text-muted-foreground" />
                     </Button>
                 </PopoverTrigger>
-                <PopoverContent align="end" className="w-72 p-0 overflow-hidden">
-                    {/* Preset list. Grouped: quick presets on top, extended
-                        windows below. Active preset gets a check mark. */}
-                    <div className="py-1">
-                        <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
-                            Quick
-                        </p>
-                        {QUICK_PRESETS.map((p) => (
-                            <PresetRow key={p.id} preset={p} active={value.preset === p.id} onSelect={() => applyPreset(p.id)} />
-                        ))}
-                        <p className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
-                            Extended
-                        </p>
-                        {EXTENDED_PRESETS.map((p) => (
-                            <PresetRow key={p.id} preset={p} active={value.preset === p.id} onSelect={() => applyPreset(p.id)} />
-                        ))}
-                    </div>
-
-                    {/* Custom range. Two date pickers + a small Apply button.
-                        Validate `start <= end` locally so the parent only
-                        ever receives a sane pair. */}
-                    <div className="border-t bg-muted/30 px-3 py-3 space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
-                            Custom range
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                            <DatePicker
-                                value={customStart}
-                                onChange={setCustomStart}
-                                placeholder="Start"
-                                max={customEnd || undefined}
-                                className="h-8 text-xs"
-                            />
-                            <span className="text-muted-foreground text-xs">to</span>
-                            <DatePicker
-                                value={customEnd}
-                                onChange={setCustomEnd}
-                                placeholder="End"
-                                min={customStart || undefined}
-                                className="h-8 text-xs"
-                            />
+                <PopoverContent align="end" className="w-auto p-0 overflow-hidden">
+                    <div className="hrhub-rdr">
+                        <DateRangePicker
+                            ranges={[draft]}
+                            onChange={(r: RangeKeyDict) => r.selection && setDraft(r.selection)}
+                            months={2}
+                            direction="horizontal"
+                            showDateDisplay={false}
+                            showMonthAndYearPickers
+                            moveRangeOnFirstSelection={false}
+                            staticRanges={staticRanges}
+                            inputRanges={[]}
+                            rangeColors={[PRIMARY]}
+                            weekStartsOn={1}
+                        />
+                        {/* Footer: live span + Apply / Cancel, matching the plugin. */}
+                        <div className="flex items-center justify-end gap-2 border-t px-3 py-2.5">
+                            <span className="mr-auto text-xs text-muted-foreground tabular-nums">{draftLabel}</span>
+                            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button size="sm" className="h-8 text-xs" onClick={applyDraft}>
+                                Apply
+                            </Button>
                         </div>
-                        <Button
-                            size="sm"
-                            className="w-full h-8 text-xs"
-                            disabled={!customStart || !customEnd || customStart > customEnd}
-                            onClick={applyCustom}
-                        >
-                            Apply custom range
-                        </Button>
                     </div>
                 </PopoverContent>
             </Popover>
@@ -260,24 +227,7 @@ export function DateRangePresets({ value, onChange, className, compact = false }
     )
 }
 
-function PresetRow({ preset, active, onSelect }: { preset: PresetSpec; active: boolean; onSelect: () => void }) {
-    return (
-        <button
-            type="button"
-            onClick={onSelect}
-            className={cn(
-                'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-xs text-left transition-colors',
-                active ? 'bg-muted/60 text-foreground font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-        >
-            <span>{preset.label}</span>
-            {active && <Check className="size-3.5 text-primary" />}
-        </button>
-    )
-}
-
-/** Convenience factory for the default value. Reports page seeds with
- *  "This month" because that's HR's most common starting window. */
+/** Default seed — Reports opens on "This month". */
 export function defaultReportRange(): ReportDateRangeValue {
     const { startDate, endDate } = resolvePreset('this_month')
     return { preset: 'this_month', startDate, endDate }

@@ -95,6 +95,15 @@ describe('actionVerbFor', () => {
         expect(actionVerbFor('bulk_import')).toBe('bulk import')
         expect(actionVerbFor('frobnicate')).toBe('frobnicate')
     })
+
+    it('maps the extended classification verbs', () => {
+        expect(actionVerbFor('assign')).toBe('assigned')
+        expect(actionVerbFor('unassign')).toBe('unassigned')
+        expect(actionVerbFor('upload')).toBe('uploaded')
+        expect(actionVerbFor('download')).toBe('downloaded')
+        expect(actionVerbFor('permission_change')).toBe('changed permissions for')
+        expect(actionVerbFor('role_change')).toBe('changed the role of')
+    })
 })
 
 describe('timeAgo', () => {

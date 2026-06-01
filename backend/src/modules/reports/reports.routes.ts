@@ -201,14 +201,14 @@ export default async function (fastify: any): Promise<void> {
         // rejection reason is logged so we still see failures in the logs.
         const results = await Promise.allSettled([
             getHeadcountReport(tenantId),
-            getPayrollSummaryReport(tenantId),
+            getPayrollSummaryReport(tenantId, range ?? undefined),
             getVisaExpiryReport(tenantId, days),
-            getPROCostReport(tenantId),
+            getPROCostReport(tenantId, range ?? undefined),
             getAttendanceSummaryReport(tenantId, range ?? days),
             getLeaveSummaryReport(tenantId, year),
             getTurnoverReport(tenantId, range ?? 12),
-            getOnboardingReport(tenantId),
-            getPerformanceReport(tenantId),
+            getOnboardingReport(tenantId, range ?? undefined),
+            getPerformanceReport(tenantId, range ?? undefined),
             getDocumentExpiryReport(tenantId, days),
         ])
         const keys = [
