@@ -150,7 +150,7 @@ export function useCommitAttendanceImport() {
         // view — invalidate broadly so every consumer refreshes.
         onSuccess: () => Promise.all([
             qc.invalidateQueries({ queryKey: ['attendance'] }),
-            qc.invalidateQueries({ queryKey: ['attendance-punches'] }),
+            qc.invalidateQueries({ queryKey: ['attendance', 'punches'] }),
         ]),
         onError: () => {},
     })
