@@ -23,7 +23,19 @@ function buildQuery(params: Record<string, string | number | undefined | null> |
 export function useLeaveRequests(params: ListLeaveParams = {}) {
     const tenantId = useAuthStore((s) => s.user?.tenantId)
     return useQuery({
-        queryKey: ['portal', 'leave', tenantId, params],
+        queryKey: [
+            'portal',
+            'leave',
+            tenantId,
+            params.employeeId,
+            params.status,
+            params.leaveType,
+            params.from,
+            params.to,
+            params.limit,
+            params.offset,
+            params.search,
+        ],
         queryFn: () => api.get<PaginatedResponse<LeaveRequest>>(`/leave${buildQuery(params)}`),
         enabled: !!tenantId,
     })
