@@ -117,28 +117,23 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
     return issueTokens(fastify, user, input)
 }
 
-/**
- * Complete a 2FA login challenge — verifies the TOTP code and issues real tokens.
- * Call after loginUser returned `{ requiresMfa: true, mfaToken }`.
- */
-export async function completeMfaLogin(
-    fastify: AnyFastify,
-    userId: string,
-    totpCode: string,
-    meta: { ipAddress?: string; userAgent?: string },
-) {
-    const isValid = await verifyTotpCode(userId, totpCode)
-    if (!isValid) {
-        recordLoginEvent({
-            userId,
-            eventType: '2fa_failed',
-            success: false,
-            ipAddress: meta.ipAddress,
-            userAgent: meta.userAgent,
-            failureReason: 'invalid_totp',
-        }).catch(() => {})
-        return null
-    }
+type MfaMeta = { ipAddress?: string; userAgent?: string }
+
+/** Record a failed 2FA attempt (fire-and-forget). */
+function recordMfaFailure(userId: string, reason: string, meta: MfaMeta) {
+    recordLoginEvent({
+        userId,
+        eventType: '2fa_failed',
+        success: false,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        failureReason: reason,
+    }).catch(() => {})
+}
+
+/** Shared tail once a 2FA factor is verified: load the user, stamp last-login,
+ *  record the success event, and issue the real session tokens. */
+async function finishMfaLogin(fastify: AnyFastify, userId: string, meta: MfaMeta) {
     const [user] = await db
         .select()
         .from(users)
@@ -159,44 +154,27 @@ export async function completeMfaLogin(
 }
 
 /**
+ * Complete a 2FA login challenge — verifies the TOTP code and issues real tokens.
+ * Call after loginUser returned `{ requiresMfa: true, mfaToken }`.
+ */
+export async function completeMfaLogin(fastify: AnyFastify, userId: string, totpCode: string, meta: MfaMeta) {
+    if (!(await verifyTotpCode(userId, totpCode))) {
+        recordMfaFailure(userId, 'invalid_totp', meta)
+        return null
+    }
+    return finishMfaLogin(fastify, userId, meta)
+}
+
+/**
  * Complete a 2FA login challenge using a single-use backup recovery code,
  * for when the authenticator app is unavailable.
  */
-export async function completeMfaLoginWithBackupCode(
-    fastify: AnyFastify,
-    userId: string,
-    backupCode: string,
-    meta: { ipAddress?: string; userAgent?: string },
-) {
-    const isValid = await verifyAndConsumeBackupCode(userId, backupCode)
-    if (!isValid) {
-        recordLoginEvent({
-            userId,
-            eventType: '2fa_failed',
-            success: false,
-            ipAddress: meta.ipAddress,
-            userAgent: meta.userAgent,
-            failureReason: 'invalid_backup_code',
-        }).catch(() => {})
+export async function completeMfaLoginWithBackupCode(fastify: AnyFastify, userId: string, backupCode: string, meta: MfaMeta) {
+    if (!(await verifyAndConsumeBackupCode(userId, backupCode))) {
+        recordMfaFailure(userId, 'invalid_backup_code', meta)
         return null
     }
-    const [user] = await db
-        .select()
-        .from(users)
-        .where(and(eq(users.id, userId), eq(users.isActive, true)))
-        .limit(1)
-    if (!user) return null
-    await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id))
-    recordLoginEvent({
-        tenantId: user.tenantId,
-        userId: user.id,
-        email: user.email,
-        eventType: '2fa_success',
-        success: true,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-    }).catch(() => {})
-    return issueTokens(fastify, user, meta)
+    return finishMfaLogin(fastify, userId, meta)
 }
 
 export async function issueTokens(fastify: AnyFastify, user: any, meta: { ipAddress?: string; userAgent?: string }) {

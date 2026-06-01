@@ -22,8 +22,10 @@ import {
     changePasswordSchema,
     forgotPasswordSchema,
     loginSchema,
+    mfaChallengeSchema,
     refreshSchema,
     resetPasswordSchema,
+    totpTokenSchema,
     validate,
 } from '../../lib/validation.js'
 import { e400, e401 } from '../../lib/errors.js'
@@ -157,8 +159,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // POST /api/v1/auth/2fa/challenge — finish login with a TOTP code (public; mfaToken proves the password step).
     fastify.post('/2fa/challenge', challengeLimit, async (request: any, reply: any) => {
-        const { mfaToken, code } = (request.body ?? {}) as { mfaToken?: string; code?: string }
-        if (!mfaToken || !code) return reply.code(400).send(e400('mfaToken and code are required'))
+        const { mfaToken, code } = validate(mfaChallengeSchema, request.body)
         let payload: any
         try { payload = (fastify as any).jwt.verify(mfaToken) } catch {
             return reply.code(401).send(e401('Invalid or expired MFA session.'))
@@ -174,8 +175,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // POST /api/v1/auth/2fa/backup-challenge — finish login with a single-use backup code (public).
     fastify.post('/2fa/backup-challenge', challengeLimit, async (request: any, reply: any) => {
-        const { mfaToken, code } = (request.body ?? {}) as { mfaToken?: string; code?: string }
-        if (!mfaToken || !code) return reply.code(400).send(e400('mfaToken and code are required'))
+        const { mfaToken, code } = validate(mfaChallengeSchema, request.body)
         let payload: any
         try { payload = (fastify as any).jwt.verify(mfaToken) } catch {
             return reply.code(401).send(e401('Invalid or expired MFA session.'))
@@ -202,9 +202,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // POST /api/v1/auth/2fa/verify — confirm a code to activate 2FA; returns backup codes ONCE.
     fastify.post('/2fa/verify', { ...auth }, async (request: any, reply: any) => {
-        const { token } = (request.body ?? {}) as { token?: string }
-        if (!token) return reply.code(400).send(e400('token is required'))
-        const result = await verifyAndEnableTotp(request.user.id, String(token))
+        const { token } = validate(totpTokenSchema, request.body)
+        const result = await verifyAndEnableTotp(request.user.id, token)
         if (!result.enabled) return reply.code(400).send(e400('Invalid or expired token'))
         auditSecurity(request, '2fa-enable', 'Two-factor authentication')
         return reply.send({ data: { enabled: true, backupCodes: result.backupCodes ?? [] } })
@@ -212,9 +211,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // POST /api/v1/auth/2fa/disable — turn 2FA off (requires a current TOTP code as proof).
     fastify.post('/2fa/disable', { ...auth }, async (request: any, reply: any) => {
-        const { token } = (request.body ?? {}) as { token?: string }
-        if (!token) return reply.code(400).send(e400('token is required'))
-        const ok = await disableTotp(request.user.id, String(token))
+        const { token } = validate(totpTokenSchema, request.body)
+        const ok = await disableTotp(request.user.id, token)
         if (!ok) return reply.code(400).send(e400('Invalid token or 2FA not enabled'))
         auditSecurity(request, '2fa-disable', 'Two-factor authentication')
         return reply.send({ data: { enabled: false } })
@@ -222,9 +220,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // POST /api/v1/auth/2fa/backup-codes/regenerate — fresh codes, invalidates old (requires TOTP code).
     fastify.post('/2fa/backup-codes/regenerate', { ...auth }, async (request: any, reply: any) => {
-        const { token } = (request.body ?? {}) as { token?: string }
-        if (!token) return reply.code(400).send(e400('token is required'))
-        const codes = await regenerateBackupCodes(request.user.id, String(token))
+        const { token } = validate(totpTokenSchema, request.body)
+        const codes = await regenerateBackupCodes(request.user.id, token)
         if (!codes) return reply.code(400).send(e400('Invalid token or 2FA not enabled'))
         auditSecurity(request, '2fa-backup-regenerate', 'Two-factor authentication')
         return reply.send({ data: { backupCodes: codes } })
