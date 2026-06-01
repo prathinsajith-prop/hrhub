@@ -1181,7 +1181,8 @@
     "directReports": "Direct Reports",
     "noData": "No organizational data available",
     "expand": "Expand All",
-    "collapse": "Collapse All"
+    "collapse": "Collapse All",
+    "selectEmployee": "Search employee…"
   },
   "assets": {
     "title": "Assets",
@@ -2005,7 +2006,13 @@
       "teamDeleteFailedDesc": "Could not delete team.",
       "deleteTeamTitle": "Delete \"{{name}}\"?",
       "deleteTeamDesc": "All members will be removed from this team. This action cannot be undone.",
-      "deleting": "Deleting…"
+      "deleting": "Deleting…",
+      "filters": "Filters",
+      "clearFilters": "Clear",
+      "allBranches": "All branches",
+      "allDivisions": "All divisions",
+      "allDepartments": "All departments",
+      "allDesignations": "All designations"
     },
     "gradeLevels": {
       "title": "Grade Levels & Sponsoring Entities",

@@ -35,6 +35,15 @@ export function getS3Client(): S3Client {
             accessKeyId: env.S3_ACCESS_KEY,
             secretAccessKey: env.S3_SECRET_KEY,
         },
+        // AWS SDK v3.730+ adds an automatic CRC32 checksum to every request — including
+        // presigned PUT URLs. The browser then can't satisfy the baked-in
+        // x-amz-checksum-crc32=AAAAAA== query param (CRC of empty content) on direct
+        // uploads, so S3 rejects with "header you provided implies functionality that
+        // is not implemented". Opting back into the pre-v3.730 behaviour fixes
+        // browser-side PUTs to presigned URLs without disabling integrity checks for
+        // server-side uploads that DO send a body the SDK can hash itself.
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
     })
     return s3Client
 }

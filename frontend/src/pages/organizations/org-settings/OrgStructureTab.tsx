@@ -735,7 +735,8 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
     const [headDialogOpen, setHeadDialogOpen] = useState(false)
     const isDept = unit.type === 'department'
     // Departments stay collapsed by default - open on explicit click.
-    const [expanded, setExpanded] = useState(!isDept)
+    const [userExpanded, setUserExpanded] = useState(!isDept)
+    const expanded = userExpanded
     const [confirmDelete, setConfirmDelete] = useState(false)
     const meta = ORG_TYPE_META[unit.type]
     const Icon = meta.icon
@@ -751,8 +752,8 @@ function OrgUnitRow({ unit, units, empList, teamsByDept }: {
                     meta.treeIndent,
                     hasContent ? 'cursor-pointer hover:bg-muted/40' : 'hover:bg-muted/20',
                 )}
-                onClick={hasContent ? () => setExpanded(e => !e) : undefined}
-                onKeyDown={hasContent ? onActivate(() => setExpanded(v => !v)) : undefined}
+                onClick={hasContent ? () => setUserExpanded(e => !e) : undefined}
+                onKeyDown={hasContent ? onActivate(() => setUserExpanded(v => !v)) : undefined}
                 role={hasContent ? 'button' : undefined}
                 tabIndex={hasContent ? 0 : undefined}
                 aria-expanded={hasContent ? expanded : undefined}
@@ -905,7 +906,7 @@ export function OrgStructureTab() {
         [employees],
     )
 
-    // Group teams by department once → O(1) lookup per row
+    // Group teams by department once → O(1) lookup per row.
     const teamsByDept = useMemo(() => {
         const map = new Map<string, TeamRow[]>()
         for (const team of teams) {
@@ -918,12 +919,13 @@ export function OrgStructureTab() {
         return map
     }, [teams])
 
-    const roots = units.filter(u => !u.parentId)
-    const counts: Record<OrgUnitType, number> = {
+    const counts = {
         branch: units.filter(u => u.type === 'branch').length,
         division: units.filter(u => u.type === 'division').length,
         department: units.filter(u => u.type === 'department').length,
     }
+
+    const roots = units.filter(u => !u.parentId)
 
     return (
         <div className="space-y-6">
@@ -970,7 +972,7 @@ export function OrgStructureTab() {
                         <Skeleton key={i} className="h-11 rounded-lg" />
                     ))}
                 </div>
-            ) : roots.length === 0 ? (
+            ) : units.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-12 text-center">
                     <GitBranch className="size-10 text-muted-foreground" />
                     <div>
@@ -988,7 +990,13 @@ export function OrgStructureTab() {
                     {roots
                         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
                         .map(unit => (
-                            <OrgUnitRow key={unit.id} unit={unit} units={units} empList={empList} teamsByDept={teamsByDept} />
+                            <OrgUnitRow
+                                key={unit.id}
+                                unit={unit}
+                                units={units}
+                                empList={empList}
+                                teamsByDept={teamsByDept}
+                            />
                         ))}
                 </div>
             )}

@@ -1,12 +1,18 @@
-import { memo } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Users } from 'lucide-react'
+import { Filter as FilterIcon, Users } from 'lucide-react'
+import { OrgUnitFilters, EMPTY_ORG_FILTERS, isOrgFiltersActive, type OrgFilters } from '@/components/shared/OrgUnitFilters'
+import { useOrgUnits } from '@/hooks/useOrgUnits'
+import { useDesignations } from '@/hooks/useDesignations'
+import { useEmployees } from '@/hooks/useEmployees'
+import type { Employee } from '@/types'
 
 // ─── Reporting Tree ───────────────────────────────────────────────────────────
 
@@ -17,6 +23,8 @@ interface OrgNode {
     department?: string
     status: string
     isAncestor?: boolean
+    /** Marks nodes that satisfied the active filter (vs. ancestors kept for context). */
+    isMatch?: boolean
     children: OrgNode[]
 }
 
@@ -33,6 +41,7 @@ const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNo
     const initials = node.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     const dot = STATUS_DOT[node.status] ?? 'bg-muted-foreground'
     const isAncestor = node.isAncestor === true
+    const isMatch = node.isMatch === true
     const isMe = !!currentEmployeeId && node.id === currentEmployeeId
 
     return (
@@ -41,9 +50,11 @@ const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNo
                 'relative flex flex-col items-center text-center rounded-2xl border px-4 py-4 w-48 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5',
                 isAncestor
                     ? 'bg-muted/40 border-border/40 opacity-75'
-                    : isMe
-                        ? 'bg-card border-primary/25 shadow-primary/10 shadow-md ring-1 ring-primary/10'
-                        : 'bg-card border-border/60',
+                    : isMatch
+                        ? 'bg-card border-emerald-300 shadow-emerald-100 shadow-md ring-1 ring-emerald-200'
+                        : isMe
+                            ? 'bg-card border-primary/25 shadow-primary/10 shadow-md ring-1 ring-primary/10'
+                            : 'bg-card border-border/60',
             )}>
                 {isMe && !isAncestor && (
                     <div className="absolute -top-2 left-1/2 -translate-x-1/2">
@@ -56,6 +67,13 @@ const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNo
                     <div className="absolute -top-2 left-1/2 -translate-x-1/2">
                         <span className="text-[9px] font-semibold uppercase tracking-wider bg-muted text-muted-foreground border px-2 py-0.5 rounded-full">
                             Manager
+                        </span>
+                    </div>
+                )}
+                {isMatch && !isMe && !isAncestor && (
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                            Match
                         </span>
                     </div>
                 )}
@@ -106,7 +124,38 @@ const EmpCard = memo(function EmpCard({ node, currentEmployeeId }: { node: OrgNo
     )
 })
 
-function ReportingChart() {
+/**
+ * Walk the org-chart tree and prune branches that contain no employees matching
+ * the filter set. Behavior:
+ *   - Direct matches are kept and tagged isMatch=true.
+ *   - The full subtree under a matched node is kept (so reports of a matched
+ *     manager stay visible — important when searching for a single person).
+ *   - Ancestors of any match are kept and tagged isAncestor=true so the
+ *     reporting chain renders dimmed for context.
+ *
+ * Pass `inMatchSubtree=true` to skip the per-node match check and keep every
+ * descendant; that branch is already inside a confirmed match.
+ */
+function pruneTree(nodes: OrgNode[], matches: Set<string>, inMatchSubtree: boolean): OrgNode[] {
+    const out: OrgNode[] = []
+    for (const n of nodes) {
+        const selfMatch = matches.has(n.id)
+        const nextInSubtree = inMatchSubtree || selfMatch
+        const prunedChildren = pruneTree(n.children, matches, nextInSubtree)
+        if (inMatchSubtree || selfMatch || prunedChildren.length > 0) {
+            out.push({
+                ...n,
+                isMatch: selfMatch,
+                // Anything kept that isn't itself a match is context — render it dimmed.
+                isAncestor: !selfMatch && !inMatchSubtree,
+                children: prunedChildren,
+            })
+        }
+    }
+    return out
+}
+
+function ReportingChart({ filters }: { filters: OrgFilters }) {
     const { user } = useAuthStore()
     const currentEmployeeId = user?.employeeId ?? undefined
     const { data, isLoading } = useQuery({
@@ -114,7 +163,40 @@ function ReportingChart() {
         queryFn: () => api.get<OrgNode[]>('/employees/org-chart'),
         staleTime: 3 * 60 * 1000,
     })
-    const list = Array.isArray(data) ? data : []
+
+    // Employees + their org-unit ids so we can filter by branch/division/department.
+    // The /employees/org-chart endpoint only echoes department NAME, so we join
+    // against this list to resolve real ids.
+    const { data: empResp } = useEmployees({ limit: 500 })
+    const allEmployees = useMemo<Employee[]>(
+        () => (Array.isArray(empResp) ? empResp : (empResp as { data?: Employee[] } | undefined)?.data ?? []) as Employee[],
+        [empResp],
+    )
+
+    const list = useMemo(() => (Array.isArray(data) ? data : []), [data])
+    const filtersActive = isOrgFiltersActive(filters)
+
+    const filteredList = useMemo(() => {
+        if (!filtersActive) return list
+        const byId = new Map(allEmployees.map(e => [e.id, e]))
+        const matches = new Set<string>()
+        // Walk every node in the tree and decide if it satisfies the filters.
+        const visit = (nodes: OrgNode[]) => {
+            for (const n of nodes) {
+                const emp = byId.get(n.id)
+                let keep = true
+                if (filters.employeeId && n.id !== filters.employeeId) keep = false
+                if (keep && filters.branchId && emp?.branchId !== filters.branchId) keep = false
+                if (keep && filters.divisionId && emp?.divisionId !== filters.divisionId) keep = false
+                if (keep && filters.departmentId && emp?.departmentId !== filters.departmentId) keep = false
+                if (keep && filters.designation && (emp?.designation ?? n.designation) !== filters.designation) keep = false
+                if (keep) matches.add(n.id)
+                visit(n.children)
+            }
+        }
+        visit(list)
+        return pruneTree(list, matches, false)
+    }, [list, allEmployees, filters, filtersActive])
 
     if (isLoading) return (
         <div className="flex gap-8 justify-center py-12">
@@ -140,10 +222,20 @@ function ReportingChart() {
         </div>
     )
 
+    if (filteredList.length === 0) return (
+        <div className="flex flex-col items-center gap-2 py-20 text-center">
+            <FilterIcon className="size-8 text-muted-foreground" />
+            <p className="font-semibold text-sm">No employees match these filters</p>
+            <p className="text-sm text-muted-foreground max-w-xs">
+                Adjust or clear the filters above to see the reporting tree.
+            </p>
+        </div>
+    )
+
     return (
         <div className="overflow-x-auto pb-6">
             <div className="flex gap-16 justify-center min-w-max py-8 px-6">
-                {list.map((node: OrgNode) => (
+                {filteredList.map((node: OrgNode) => (
                     <EmpCard key={node.id} node={node} currentEmployeeId={currentEmployeeId} />
                 ))}
             </div>
@@ -165,6 +257,12 @@ export function OrgChartPage() {
             ? t('orgChart.descriptionDeptHead', { defaultValue: 'Your branch structure and reporting lines within your team.' })
             : t('orgChart.descriptionEmployee', { defaultValue: 'Your branch structure and your position in the reporting hierarchy.' })
 
+    const [filters, setFilters] = useState<OrgFilters>(EMPTY_ORG_FILTERS)
+    const { data: units = [] } = useOrgUnits()
+    const { data: designations = [] } = useDesignations()
+    const showFilters = isFullAccess && units.length > 0
+    const filtersActive = isOrgFiltersActive(filters)
+
     return (
         <PageWrapper>
             <div className="mb-6">
@@ -174,8 +272,25 @@ export function OrgChartPage() {
                 <p className="text-sm text-muted-foreground mt-1">{description}</p>
             </div>
 
-            {/* Org Structure tab is temporarily hidden - show Reporting Lines only. */}
-            <ReportingChart />
+            {showFilters && (
+                <div className="mb-4">
+                    <OrgUnitFilters
+                        filters={filters}
+                        onChange={setFilters}
+                        units={units}
+                        designations={designations}
+                    />
+                    {filtersActive && (
+                        <div className="mt-2 flex justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => setFilters(EMPTY_ORG_FILTERS)}>
+                                {t('orgSettings.structure.clearFilters', { defaultValue: 'Clear' })}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            <ReportingChart filters={filters} />
         </PageWrapper>
     )
 }

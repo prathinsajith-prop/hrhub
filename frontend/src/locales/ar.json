@@ -1181,7 +1181,8 @@
     "directReports": "التقارير المباشرة",
     "noData": "لا تتوفر بيانات تنظيمية",
     "expand": "توسيع الكل",
-    "collapse": "طي الكل"
+    "collapse": "طي الكل",
+    "selectEmployee": "ابحث عن موظف…"
   },
   "assets": {
     "title": "إدارة الأصول",
@@ -2005,7 +2006,13 @@
       "teamDeleteFailedDesc": "تعذّر حذف الفريق.",
       "deleteTeamTitle": "حذف \"{{name}}\"؟",
       "deleteTeamDesc": "ستتم إزالة جميع الأعضاء من هذا الفريق. لا يمكن التراجع عن هذا الإجراء.",
-      "deleting": "جارٍ الحذف…"
+      "deleting": "جارٍ الحذف…",
+      "filters": "عوامل التصفية",
+      "clearFilters": "مسح",
+      "allBranches": "كل الفروع",
+      "allDivisions": "كل الأقسام",
+      "allDepartments": "كل الإدارات",
+      "allDesignations": "كل المسميات"
     },
     "gradeLevels": {
       "title": "مستويات الدرجات والجهات الكافلة",

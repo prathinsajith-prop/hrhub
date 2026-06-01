@@ -57,7 +57,8 @@ import { resolveMonthFromOffset } from '@/lib/monthRange'
 import { useEmployeeTransfers, useCreateTransfer } from '@/hooks/useTransfers'
 import { useLoans } from '@/hooks/useLoans'
 import { useDependents, useCreateDependent, useUpdateDependent, useDeleteDependent, useEmployeeNotes, useAddEmployeeNote, useDeleteEmployeeNote, type Dependent } from '@/hooks/useEmployeeDependents'
-import { useActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { useInfiniteActivityLogs, type ActivityLog } from '@/hooks/useAudit'
+import { actionVerbFor, formatChangeEntries } from '@/lib/activityFormat'
 import { useEmployeeWarnings, useCreateEmployeeWarning, useDeleteEmployeeWarning, useWarningDocumentUrl, type CreateWarningInput } from '@/hooks/useEmployeeWarnings'
 import { useSponsoringEntities, useCreateSponsoringEntity, type SponsoringEntity } from '@/hooks/useSponsoringEntities'
 import { useEmployeeTraining, TRAINING_STATUS_STYLE, type TrainingRecord } from '@/hooks/useTraining'
@@ -1033,10 +1034,34 @@ export function EmployeeDetailPage() {
   const addNote = useAddEmployeeNote(id ?? '')
   const deleteNote = useDeleteEmployeeNote(id ?? '')
 
-  // Updates (audit trail for this employee)
-  const { data: auditData, isLoading: auditLoading } = useActivityLogs(
-    canManage && id ? { entityType: 'employee', entityId: id, limit: 100 } : {},
+  // Updates (audit trail for this employee) — infinite scroll, 20 per page
+  const {
+    data: auditPages,
+    isLoading: auditLoading,
+    hasNextPage: auditHasNext,
+    isFetchingNextPage: auditFetchingNext,
+    fetchNextPage: auditFetchNext,
+  } = useInfiniteActivityLogs(
+    canManage && id
+      ? { entityType: 'employee', entityId: id, pageSize: 20 }
+      : { pageSize: 20 },
   )
+  const auditLogs = React.useMemo<ActivityLog[]>(
+    () => (auditPages?.pages ?? []).flat(),
+    [auditPages],
+  )
+  const auditSentinelRef = React.useRef<HTMLDivElement | null>(null)
+  React.useEffect(() => {
+    const el = auditSentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && auditHasNext && !auditFetchingNext) {
+        auditFetchNext()
+      }
+    }, { rootMargin: '200px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [auditHasNext, auditFetchingNext, auditFetchNext])
 
   // Warnings
   const { data: warningsData, isLoading: warningsLoading } = useEmployeeWarnings(canManage ? (id ?? '') : '')
@@ -2946,41 +2971,41 @@ export function EmployeeDetailPage() {
           {canManage && (
             <TabsContent value="updates" className="mt-4">
               <Card>
-                <CardHeader><CardTitle className="text-base">Activity History</CardTitle></CardHeader>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Activity History</CardTitle>
+                    {auditLogs.length > 0 && (
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {auditLogs.length} event{auditLogs.length === 1 ? '' : 's'}{auditHasNext ? '+' : ''}
+                      </span>
+                    )}
+                  </div>
+                </CardHeader>
                 <CardContent className="p-0">
                   {auditLoading ? (
-                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={`div-${i}`} className="h-10 rounded bg-muted animate-pulse" />)}</div>
-                  ) : !auditData?.length ? (
+                    <div className="p-4 space-y-2">{[1, 2, 3, 4, 5].map(i => <div key={`upd-skel-${i}`} className="h-16 rounded bg-muted animate-pulse" />)}</div>
+                  ) : !auditLogs.length ? (
                     <div className="text-center py-12 text-muted-foreground">
                       <History className="size-8 mx-auto mb-2 opacity-30" />
                       <p className="text-sm font-medium">No activity recorded</p>
+                      <p className="text-xs mt-0.5">Edits and updates to this employee will appear here.</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b bg-muted/40">
-                            {['Date', 'Actor', 'Role', 'Action', 'Fields Changed'].map(h => (
-                              <th key={h} className="text-left font-medium text-muted-foreground px-4 py-2.5 whitespace-nowrap">{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(auditData as ActivityLog[]).map(log => (
-                            <tr key={log.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(log.createdAt)}</td>
-                              <td className="px-4 py-2.5 font-medium">{log.actorName ?? '—'}</td>
-                              <td className="px-4 py-2.5 text-muted-foreground capitalize">{log.actorRole?.replace('_', ' ') ?? '—'}</td>
-                              <td className="px-4 py-2.5">
-                                <ActionBadge action={log.action} />
-                              </td>
-                              <td className="px-4 py-2.5 text-muted-foreground">
-                                {log.changes ? Object.keys(log.changes).join(', ') : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="divide-y">
+                      {auditLogs.map(log => (
+                        <EmployeeActivityRow key={log.id} log={log} />
+                      ))}
+                      <div ref={auditSentinelRef} className="h-6" />
+                      {auditFetchingNext && (
+                        <div className="flex justify-center items-center gap-2 py-4 text-xs text-muted-foreground">
+                          <Loader2 className="size-3 animate-spin" /> Loading more…
+                        </div>
+                      )}
+                      {!auditHasNext && auditLogs.length >= 20 && (
+                        <div className="text-center py-3 text-[11px] text-muted-foreground/70">
+                          End of activity
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -3661,5 +3686,168 @@ function AddWarningDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ── Employee Activity Updates row ────────────────────────────────────────────
+
+function formatPunchTime(iso?: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('en-AE', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })
+}
+
+function buildActivityHeadline(log: ActivityLog, changeCount: number): React.ReactNode {
+  const meta = (log.metadata ?? {}) as Record<string, unknown>
+  const kind = typeof meta.kind === 'string' ? meta.kind : null
+  const subKind = typeof meta.subKind === 'string' ? meta.subKind : null
+  const target = log.entityName
+
+  if (kind === 'document') {
+    const verbMap: Record<string, string> = {
+      upload: 'uploaded document',
+      edit: 'updated document',
+      verify: 'verified document',
+      reject: 'rejected document',
+      delete: 'removed document',
+    }
+    const verb = verbMap[subKind ?? ''] ?? `${actionVerbFor(log.action)} document`
+    return (
+      <>
+        <span className="text-muted-foreground"> {verb} </span>
+        {target && <span className="font-medium text-foreground">{target}</span>}
+      </>
+    )
+  }
+  if (kind === 'attendance') {
+    const at = typeof meta.at === 'string' ? formatPunchTime(meta.at) : ''
+    const date = typeof meta.date === 'string' ? meta.date : ''
+    const verbMap: Record<string, string> = {
+      'check-in': 'checked in',
+      'check-out': 'checked out',
+      'manual-punch': 'added a manual punch',
+      'delete-punch': 'removed a punch',
+      'update': 'updated attendance',
+      'external-punch': 'recorded a biometric punch',
+    }
+    const verb = verbMap[subKind ?? ''] ?? `${actionVerbFor(log.action)} attendance`
+    const when = at || date
+    return (
+      <>
+        <span className="text-muted-foreground"> {verb}</span>
+        {when && <span className="text-muted-foreground"> at <span className="font-medium text-foreground tabular-nums">{when}</span></span>}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <span className="text-muted-foreground"> {actionVerbFor(log.action)} </span>
+      <span className="text-muted-foreground">
+        {changeCount > 0 ? `${changeCount} field${changeCount === 1 ? '' : 's'}` : 'this record'}
+      </span>
+    </>
+  )
+}
+
+function EmployeeActivityRow({ log }: { log: ActivityLog }) {
+  const [expanded, setExpanded] = React.useState(false)
+  const changes = formatChangeEntries(log.changes)
+  const visibleChanges = expanded ? changes : changes.slice(0, 3)
+  const initials = (log.actorName ?? '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(n => n[0]?.toUpperCase() ?? '')
+    .join('') || '?'
+  const meta = (log.metadata ?? {}) as Record<string, unknown>
+  const metaPills: { label: string; value: string }[] = []
+  if (typeof meta.subKind === 'string' && typeof meta.kind === 'string' && meta.kind !== 'document' && meta.kind !== 'attendance') {
+    metaPills.push({ label: 'Type', value: String(meta.subKind) })
+  }
+  if (meta.kind === 'attendance' && typeof meta.locationName === 'string' && meta.locationName) {
+    metaPills.push({ label: 'Location', value: String(meta.locationName) })
+  }
+  if (meta.kind === 'attendance' && typeof meta.deviceName === 'string' && meta.deviceName) {
+    metaPills.push({ label: 'Device', value: String(meta.deviceName) })
+  }
+  if (meta.kind === 'document' && typeof meta.docType === 'string' && meta.docType) {
+    metaPills.push({ label: 'Doc type', value: String(meta.docType) })
+  }
+  if (meta.kind === 'document' && typeof meta.reason === 'string' && meta.reason) {
+    metaPills.push({ label: 'Reason', value: String(meta.reason) })
+  }
+
+  return (
+    <div className="px-4 py-3.5 hover:bg-muted/30 transition-colors">
+      <div className="flex items-start gap-3">
+        <div className="size-9 rounded-full bg-primary/10 text-primary text-[11px] font-semibold flex items-center justify-center shrink-0">
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm leading-snug">
+                <span className="font-semibold text-foreground">{log.actorName ?? 'System'}</span>
+                {buildActivityHeadline(log, changes.length)}
+              </p>
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground flex-wrap">
+                <ActionBadge action={log.action} />
+                {log.actorRole && (
+                  <span className="capitalize">· {log.actorRole.replace(/_/g, ' ')}</span>
+                )}
+                {log.ipAddress && (
+                  <span className="font-mono text-[10px]">· {log.ipAddress}</span>
+                )}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[11px] text-muted-foreground tabular-nums">
+                {formatDateTime(log.createdAt)}
+              </p>
+            </div>
+          </div>
+
+          {changes.length > 0 && (
+            <div className="mt-2.5 rounded-lg bg-muted/30 border p-2.5 space-y-2">
+              {visibleChanges.map(c => (
+                <div key={c.key} className="grid grid-cols-[minmax(140px,180px)_1fr] gap-3 text-[12px] items-baseline">
+                  <span className="font-medium text-muted-foreground truncate">{c.label}</span>
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[11px] line-through break-all">
+                      {c.from}
+                    </span>
+                    <span className="text-muted-foreground shrink-0">→</span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-medium break-all">
+                      {c.to}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {changes.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(v => !v)}
+                  className="text-[11px] text-primary hover:underline pt-0.5"
+                >
+                  {expanded ? 'Show less' : `Show ${changes.length - 3} more change${changes.length - 3 === 1 ? '' : 's'}`}
+                </button>
+              )}
+            </div>
+          )}
+          {metaPills.length > 0 && (
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+              {metaPills.map(p => (
+                <span key={p.label} className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-muted/60 text-foreground/80">
+                  <span className="text-muted-foreground">{p.label}:</span>
+                  <span className="font-medium">{p.value}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
