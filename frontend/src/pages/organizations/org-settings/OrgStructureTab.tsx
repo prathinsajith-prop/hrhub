@@ -905,7 +905,7 @@ export function OrgStructureTab() {
         [employees],
     )
 
-    // Group teams by department once → O(1) lookup per row
+    // Group teams by department once → O(1) lookup per row.
     const teamsByDept = useMemo(() => {
         const map = new Map<string, TeamRow[]>()
         for (const team of teams) {
@@ -918,12 +918,13 @@ export function OrgStructureTab() {
         return map
     }, [teams])
 
-    const roots = units.filter(u => !u.parentId)
-    const counts: Record<OrgUnitType, number> = {
+    const counts = {
         branch: units.filter(u => u.type === 'branch').length,
         division: units.filter(u => u.type === 'division').length,
         department: units.filter(u => u.type === 'department').length,
     }
+
+    const roots = units.filter(u => !u.parentId)
 
     return (
         <div className="space-y-6">
@@ -988,7 +989,13 @@ export function OrgStructureTab() {
                     {roots
                         .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
                         .map(unit => (
-                            <OrgUnitRow key={unit.id} unit={unit} units={units} empList={empList} teamsByDept={teamsByDept} />
+                            <OrgUnitRow
+                                key={unit.id}
+                                unit={unit}
+                                units={units}
+                                empList={empList}
+                                teamsByDept={teamsByDept}
+                            />
                         ))}
                 </div>
             )}

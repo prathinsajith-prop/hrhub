@@ -41,6 +41,13 @@ async function authenticatePlugin(fastify: any): Promise<void> {
         try {
             const payload = (await request.jwtVerify()) as JwtPayload
 
+            // A 2FA "pending" token only proves the password step — it must never
+            // grant access to protected routes. Reject it explicitly (defence in
+            // depth; it also lacks employeeId/role).
+            if ((payload as { purpose?: string }).purpose === 'mfa-pending') {
+                return reply.code(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Two-factor authentication not completed' })
+            }
+
             const cached = cacheGet(payload.sub)
             let isActive: boolean
             if (cached !== null) {

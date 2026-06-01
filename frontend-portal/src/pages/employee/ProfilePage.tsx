@@ -6,6 +6,7 @@ import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Mail, Phone, Pencil
 import { ApiError } from '@/lib/api'
 import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
 import { useChangePassword } from '@/hooks/useChangePassword'
+import { TwoFactorCard } from '@/components/security/TwoFactorCard'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -208,6 +209,7 @@ export function EmployeeProfilePage() {
                 <TabsContent value="settings" className="space-y-4">
                     <LanguageCard />
                     <SecurityCard />
+                    <TwoFactorCard />
                 </TabsContent>
             </Tabs>
         </div>
