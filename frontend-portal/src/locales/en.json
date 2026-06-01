@@ -39,6 +39,8 @@
     "backupCode": "Backup code",
     "verify": "Verify",
     "verifying": "Verifying…",
+    "invalidCode": "Invalid or expired verification code. Please try again.",
+    "mfaAutoSubmitHint": "Enter all 6 digits to verify automatically",
     "useBackupCode": "Use a backup code",
     "useAuthenticator": "Use authenticator app",
     "backToSignIn": "Back to sign in"

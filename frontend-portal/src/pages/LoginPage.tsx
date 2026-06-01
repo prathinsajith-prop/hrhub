@@ -82,14 +82,17 @@ export function LoginPage() {
         navigate(canManage ? ROUTES.managerHome : ROUTES.employeeHome, { replace: true })
     }
 
-    function toErrorMessage(err: unknown): string {
-        return err instanceof ApiError
-            ? err.statusCode === 401
-                ? t('auth.invalidCredentials')
-                : err.message
-            : err instanceof Error
-              ? err.message
-              : t('auth.invalidCredentials')
+    // `mfa` flag matters because the 2FA challenge also returns 401 on a wrong
+    // code — without it we'd wrongly show "Invalid email or password" for a bad
+    // verification code. In MFA mode we surface the server's precise message
+    // ("Invalid or expired verification code") with a localized fallback.
+    function toErrorMessage(err: unknown, opts?: { mfa?: boolean }): string {
+        if (err instanceof ApiError) {
+            if (opts?.mfa) return err.message || t('auth.invalidCode')
+            return err.statusCode === 401 ? t('auth.invalidCredentials') : err.message
+        }
+        if (err instanceof Error) return err.message
+        return opts?.mfa ? t('auth.invalidCode') : t('auth.invalidCredentials')
     }
 
     async function onSubmit(e: FormEvent) {
@@ -127,7 +130,7 @@ export function LoginPage() {
             const res = await api.post<ChallengeResponse>(endpoint, { mfaToken, code })
             finalizeLogin(res.data) // navigates away on success
         } catch (err) {
-            setError(toErrorMessage(err))
+            setError(toErrorMessage(err, { mfa: true }))
             setMfaCode('')
             setSubmitting(false)
         }
@@ -227,22 +230,36 @@ export function LoginPage() {
                                 )}
                             </div>
 
-                            <Button
-                                type="submit"
-                                className="h-12 w-full rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-[15px] font-semibold text-white shadow-lg shadow-indigo-300/40 transition-transform hover:from-indigo-600 hover:to-sky-600 hover:shadow-xl active:translate-y-[1px] disabled:translate-y-0"
-                                disabled={submitting || mfaCode.replace(/[^a-z0-9]/gi, '').length < (useBackupCode ? 10 : 6)}
-                            >
-                                {submitting ? (
-                                    <>
-                                        <Loader2 className="size-4 animate-spin" /> {t('auth.verifying')}
-                                    </>
-                                ) : (
-                                    <>
-                                        {t('auth.verify')}
-                                        <ArrowRight className="size-4" data-rtl-flip />
-                                    </>
-                                )}
-                            </Button>
+                            {useBackupCode ? (
+                                // Backup codes are variable-length — submit with an explicit button.
+                                <Button
+                                    type="submit"
+                                    className="h-12 w-full rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-[15px] font-semibold text-white shadow-lg shadow-indigo-300/40 transition-transform hover:from-indigo-600 hover:to-sky-600 hover:shadow-xl active:translate-y-[1px] disabled:translate-y-0"
+                                    disabled={submitting || mfaCode.replace(/[^a-z0-9]/gi, '').length < 10}
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <Loader2 className="size-4 animate-spin" /> {t('auth.verifying')}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {t('auth.verify')}
+                                            <ArrowRight className="size-4" data-rtl-flip />
+                                        </>
+                                    )}
+                                </Button>
+                            ) : (
+                                // TOTP auto-submits on the 6th digit — no button needed; show progress.
+                                <div className="flex h-6 items-center justify-center text-sm text-muted-foreground" aria-live="polite">
+                                    {submitting ? (
+                                        <span className="inline-flex items-center gap-2 text-primary">
+                                            <Loader2 className="size-4 animate-spin" /> {t('auth.verifying')}
+                                        </span>
+                                    ) : (
+                                        <span>{t('auth.mfaAutoSubmitHint')}</span>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="flex items-center justify-between pt-1 text-xs">
                                 <button
