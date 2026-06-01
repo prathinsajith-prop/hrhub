@@ -1,4 +1,4 @@
-import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, deletePayrollRun, getPayrollReadiness, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById } from './payroll.service.js'
+import { listPayrollRuns, getPayrollRun, createPayrollRun, updatePayrollRun, deletePayrollRun, getPayrollReadiness, getPayslipsWithEmployees, getPayslipsByEmployee, runPayroll, calculateGratuity, generateWpsSif, getPayslipById, getPayslips } from './payroll.service.js'
 import {
     bulkCreateAdjustments,
     createAdjustment,
@@ -124,6 +124,38 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        // Mirror onto every paid employee so each one's Updates tab + the
+        // employee portal "My Activity" view both surface this month's payroll.
+        ;(async () => {
+            try {
+                const slips = await getPayslips(request.user.tenantId, id)
+                const period = updatedRun ? `${updatedRun.month}/${updatedRun.year}` : ''
+                for (const s of slips) {
+                    if (!s.employeeId) continue
+                    recordActivity({
+                        tenantId: request.user.tenantId,
+                        userId: request.user.id,
+                        actorName: request.user.name,
+                        actorRole: request.user.role,
+                        entityType: 'employee',
+                        entityId: s.employeeId,
+                        entityName: period ? `Payslip ${period}` : 'Payslip',
+                        action: 'approve',
+                        metadata: {
+                            kind: 'payroll',
+                            subKind: 'payslip-generated',
+                            payrollRunId: id,
+                            payslipId: s.id,
+                            month: updatedRun?.month ?? null,
+                            year: updatedRun?.year ?? null,
+                            netSalary: (s as any).netSalary != null ? Number((s as any).netSalary) : null,
+                        },
+                        ipAddress: (request as any).ip,
+                        userAgent: request.headers['user-agent'],
+                    }).catch(() => { })
+                }
+            } catch { /* non-fatal audit pass */ }
+        })()
         return reply.send({ data: updatedRun })
     })
 

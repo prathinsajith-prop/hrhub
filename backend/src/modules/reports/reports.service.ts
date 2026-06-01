@@ -157,12 +157,36 @@ export async function getVisaExpiryReport(tenantId: string, days = 90) {
 //   • By-department breakdown (present / late / absent counts + rate)
 //   • Top-10 late arrivals leaderboard
 
-export async function getAttendanceSummaryReport(tenantId: string, days = 90) {
+/**
+ * Attendance summary report.
+ *
+ * Two ways to express the time window:
+ *   • `range: { startDate, endDate }` — explicit calendar slice (used by
+ *     the Today / This Week / Last Week / This Month / Custom presets on
+ *     the Reports page). When provided, `days` is ignored.
+ *   • `days` — rolling window ending at "today" (legacy default). Kept
+ *     for backward-compatible callers and for the `/reports/summary`
+ *     BFF that doesn't need the explicit range yet.
+ *
+ * `endDate` is inclusive — `BETWEEN startDate AND endDate` semantics —
+ * matching the way HR thinks about a date filter on the UI ("show me
+ * 1 May through 31 May", not "1 May exclusive 31 May").
+ */
+export async function getAttendanceSummaryReport(
+    tenantId: string,
+    daysOrRange: number | { startDate: string; endDate: string } = 90,
+) {
     return withLongTimeout(async (tx) => {
-        const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10)
+        const range = typeof daysOrRange === 'number'
+            ? {
+                startDate: new Date(Date.now() - daysOrRange * 86_400_000).toISOString().slice(0, 10),
+                endDate: new Date().toISOString().slice(0, 10),
+            }
+            : daysOrRange
         const baseWhere = and(
             eq(attendanceRecords.tenantId, tenantId),
-            gte(attendanceRecords.date, cutoff),
+            gte(attendanceRecords.date, range.startDate),
+            lte(attendanceRecords.date, range.endDate),
         )
 
         // Five independent SELECTs — run them in parallel against the
@@ -263,8 +287,16 @@ export async function getAttendanceSummaryReport(tenantId: string, days = 90) {
             lateCount: Number(r.lateCount),
         }))
 
+        // Days span of the resolved window (inclusive). Used by the UI
+        // to print "Showing 7 days / 31 days" alongside the chart.
+        const windowDays = Math.max(
+            1,
+            Math.round((Date.parse(range.endDate) - Date.parse(range.startDate)) / 86_400_000) + 1,
+        )
         return {
-            windowDays: days,
+            windowDays,
+            windowStart: range.startDate,
+            windowEnd: range.endDate,
             present,
             late,
             absent,
@@ -397,12 +429,31 @@ export async function getLeaveSummaryReport(tenantId: string, year?: number) {
 // request is approved or completed — pending/rejected ones don't count
 // as real exits yet.
 
-export async function getTurnoverReport(tenantId: string, months = 12) {
+/**
+ * Turnover report.
+ *
+ * Same shape contract as the attendance summary: accepts either an
+ * explicit calendar range or a rolling-N-months window for back-compat
+ * with `/reports/summary`. The explicit range bounds *both* the joins
+ * (employees with `joinDate` within the window) and the exits
+ * (approved/completed exits with `lastWorkingDay` within the window).
+ */
+export async function getTurnoverReport(
+    tenantId: string,
+    monthsOrRange: number | { startDate: string; endDate: string } = 12,
+) {
     return withLongTimeout(async (tx) => {
-        const now = new Date()
-        const start = new Date(now.getFullYear(), now.getMonth() - months + 1, 1)
-        const startIso = start.toISOString().slice(0, 10)
-        const todayIso = now.toISOString().slice(0, 10)
+        let startIso: string
+        let todayIso: string
+        if (typeof monthsOrRange === 'number') {
+            const now = new Date()
+            const start = new Date(now.getFullYear(), now.getMonth() - monthsOrRange + 1, 1)
+            startIso = start.toISOString().slice(0, 10)
+            todayIso = now.toISOString().slice(0, 10)
+        } else {
+            startIso = monthsOrRange.startDate
+            todayIso = monthsOrRange.endDate
+        }
 
         const baseEmpWhere = and(
             eq(employees.tenantId, tenantId),
@@ -413,6 +464,7 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
         const exitsBaseWhere = and(
             eq(exitRequests.tenantId, tenantId),
             gte(exitRequests.lastWorkingDay, startIso),
+            lte(exitRequests.lastWorkingDay, todayIso),
             inArray(exitRequests.status, ['approved', 'completed']),
         )
         const [joinRows, exitRows, headcountRow, deptRows, tenureRows, exitTypeRows] = await Promise.all([
@@ -426,6 +478,7 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
                 .where(and(
                     eq(employees.tenantId, tenantId),
                     gte(employees.joinDate, startIso),
+                    lte(employees.joinDate, todayIso),
                 ))
                 .groupBy(sql`DATE_TRUNC('month', ${employees.joinDate})`)
                 .orderBy(sql`DATE_TRUNC('month', ${employees.joinDate})`),
@@ -498,8 +551,17 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
 
         const byExitType = exitTypeRows.map((r) => ({ label: r.exitType ?? 'unknown', count: Number(r.count) }))
 
+        // Derive windowMonths from the resolved range so the UI can still
+        // show "Last 12 months" when no explicit range was given, and
+        // "1 May - 31 May (1 month)" when one was.
+        const windowMonths = Math.max(
+            1,
+            Math.round((Date.parse(todayIso) - Date.parse(startIso)) / (30 * 86_400_000)),
+        )
         return {
-            windowMonths: months,
+            windowMonths,
+            windowStart: startIso,
+            windowEnd: todayIso,
             totalJoins,
             totalExits,
             currentHeadcount: Number(headcount),
@@ -509,8 +571,6 @@ export async function getTurnoverReport(tenantId: string, months = 12) {
             byDepartment,
             tenureDistribution,
             byExitType,
-            windowStart: startIso,
-            windowEnd: todayIso,
         }
     })
 }

@@ -22,6 +22,7 @@ import { formatDate, formatCurrency, cn } from '@/lib/utils'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useReportsSummary } from '@/hooks/useReports'
+import { DateRangePresets, defaultReportRange, type ReportDateRangeValue } from '@/components/shared/DateRangePresets'
 import { usePermissions } from '@/hooks/usePermissions'
 import type {
     PayrollTrendRow,
@@ -285,7 +286,17 @@ export function ReportsPage() {
     const canViewPayroll = can('view_payroll')
     const canViewVisa = can('view_visa')
 
-    const { data: reportsSummary, isLoading: summaryLoading, isFetching: summaryFetching, refetch: refetchSummary } = useReportsSummary(90)
+    // Shared date-range filter for the whole page. Defaults to "This
+    // month" because that's the most common starting view for HR. The
+    // range drives `useReportsSummary` (and the range-aware sub-reports
+    // it bundles — attendance, turnover); date-insensitive reports
+    // (headcount snapshot, visa-expiry-next-90, leave-by-year) ignore it
+    // by design so the dropdown never gives misleading results.
+    const [range, setRange] = useState<ReportDateRangeValue>(() => defaultReportRange())
+    const { data: reportsSummary, isLoading: summaryLoading, isFetching: summaryFetching, refetch: refetchSummary } = useReportsSummary({
+        startDate: range.startDate,
+        endDate: range.endDate,
+    })
     const headcount = reportsSummary?.headcount
     const payrollSummary = reportsSummary?.payrollSummary
     const proCosts = reportsSummary?.proCosts
@@ -387,11 +398,19 @@ export function ReportsPage() {
                 title={t('reports.title')}
                 description={t('reports.description')}
                 actions={
-                    <Button variant="outline" size="sm"
-                        leftIcon={<RefreshCcw className={isRefreshing ? 'size-3.5 animate-spin' : 'size-3.5'} />}
-                        onClick={() => void refetchSummary()} disabled={isRefreshing}>
-                        Refresh
-                    </Button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* Shared date-range filter. Driving the BFF means
+                            Attendance + Turnover repaint when HR flips the
+                            preset; reports that ignore the range (headcount,
+                            visa-expiry, leave-by-year) keep their own
+                            windowing semantics. */}
+                        <DateRangePresets value={range} onChange={setRange} />
+                        <Button variant="outline" size="sm"
+                            leftIcon={<RefreshCcw className={isRefreshing ? 'size-3.5 animate-spin' : 'size-3.5'} />}
+                            onClick={() => void refetchSummary()} disabled={isRefreshing}>
+                            Refresh
+                        </Button>
+                    </div>
                 }
             />
 

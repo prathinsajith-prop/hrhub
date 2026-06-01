@@ -150,6 +150,16 @@ export default async function profileChangesRoutes(fastify: FastifyInstance) {
             })
             .returning()
 
+        // Build a from→to diff (current value → proposed value) so the audit
+        // detail shows exactly what the employee wants changed, not just the
+        // field names.
+        const changeDiff: Record<string, { from: unknown; to: unknown }> = {}
+        for (const f of Object.keys(proposed)) {
+            const from = (snapshot as Record<string, unknown>)[f] ?? null
+            const to = (proposed as Record<string, unknown>)[f] ?? null
+            if (from !== to) changeDiff[f] = { from, to }
+        }
+        const sharedMeta = { kind: 'profile', subKind: 'change-request', category, fields: Object.keys(proposed) }
         recordActivity({
             tenantId: user.tenantId,
             userId: user.id,
@@ -159,7 +169,24 @@ export default async function profileChangesRoutes(fastify: FastifyInstance) {
             entityId: created.id,
             entityName: category,
             action: 'submit',
-            metadata: { category, fields: Object.keys(proposed) },
+            changes: Object.keys(changeDiff).length > 0 ? changeDiff : undefined,
+            metadata: sharedMeta,
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => {})
+        // Mirror onto the employee record so the change surfaces in the HR
+        // Updates tab and the employee's own My Activity feed.
+        recordActivity({
+            tenantId: user.tenantId,
+            userId: user.id,
+            actorName: user.name,
+            actorRole: user.role,
+            entityType: 'employee',
+            entityId: user.employeeId,
+            entityName: CATEGORY_LABEL[category] ?? category,
+            action: 'submit',
+            changes: Object.keys(changeDiff).length > 0 ? changeDiff : undefined,
+            metadata: { ...sharedMeta, requestId: created.id },
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => {})

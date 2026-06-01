@@ -85,6 +85,21 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (doc.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: doc.employeeId,
+                entityName: doc.fileName ?? doc.docType,
+                action: 'create',
+                metadata: { kind: 'document', subKind: 'upload', documentId: doc.id, docType: doc.docType },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.code(201).send({ data: doc })
     })
 
@@ -121,6 +136,21 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (updated.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: updated.employeeId,
+                entityName: updated.fileName ?? updated.docType,
+                action: 'update',
+                metadata: { kind: 'document', subKind: 'edit', documentId: id, docType: updated.docType },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: updated })
     })
 
@@ -143,6 +173,21 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (updated.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: updated.employeeId,
+                entityName: updated.fileName ?? updated.docType,
+                action: 'approve',
+                metadata: { kind: 'document', subKind: 'verify', documentId: id, docType: updated.docType },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         await logDocumentAction({
             tenantId: request.user.tenantId,
             documentId: id,
@@ -200,6 +245,21 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (updated.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: updated.employeeId,
+                entityName: updated.fileName ?? updated.docType,
+                action: 'reject',
+                metadata: { kind: 'document', subKind: 'reject', documentId: id, docType: updated.docType, reason },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         await logDocumentAction({
             tenantId: request.user.tenantId,
             documentId: id,
@@ -260,10 +320,26 @@ export default async function (fastify: any): Promise<void> {
             actorRole: request.user.role,
             entityType: 'document',
             entityId: id,
+            entityName: deleted.fileName ?? deleted.docType,
             action: 'delete',
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (deleted.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: deleted.employeeId,
+                entityName: deleted.fileName ?? deleted.docType,
+                action: 'delete',
+                metadata: { kind: 'document', subKind: 'delete', documentId: id, docType: deleted.docType },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.code(204).send()
     })
 
@@ -394,6 +470,21 @@ export default async function (fastify: any): Promise<void> {
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if (doc.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: doc.employeeId,
+                entityName: doc.fileName ?? doc.docType,
+                action: 'create',
+                metadata: { kind: 'document', subKind: 'upload', documentId: doc.id, docType: doc.docType },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
 
         await logDocumentAction({
             tenantId: request.user.tenantId,

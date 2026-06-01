@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
 import { documents, employees, orgUnits } from '../../db/schema/index.js'
 import { e400, e403, e404 } from '../../lib/errors.js'
-import { buildS3Key, generateDownloadUrl, generateUploadUrl, objectExists } from '../../lib/s3.js'
+import { buildS3Key, generateDownloadUrl, generateUploadUrl, objectExists, uploadObject } from '../../lib/s3.js'
 import { parseUuidParam } from '../../lib/validation.js'
 import { recordActivity } from '../../lib/audit.js'
 import { notifyRequester, notifyReviewers } from '../../lib/notify.js'
@@ -161,6 +161,112 @@ export default async function documentsRoutes(fastify: FastifyInstance) {
         const s3Key = buildS3Key(tenantId, `employees/${employeeId}/documents`, fileName)
         const uploadUrl = await generateUploadUrl(s3Key, contentType)
         return reply.send({ data: { uploadUrl, s3Key } })
+    })
+
+    // POST /api/v1/documents/upload — single-request multipart upload. The
+    // browser sends the file + metadata as multipart/form-data to THIS backend,
+    // which streams it to S3 server-side and registers the document. This avoids
+    // a browser→S3 direct PUT, which would require the bucket's CORS policy to
+    // allow the portal origin (it currently doesn't). Mirrors the main backend.
+    fastify.post('/upload', { ...auth }, async (request: any, reply: any) => {
+        const { tenantId, employeeId } = request.user
+        if (!employeeId) return reply.code(400).send(e400('No employee record linked to this account'))
+
+        // Buffer the file and collect fields. The file part may arrive before the
+        // other fields, so we read everything before processing.
+        const fields: Record<string, string> = {}
+        let pending: { buffer: Buffer; originalName: string; mimetype: string } | null = null
+        for await (const part of (request as any).parts()) {
+            if (part.type === 'file') {
+                const chunks: Buffer[] = []
+                for await (const chunk of part.file) chunks.push(chunk as Buffer)
+                if (part.file.truncated) {
+                    return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: 'File exceeds the 10 MB limit.' })
+                }
+                pending = { buffer: Buffer.concat(chunks), originalName: part.filename, mimetype: part.mimetype }
+            } else {
+                fields[part.fieldname] = part.value as string
+            }
+        }
+        if (!pending) return reply.code(400).send(e400('No file provided'))
+
+        // Trust the browser-sent MIME, falling back to the file extension for
+        // Office formats some browsers report as application/octet-stream.
+        const EXT_MIME: Record<string, string> = {
+            pdf: 'application/pdf',
+            jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xls: 'application/vnd.ms-excel',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }
+        const ext = pending.originalName.split('.').pop()?.toLowerCase() ?? ''
+        const mime = ALLOWED_UPLOAD_TYPES.has(pending.mimetype) ? pending.mimetype : (EXT_MIME[ext] ?? pending.mimetype)
+        if (!ALLOWED_UPLOAD_TYPES.has(mime)) {
+            return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: `File type '${mime}' is not permitted.` })
+        }
+
+        const category = String(fields.category ?? '')
+        const docType = String(fields.docType ?? '').trim()
+        const fileName = pending.originalName
+        const docNumber = fields.docNumber ? String(fields.docNumber).trim() : null
+        const issueDate = fields.issueDate ? String(fields.issueDate) : null
+        const expiryDate = fields.expiryDate ? String(fields.expiryDate) : null
+        const notes = fields.notes ? String(fields.notes) : null
+
+        if (!ALLOWED_CATEGORIES.has(category)) return reply.code(400).send(e400('Invalid category'))
+        if (!docType) return reply.code(400).send(e400('docType is required'))
+
+        const s3Key = buildS3Key(tenantId, `employees/${employeeId}/documents`, fileName)
+        try {
+            await uploadObject(s3Key, pending.buffer, mime)
+        } catch (err) {
+            request.log?.error?.({ err }, 'S3 upload failed')
+            return reply.code(503).send({ statusCode: 503, error: 'Service Unavailable', message: 'File storage service is unavailable. Please try again later.' })
+        }
+
+        const [doc] = await db
+            .insert(documents)
+            .values({
+                tenantId,
+                employeeId,
+                category: category as any,
+                docType,
+                fileName,
+                s3Key,
+                fileSize: pending.buffer.length,
+                docNumber,
+                issueDate,
+                expiryDate,
+                notes,
+                status: 'under_review',
+                uploadedBy: request.user.id,
+            })
+            .returning()
+
+        recordActivity({
+            tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'document',
+            entityId: doc.id,
+            entityName: doc.docType,
+            action: 'submit',
+            metadata: { category, docType, pendingApproval: true },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => {})
+
+        notifyReviewers({
+            tenantId,
+            actorEmployeeId: employeeId,
+            title: `${request.user.name ?? 'An employee'} uploaded "${docType}"`,
+            message: 'New document pending verification',
+            actionUrl: `/employees/${employeeId}?tab=documents&review=${doc.id}`,
+        }).catch((err) => request.log?.warn?.({ err }, 'document submit notification failed'))
+
+        return reply.code(201).send({ data: doc })
     })
 
     // POST /api/v1/documents — register the uploaded file as a pending document.

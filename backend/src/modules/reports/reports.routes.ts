@@ -23,6 +23,33 @@ function boundedInt(raw: unknown, def: number, min: number, max: number): number
     return Math.min(max, Math.max(min, Math.trunc(n)))
 }
 
+/**
+ * Parse an optional `?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD` pair from
+ * the request query string. Returns `null` if either side is missing,
+ * malformed, or the order is inverted — letting the calling handler
+ * fall back to its legacy rolling-window param (`days` / `months`).
+ *
+ * Strict validation here is the whole point: the date strings flow
+ * straight into SQL `BETWEEN` predicates downstream, and a `Date(NaN)`
+ * would throw when we go to format it. Rejecting at the edge keeps the
+ * service layer's contract simple.
+ */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+function parseDateRange(query: any): { startDate: string; endDate: string } | null {
+    const startDate = typeof query?.startDate === 'string' ? query.startDate : ''
+    const endDate = typeof query?.endDate === 'string' ? query.endDate : ''
+    if (!ISO_DATE.test(startDate) || !ISO_DATE.test(endDate)) return null
+    // Calendar order — `startDate <= endDate`. Lexicographic compare is
+    // correct for YYYY-MM-DD without any Date() parsing.
+    if (startDate > endDate) return null
+    // Sanity-cap the year window — keeps a stray `0099-01-01` or
+    // `9999-12-31` out of the indexed date range scans.
+    const startYear = Number(startDate.slice(0, 4))
+    const endYear = Number(endDate.slice(0, 4))
+    if (startYear < 2000 || endYear > 2100) return null
+    return { startDate, endDate }
+}
+
 export default async function (fastify: any): Promise<void> {
     const reportsAuth = { preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'pro_officer', 'dept_head', 'super_admin')] }
 
@@ -67,11 +94,20 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // GET /api/v1/reports/attendance-summary?days=90
+    //   OR /reports/attendance-summary?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+    //
+    // Explicit range wins when valid — that's what the Today / This Week /
+    // Last Week / This Month / Custom presets on the Reports page send.
     fastify.get('/attendance-summary', {
         schema: { tags: ['Reports'] },
         ...reportsAuth,
     }, async (request: any, reply: any) => {
         const tenantId = request.user.tenantId
+        const range = parseDateRange(request.query)
+        if (range) {
+            const data = await getAttendanceSummaryReport(tenantId, range)
+            return reply.send({ data })
+        }
         const days = boundedInt((request.query as any).days, 90, 1, 3650)
         const data = await getAttendanceSummaryReport(tenantId, days)
         return reply.send({ data })
@@ -93,11 +129,17 @@ export default async function (fastify: any): Promise<void> {
     })
 
     // GET /api/v1/reports/turnover?months=12
+    //   OR /reports/turnover?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
     fastify.get('/turnover', {
         schema: { tags: ['Reports'] },
         ...reportsAuth,
     }, async (request: any, reply: any) => {
         const tenantId = request.user.tenantId
+        const range = parseDateRange(request.query)
+        if (range) {
+            const data = await getTurnoverReport(tenantId, range)
+            return reply.send({ data })
+        }
         const months = boundedInt((request.query as any).months, 12, 1, 120)
         const data = await getTurnoverReport(tenantId, months)
         return reply.send({ data })
@@ -144,6 +186,12 @@ export default async function (fastify: any): Promise<void> {
         const tenantId: string = request.user.tenantId
         const days = boundedInt((request.query as any).days, 90, 1, 3650)
         const year = new Date().getFullYear()
+        // Range-aware sub-reports (attendance + turnover) honour an
+        // explicit `?startDate&endDate` window when the Reports page
+        // sends one. Other sub-reports keep their original windowing
+        // contract — visa/document expiry are forward-looking "next N
+        // days", leave summary is year-based, headcount is a snapshot.
+        const range = parseDateRange(request.query)
 
         // allSettled, not all: one failing sub-report (a bad migration on
         // one table, a transient timeout) must not blank the entire reports
@@ -156,9 +204,9 @@ export default async function (fastify: any): Promise<void> {
             getPayrollSummaryReport(tenantId),
             getVisaExpiryReport(tenantId, days),
             getPROCostReport(tenantId),
-            getAttendanceSummaryReport(tenantId, days),
+            getAttendanceSummaryReport(tenantId, range ?? days),
             getLeaveSummaryReport(tenantId, year),
-            getTurnoverReport(tenantId, 12),
+            getTurnoverReport(tenantId, range ?? 12),
             getOnboardingReport(tenantId),
             getPerformanceReport(tenantId),
             getDocumentExpiryReport(tenantId, days),

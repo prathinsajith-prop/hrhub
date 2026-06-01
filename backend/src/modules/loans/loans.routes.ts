@@ -103,6 +103,19 @@ export default async function loansRoutes(fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        recordActivity({
+            tenantId: user.tenantId,
+            userId: user.id,
+            actorName: user.name,
+            actorRole: user.role,
+            entityType: 'employee',
+            entityId: employeeId,
+            entityName: `Loan AED ${row.amount}`,
+            action: 'submit',
+            metadata: { kind: 'loan', subKind: 'request', loanId: row.id, amount: Number(row.amount), reason: parse.data.reason ?? null },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
         return reply.code(201).send({ data: row })
     })
 
@@ -125,6 +138,21 @@ export default async function loansRoutes(fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if ((updated as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (updated as any).employeeId,
+                entityName: `Loan AED ${updated.amount}`,
+                action: 'approve',
+                metadata: { kind: 'loan', subKind: 'approve', loanId: updated.id, amount: Number(updated.amount), startDate: body.startDate ?? null },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: updated })
     })
 
@@ -147,6 +175,21 @@ export default async function loansRoutes(fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        if ((updated as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (updated as any).employeeId,
+                entityName: `Loan AED ${updated.amount}`,
+                action: 'reject',
+                metadata: { kind: 'loan', subKind: 'reject', loanId: updated.id, amount: Number(updated.amount), notes: body.notes ?? null },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: updated })
     })
 

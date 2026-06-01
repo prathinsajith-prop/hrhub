@@ -58,6 +58,7 @@ export const ROUTES = {
     myPayslips: '/my/payslips',
     myProfile: '/my/profile',
     myAttendance: '/my/attendance',
+    myActivity: '/my/activity',
 } as const
 
 export type RouteKey = keyof typeof ROUTES
@@ -98,4 +99,5 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     'my/payslips': 'myPayslips.title',
     'my/profile': 'myProfile.title',
     'my/attendance': 'myAttendance.title',
+    'my/activity': 'myActivity.title',
 }
