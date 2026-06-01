@@ -192,6 +192,13 @@ export default async function profileChangesRoutes(fastify: any): Promise<void> 
                 .where(eq(profileChangeRequests.id, id))
         })
 
+        // from→to diff (current snapshot → approved value) for the changed
+        // fields, so the audit detail shows what was actually applied.
+        const approveDiff: Record<string, { from: unknown; to: unknown }> = {}
+        for (const f of changedFields) {
+            approveDiff[f] = { from: snapshot[f] ?? null, to: proposed[f] ?? null }
+        }
+        const approveMeta = { kind: 'profile', subKind: 'change-approved', category: req.category, fields: changedFields }
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -201,7 +208,24 @@ export default async function profileChangesRoutes(fastify: any): Promise<void> 
             entityId: id,
             entityName: req.category,
             action: 'approve',
-            metadata: { category: req.category, fields: changedFields },
+            changes: Object.keys(approveDiff).length > 0 ? approveDiff : undefined,
+            metadata: approveMeta,
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        // Mirror onto the employee so the applied change shows in the Updates
+        // tab + the employee's My Activity, with the same from→to detail.
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: req.employeeId,
+            entityName: CATEGORY_LABEL[req.category] ?? req.category,
+            action: 'approve',
+            changes: Object.keys(approveDiff).length > 0 ? approveDiff : undefined,
+            metadata: { ...approveMeta, requestId: id },
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
@@ -253,6 +277,7 @@ export default async function profileChangesRoutes(fastify: any): Promise<void> 
             .where(and(eq(profileChangeRequests.tenantId, request.user.tenantId), eq(profileChangeRequests.id, id)))
             .returning()
 
+        const rejectMeta = { kind: 'profile', subKind: 'change-rejected', category: req.category, reason }
         recordActivity({
             tenantId: request.user.tenantId,
             userId: request.user.id,
@@ -262,7 +287,22 @@ export default async function profileChangesRoutes(fastify: any): Promise<void> 
             entityId: id,
             entityName: req.category,
             action: 'reject',
-            metadata: { reason },
+            metadata: rejectMeta,
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        // Mirror onto the employee so the rejection shows in the Updates tab +
+        // the employee's My Activity feed.
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: req.employeeId,
+            entityName: CATEGORY_LABEL[req.category] ?? req.category,
+            action: 'reject',
+            metadata: { ...rejectMeta, requestId: id },
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })

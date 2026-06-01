@@ -73,6 +73,27 @@ export async function exitRoutes(fastify: any) {
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const data = await initiateExit(request.user.tenantId, parse.data as any)
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: data.request.id, entityName: data.settlement.employeeName, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if (data.request.employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: data.request.employeeId,
+                entityName: data.settlement.employeeName,
+                action: 'submit',
+                metadata: {
+                    kind: 'exit',
+                    subKind: 'initiate',
+                    exitRequestId: data.request.id,
+                    exitDate: (data.request as any).exitDate,
+                    exitType: (data.request as any).exitType,
+                },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.code(201).send({ data })
     })
 
@@ -112,6 +133,21 @@ export async function exitRoutes(fastify: any) {
         const data = await approveExit(request.user.tenantId, id, request.user.id, { override })
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not pending' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'approve', metadata: override ? { override: true } : undefined, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if ((data as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (data as any).employeeId,
+                entityName: (data as any).employeeName,
+                action: 'approve',
+                metadata: { kind: 'exit', subKind: 'approve', exitRequestId: id, override },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data })
     })
 
@@ -122,6 +158,21 @@ export async function exitRoutes(fastify: any) {
         const data = await rejectExit(request.user.tenantId, id, request.user.id, reason)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not pending' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'reject', metadata: reason ? { reason } : undefined, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if ((data as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (data as any).employeeId,
+                entityName: (data as any).employeeName,
+                action: 'reject',
+                metadata: { kind: 'exit', subKind: 'reject', exitRequestId: id, reason: reason ?? null },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data })
     })
 
@@ -131,6 +182,21 @@ export async function exitRoutes(fastify: any) {
         const data = await markSettlementPaid(request.user.tenantId, id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Exit request not found or not approved' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'exit_request', entityId: id, entityName: (data as any).employeeName, action: 'update', metadata: { settlementPaid: true }, ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if ((data as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (data as any).employeeId,
+                entityName: (data as any).employeeName,
+                action: 'update',
+                metadata: { kind: 'exit', subKind: 'settlement-paid', exitRequestId: id },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data })
     })
 

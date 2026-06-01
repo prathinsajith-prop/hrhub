@@ -48,6 +48,21 @@ export async function performanceRoutes(fastify: any) {
         if (!parse.success) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parse.error.issues[0]?.message ?? 'Invalid input' })
         const review = await createReview(request.user.tenantId, request.user.id, parse.data as any)
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: review.id, entityName: (review as any).employeeName ?? (request.body as any).reviewPeriod, action: 'create', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if ((review as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (review as any).employeeId,
+                entityName: (review as any).reviewPeriod ?? 'Performance review',
+                action: 'create',
+                metadata: { kind: 'performance', subKind: 'create', reviewId: review.id, reviewPeriod: (review as any).reviewPeriod ?? null },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.code(201).send({ data: review })
     })
 
@@ -72,6 +87,27 @@ export async function performanceRoutes(fastify: any) {
         })
         if (!review) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Performance review not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: id, entityName: (review as any).employeeName ?? (review as any).reviewPeriod, action: 'update', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if ((review as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (review as any).employeeId,
+                entityName: (review as any).reviewPeriod ?? 'Performance review',
+                action: 'update',
+                metadata: {
+                    kind: 'performance',
+                    subKind: (review as any).status === 'completed' ? 'complete' : 'update',
+                    reviewId: id,
+                    status: (review as any).status ?? null,
+                    overallRating: (review as any).overallRating ?? null,
+                },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: review })
     })
 
@@ -81,6 +117,21 @@ export async function performanceRoutes(fastify: any) {
         const deleted = await deleteReview(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Performance review not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'performance_review', entityId: id, action: 'delete', ipAddress: request.ip, userAgent: request.headers['user-agent'] }).catch(() => { })
+        if ((deleted as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (deleted as any).employeeId,
+                entityName: (deleted as any).reviewPeriod ?? 'Performance review',
+                action: 'delete',
+                metadata: { kind: 'performance', subKind: 'delete', reviewId: id },
+                ipAddress: request.ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.code(204).send()
     })
 

@@ -153,6 +153,18 @@ describe('actionVerbFor', () => {
         expect(actionVerbFor('bulk_import')).toBe('bulk import')
         expect(actionVerbFor('frobnicate')).toBe('frobnicate')
     })
+
+    // Audit Phase 0 (merged from development) — the classifier emits these
+    // action codes; the verb map must keep them in lock-step so feeds and
+    // diff views render the right English.
+    it('maps the extended classification verbs', () => {
+        expect(actionVerbFor('assign')).toBe('assigned')
+        expect(actionVerbFor('unassign')).toBe('unassigned')
+        expect(actionVerbFor('upload')).toBe('uploaded')
+        expect(actionVerbFor('download')).toBe('downloaded')
+        expect(actionVerbFor('permission_change')).toBe('changed permissions for')
+        expect(actionVerbFor('role_change')).toBe('changed the role of')
+    })
 })
 
 describe('timeAgo', () => {

@@ -235,6 +235,15 @@ export function actionVerbFor(action: string): string {
         suspend: 'suspended',
         cancel: 'cancelled',
         invite: 'invited',
+        // Audit Phase 0 (merged from development) — extended action set
+        // so the new audit pipeline's classified actions render as proper
+        // English verbs everywhere this helper is consumed.
+        assign: 'assigned',
+        unassign: 'unassigned',
+        upload: 'uploaded',
+        download: 'downloaded',
+        permission_change: 'changed permissions for',
+        role_change: 'changed the role of',
     }
     return map[action] ?? action.replace(/_/g, ' ')
 }

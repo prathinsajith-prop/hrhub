@@ -96,6 +96,30 @@ export default async function transfersRoutes(fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        // Mirror onto the employee record so the Updates tab surfaces transfers.
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: id,
+            entityName: body.transferDate,
+            action: 'update',
+            metadata: {
+                kind: 'transfer',
+                subKind: 'create',
+                transferId: transfer.id,
+                transferDate: body.transferDate,
+                fromDepartment: emp.department ?? null,
+                toDepartment: body.toDepartmentId ? (unitNameMap.get(body.toDepartmentId) ?? null) : null,
+                toDesignation: body.toDesignation ?? null,
+                newSalary: body.newSalary ?? null,
+                reason: body.reason ?? null,
+            },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
 
         return reply.code(201).send({ data: transfer })
     })

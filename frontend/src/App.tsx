@@ -58,6 +58,7 @@ const MyPayslipsPage = lazy(() => import('@/pages/my/MyPayslipsPage').then(m => 
 const MyProfilePage = lazy(() => import('@/pages/my/MyProfilePage').then(m => ({ default: m.MyProfilePage })))
 const MyAccountPage = lazy(() => import('@/pages/my/MyAccountPage').then(m => ({ default: m.MyAccountPage })))
 const MyAttendancePage = lazy(() => import('@/pages/my/MyAttendancePage').then(m => ({ default: m.MyAttendancePage })))
+const MyActivityPage = lazy(() => import('@/pages/my/MyActivityPage').then(m => ({ default: m.MyActivityPage })))
 const ComplaintsPage = lazy(() => import('@/pages/misc/ComplaintsPage').then(m => ({ default: m.ComplaintsPage })))
 const MyComplaintsPage = lazy(() => import('@/pages/my/MyComplaintsPage').then(m => ({ default: m.MyComplaintsPage })))
 const TrainingPage = lazy(() => import('@/pages/misc/TrainingPage').then(m => ({ default: m.TrainingPage })))
@@ -103,6 +104,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/my/payslips': 'myPayslips.title',
   '/my/profile': 'myProfile.title',
   '/my/attendance': 'myAttendance.title',
+  '/my/activity': 'myActivity.title',
   '/organizations': 'organizations.title',
   '/team': 'team.title',
   '/apps': 'apps.title',
@@ -210,6 +212,7 @@ export default function App() {
               <Route path="my/payslips" element={<RoleRoute routeKey="my/payslips"><MyPayslipsPage /></RoleRoute>} />
               <Route path="my/profile" element={<RoleRoute routeKey="my/profile"><MyProfilePage /></RoleRoute>} />
               <Route path="my/attendance" element={<RoleRoute routeKey="my/attendance"><MyAttendancePage /></RoleRoute>} />
+              <Route path="my/activity" element={<RoleRoute routeKey="my/activity"><MyActivityPage /></RoleRoute>} />
               <Route path="assets" element={<RoleRoute routeKey="assets"><AssetsPage /></RoleRoute>} />
               <Route path="travel" element={<RoleRoute routeKey="travel"><TravelPage /></RoleRoute>} />
               <Route path="organizations" element={<RoleRoute routeKey="organizations"><OrganizationsPage /></RoleRoute>} />

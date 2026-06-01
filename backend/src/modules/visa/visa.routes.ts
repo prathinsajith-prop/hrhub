@@ -30,8 +30,12 @@ function audit(request: any, params: {
     action: 'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import'
     metadata?: Record<string, unknown>
     changes?: Record<string, { from: unknown; to: unknown }>
+    // When set, also writes a mirror entry against the employee record so
+    // visa events surface on the employee detail page's Updates tab.
+    employeeId?: string
+    subKind?: string
 }) {
-    return recordActivity({
+    recordActivity({
         tenantId: request.user.tenantId,
         userId: request.user.id,
         actorName: request.user.name,
@@ -45,6 +49,21 @@ function audit(request: any, params: {
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'],
     }).catch(() => { })
+    if (params.employeeId) {
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: params.employeeId,
+            entityName: params.entityName,
+            action: params.action === 'export' || params.action === 'import' || params.action === 'view' ? 'update' : params.action,
+            metadata: { kind: 'visa', subKind: params.subKind ?? params.action, visaId: params.entityId, ...(params.metadata ?? {}) },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+    }
 }
 
 const COST_CATEGORIES = ['govt_fee', 'medical', 'typing', 'translation', 'other'] as const
@@ -110,6 +129,8 @@ export default async function (fastify: any): Promise<void> {
             entityName: `Visa - ${visa.visaType ?? 'application'}`,
             action: 'create',
             metadata: { visaType: visa.visaType, employeeId: visa.employeeId },
+            employeeId: visa.employeeId ?? undefined,
+            subKind: 'create',
         })
         return reply.code(201).send({ data: visa })
     })
@@ -135,6 +156,8 @@ export default async function (fastify: any): Promise<void> {
             entityName: `Visa ${updated.visaType ?? ''}`.trim(),
             action: 'update',
             metadata: { fields: Object.keys((request.body as object) ?? {}) },
+            employeeId: (updated as any).employeeId ?? undefined,
+            subKind: 'edit',
         })
         return reply.send({ data: updated })
     })
@@ -242,6 +265,8 @@ export default async function (fastify: any): Promise<void> {
                 costsCount: savedCosts.length,
                 costsTotal: savedCosts.reduce((s, c) => s + Number(c.amount), 0),
             },
+            employeeId: (result.visa as any)?.employeeId ?? undefined,
+            subKind: result.advanced ? 'advance' : 'advance-noop',
         })
 
         if (result.advanced) cacheDel(`dashboard:kpis:${request.user.tenantId}`).catch(() => { })
@@ -267,7 +292,13 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const deleted = await softDeleteVisa(request.user.tenantId, id)
         if (!deleted) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Visa application not found' })
-        audit(request, { entityId: id, action: 'delete' })
+        audit(request, {
+            entityId: id,
+            action: 'delete',
+            entityName: `Visa ${(deleted as any).visaType ?? ''}`.trim() || undefined,
+            employeeId: (deleted as any).employeeId ?? undefined,
+            subKind: 'delete',
+        })
         return reply.code(204).send()
     })
 
@@ -287,6 +318,9 @@ export default async function (fastify: any): Promise<void> {
             entityId: id,
             action: 'reject',
             metadata: reason ? { reason } : undefined,
+            entityName: `Visa ${(updated as any).visaType ?? ''}`.trim() || undefined,
+            employeeId: (updated as any).employeeId ?? undefined,
+            subKind: 'cancel',
         })
         return reply.send({ data: updated })
     })

@@ -2,6 +2,20 @@ import { db } from '../../db/index.js'
 import { loginHistory, activityLogs } from '../../db/schema/index.js'
 import { desc, sql } from 'drizzle-orm'
 import { Conditions } from '../../lib/filters.js'
+import { maskAuditChanges } from './audit.changes.js'
+
+/**
+ * Canonical activity classification. Extends the original set with the
+ * assignment / file-transfer / access-control verbs the audit spec requires.
+ * The `action` column is plain text, so adding values needs no DB migration.
+ */
+export type AuditAction =
+    | 'create' | 'update' | 'delete' | 'view'
+    | 'approve' | 'reject' | 'submit'
+    | 'export' | 'import' | 'upload' | 'download'
+    | 'assign' | 'unassign'
+    | 'login' | 'logout' | 'invite'
+    | 'permission_change' | 'role_change'
 
 /** Parse basic browser/OS info from User-Agent string */
 function parseUserAgent(ua: string): {
@@ -80,7 +94,7 @@ export async function getLoginHistory(tenantId: string, userId?: string, limit =
         totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
     }).from(loginHistory)
         .where(Conditions.create().tenant(loginHistory.tenantId, tenantId).match(loginHistory.userId, userId).where())
-        .orderBy(desc(loginHistory.createdAt))
+        .orderBy(desc(loginHistory.createdAt), desc(loginHistory.id))
         .limit(effectiveLimit)
         .offset(effectiveOffset)
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
@@ -96,14 +110,29 @@ export interface RecordActivityParams {
     entityType: string
     entityId?: string
     entityName?: string
-    action: 'create' | 'update' | 'delete' | 'view' | 'approve' | 'reject' | 'submit' | 'export' | 'import' | 'login' | 'logout' | 'invite'
+    action: AuditAction
     changes?: Record<string, { from: unknown; to: unknown }>
     metadata?: Record<string, unknown>
     ipAddress?: string
     userAgent?: string
+    /** Correlation/request id (request.requestId) for tracing one user action across events. */
+    requestId?: string
+    /** Logical module/domain (e.g. 'employees', 'payroll') — defaults to entityType when omitted. */
+    module?: string
 }
 
 export async function recordActivity(params: RecordActivityParams): Promise<void> {
+    // Fold correlation id + module into metadata (no dedicated columns yet — a
+    // follow-up migration promotes these to first-class columns). This keeps
+    // traceability working today without a schema change.
+    const meta: Record<string, unknown> = { ...(params.metadata ?? {}) }
+    if (params.requestId && meta.requestId === undefined) meta.requestId = params.requestId
+    if (meta.module === undefined) meta.module = params.module ?? params.entityType
+    // Defence in depth: redact sensitive identifiers (IBAN/account/passport/
+    // Emirates ID/SWIFT) from EVERY change-set at the single write point, so no
+    // call site can ever persist them unmasked (idempotent — safe if a caller
+    // already masked). Copy first so the caller's object isn't mutated.
+    const changes = params.changes ? maskAuditChanges({ ...params.changes }) : null
     await db.insert(activityLogs).values({
         tenantId: params.tenantId,
         userId: params.userId ?? null,
@@ -113,8 +142,8 @@ export async function recordActivity(params: RecordActivityParams): Promise<void
         entityId: params.entityId,
         entityName: params.entityName,
         action: params.action,
-        changes: params.changes ?? null,
-        metadata: params.metadata ?? null,
+        changes,
+        metadata: Object.keys(meta).length > 0 ? meta : null,
         ipAddress: params.ipAddress,
         userAgent: params.userAgent?.slice(0, 500),
     } as any)
@@ -144,7 +173,9 @@ export async function getActivityLogs(tenantId: string, params: {
         totalCount: sql<number>`COUNT(*) OVER()`.as('total_count'),
     }).from(activityLogs)
         .where(conds.where())
-        .orderBy(desc(activityLogs.createdAt))
+        // Stable, deterministic ordering — the id tie-breaker prevents rows with
+        // identical createdAt from duplicating or being skipped across offset pages.
+        .orderBy(desc(activityLogs.createdAt), desc(activityLogs.id))
         .limit(effectiveLimit)
         .offset(effectiveOffset)
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0

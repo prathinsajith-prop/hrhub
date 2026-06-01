@@ -21,6 +21,7 @@ import { RequiredDocsManager } from '@/components/shared/RequiredDocsManager'
 import { AddDocumentDialog } from '@/components/shared/AddDocumentDialog'
 import { useDocuments } from '@/hooks/useDocuments'
 import { useActivityLogs } from '@/hooks/useAudit'
+import { actionVerbFor, timeAgo } from '@/lib/activityFormat'
 import { InitialsAvatar } from '@/components/shared/Avatar'
 import { CATEGORY_LABELS, type DocCategory } from '@/lib/docTypes'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -946,11 +947,14 @@ function ActivityTab({ employeeId }: { employeeId: string }) {
                         <div key={log.id} className="flex items-start gap-3 p-2.5 rounded-lg border bg-card">
                             <Activity className="size-4 text-muted-foreground shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-medium">{log.actorName ?? 'System'}</span>
+                                <p className="text-sm leading-snug">
+                                    <span className="font-medium">{log.actorName ?? 'System'}</span>
+                                    <span className="text-muted-foreground"> {actionVerbFor(log.action)} this record</span>
+                                </p>
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground">
                                     <ActionBadge action={log.action} />
+                                    <span>· {timeAgo(log.createdAt)}</span>
                                 </div>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">{formatDate(log.createdAt)}</p>
                             </div>
                         </div>
                     ))}

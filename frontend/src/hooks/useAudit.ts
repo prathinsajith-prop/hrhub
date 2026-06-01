@@ -88,7 +88,33 @@ export function useActivityLogs(params: { entityType?: string; entityId?: string
     })
 }
 
-export function useInfiniteActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; pageSize?: number } = {}) {
+/**
+ * Employee-portal "My Activity" feed. Hits the unprivileged
+ * `/audit/my-activity` endpoint which the backend scopes server-side to the
+ * caller's own employeeId — so any authenticated user can call this without
+ * elevated permissions, but they only ever see their own activity.
+ */
+export function useInfiniteMyActivity(params: { pageSize?: number; enabled?: boolean } = {}) {
+    const tenantId = useAuthStore(s => s.tenant?.id)
+    const pageSize = params.pageSize ?? 20
+    return useInfiniteQuery({
+        queryKey: ['my-activity-infinite', tenantId, pageSize],
+        initialPageParam: 0,
+        queryFn: ({ pageParam }) => {
+            const qs = new URLSearchParams()
+            qs.set('limit', String(pageSize))
+            qs.set('offset', String(pageParam))
+            return api.get<PaginatedAuditResponse<ActivityLog>>(`/audit/my-activity?${qs}`).then(r => r.data)
+        },
+        getNextPageParam: (lastPage, allPages) => {
+            if (!lastPage || lastPage.length < pageSize) return undefined
+            return allPages.reduce((sum, p) => sum + p.length, 0)
+        },
+        enabled: !!tenantId && (params.enabled ?? true),
+    })
+}
+
+export function useInfiniteActivityLogs(params: { entityType?: string; entityId?: string; userId?: string; action?: string; actorRole?: string; actorName?: string; entityName?: string; from?: string; to?: string; ipAddress?: string; pageSize?: number; enabled?: boolean } = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
     const pageSize = params.pageSize ?? 30
     return useInfiniteQuery({
@@ -114,6 +140,6 @@ export function useInfiniteActivityLogs(params: { entityType?: string; entityId?
             if (!lastPage || lastPage.length < pageSize) return undefined
             return allPages.reduce((sum, p) => sum + p.length, 0)
         },
-        enabled: !!tenantId,
+        enabled: !!tenantId && (params.enabled ?? true),
     })
 }
