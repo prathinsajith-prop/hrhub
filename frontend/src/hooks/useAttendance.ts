@@ -242,6 +242,7 @@ export function useAddManualPunch() {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['attendance'] })
             qc.invalidateQueries({ queryKey: ['attendance-calendar'] })
+            qc.invalidateQueries({ queryKey: ['attendance', 'punches'] })
         },
     })
 }
