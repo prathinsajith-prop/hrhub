@@ -26,8 +26,10 @@ const EmployeePayslipsPage = lazy(() => import('@/pages/employee/PayslipsPage').
 const EmployeeAttendancePage = lazy(() => import('@/pages/employee/AttendancePage').then((m) => ({ default: m.EmployeeAttendancePage })))
 const EmployeeDocumentsPage = lazy(() => import('@/pages/employee/DocumentsPage').then((m) => ({ default: m.EmployeeDocumentsPage })))
 const EmployeePerformancePage = lazy(() => import('@/pages/employee/PerformancePage').then((m) => ({ default: m.EmployeePerformancePage })))
-const EmployeeExitInterviewPage = lazy(() => import('@/pages/employee/MyExitInterviewPage'))
-const PublicExitInterviewPage = lazy(() => import('@/pages/PublicExitInterviewPage'))
+// NOTE: the exit-interview pages were removed — the portal backend (port
+// 4001) serves no exit/offboarding routes, so /my-exit and
+// /exit-interview/by-token 404'd. The feature lives in the admin app only.
+// Re-add here once backend-portal grows an exit module.
 
 const ManagerHomePage = lazy(() => import('@/pages/manager/HomePage').then((m) => ({ default: m.ManagerHomePage })))
 const ManagerTeamPage = lazy(() => import('@/pages/manager/TeamPage').then((m) => ({ default: m.ManagerTeamPage })))
@@ -101,16 +103,6 @@ export default function App() {
             <Route path={ROUTES.forgotPassword} element={<ForgotPasswordPage />} />
             <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
             <Route path={ROUTES.notAuthorized} element={<NotAuthorizedPage />} />
-            {/* Public token-link route — render outside ProtectedRoute so the
-                employee can open it from an email without first logging in. */}
-            <Route
-                path={ROUTES.publicExitInterview()}
-                element={
-                    <Suspense fallback={<PageFallback />}>
-                        <PublicExitInterviewPage />
-                    </Suspense>
-                }
-            />
 
             <Route
                 element={
@@ -129,7 +121,6 @@ export default function App() {
                 <Route path={ROUTES.employeeAttendance} element={<EmployeeAttendancePage />} />
                 <Route path={ROUTES.employeeDocuments} element={<EmployeeDocumentsPage />} />
                 <Route path={ROUTES.employeePerformance} element={<EmployeePerformancePage />} />
-                <Route path={ROUTES.employeeExitInterview} element={<EmployeeExitInterviewPage />} />
 
                 {/* Shared (both modes) */}
                 <Route path={ROUTES.notifications} element={<NotificationsPage />} />

@@ -340,18 +340,23 @@ export function useDocumentExpiryReport(days = 90) {
 }
 
 // ─── Combined summary (BFF) ─────────────────────────────────────────────
+//
+// Every field is nullable: the backend uses Promise.allSettled, so a single
+// failing sub-report comes back as `null` while the rest succeed. Consumers
+// must guard each field (the ReportsPage already does, via optional chaining
+// + `?? 0` fallbacks) so one broken section never blanks the whole page.
 
 export interface ReportsSummary {
-    headcount: HeadcountReport
-    payrollSummary: PayrollSummaryReport
-    visaExpiry: VisaExpiryReport
-    proCosts: PROCostReport
-    attendanceSummary: AttendanceSummaryReport
-    leaveSummary: LeaveSummaryReport
-    turnover: TurnoverReport
-    onboarding: OnboardingReport
-    performance: PerformanceReport
-    documentExpiry: DocumentExpiryReport
+    headcount: HeadcountReport | null
+    payrollSummary: PayrollSummaryReport | null
+    visaExpiry: VisaExpiryReport | null
+    proCosts: PROCostReport | null
+    attendanceSummary: AttendanceSummaryReport | null
+    leaveSummary: LeaveSummaryReport | null
+    turnover: TurnoverReport | null
+    onboarding: OnboardingReport | null
+    performance: PerformanceReport | null
+    documentExpiry: DocumentExpiryReport | null
 }
 
 export function useReportsSummary(days = 90) {
