@@ -113,19 +113,21 @@ export function LoginPage() {
         }
     }
 
-    async function onMfaSubmit(e: FormEvent) {
-        e.preventDefault()
+    // Single submit path used by both the button and the auto-submit on the 6th
+    // digit. Takes the code explicitly so auto-submit doesn't race React state.
+    async function submitMfa(rawCode: string) {
         if (submitting || !mfaToken) return
+        const code = useBackupCode ? rawCode.replace(/[\s-]+/g, '').toUpperCase() : rawCode.replace(/\D/g, '')
+        if (code.length < (useBackupCode ? 10 : 6)) return
         setSubmitting(true)
         setError(null)
         try {
             const endpoint = useBackupCode ? '/auth/2fa/backup-challenge' : '/auth/2fa/challenge'
-            const code = useBackupCode ? mfaCode.trim().toUpperCase() : mfaCode.replace(/\D/g, '')
             const res = await api.post<ChallengeResponse>(endpoint, { mfaToken, code })
-            finalizeLogin(res.data)
+            finalizeLogin(res.data) // navigates away on success
         } catch (err) {
             setError(toErrorMessage(err))
-        } finally {
+            setMfaCode('')
             setSubmitting(false)
         }
     }
@@ -173,7 +175,7 @@ export function LoginPage() {
                     </div>
 
                     {mfaToken ? (
-                        <form className="mt-7 space-y-4" onSubmit={onMfaSubmit} noValidate>
+                        <form className="mt-7 space-y-4" onSubmit={(e) => { e.preventDefault(); submitMfa(mfaCode) }} noValidate>
                             {error ? (
                                 <div
                                     role="alert"
@@ -195,8 +197,14 @@ export function LoginPage() {
                                     autoFocus
                                     value={mfaCode}
                                     onChange={(e) => {
-                                        setMfaCode(e.target.value)
+                                        // Normalise at source: digits-only for TOTP, upper-case for backup.
+                                        const v = useBackupCode
+                                            ? e.target.value.toUpperCase()
+                                            : e.target.value.replace(/\D/g, '').slice(0, 6)
+                                        setMfaCode(v)
                                         if (error) setError(null)
+                                        // Auto-submit once a full 6-digit TOTP is entered — no extra click.
+                                        if (!useBackupCode && v.length === 6) submitMfa(v)
                                     }}
                                     inputMode={useBackupCode ? 'text' : 'numeric'}
                                     autoComplete="one-time-code"
@@ -210,7 +218,7 @@ export function LoginPage() {
                             <Button
                                 type="submit"
                                 className="h-12 w-full rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-[15px] font-semibold text-white shadow-lg shadow-indigo-300/40 transition-transform hover:from-indigo-600 hover:to-sky-600 hover:shadow-xl active:translate-y-[1px] disabled:translate-y-0"
-                                disabled={submitting || mfaCode.trim().length < (useBackupCode ? 8 : 6)}
+                                disabled={submitting || mfaCode.replace(/[^a-z0-9]/gi, '').length < (useBackupCode ? 10 : 6)}
                             >
                                 {submitting ? (
                                     <>
