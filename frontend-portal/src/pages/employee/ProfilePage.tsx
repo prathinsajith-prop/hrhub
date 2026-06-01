@@ -558,13 +558,24 @@ function ProfileSkeleton() {
 
 // ── Two-factor authentication ────────────────────────────────────────────────
 
+/** Normalize an API/unknown error into a user-facing message. */
+function twoFaError(err: unknown, fallback: string): string {
+    return err instanceof ApiError ? err.message : fallback
+}
+
 function TwoFactorCard() {
     const { t } = useTranslation()
     const { data: status, isLoading } = useTwoFactorStatus()
-    const [enableOpen, setEnableOpen] = useState(false)
-    const [disableOpen, setDisableOpen] = useState(false)
-    const [regenOpen, setRegenOpen] = useState(false)
+    // Inline panels rendered IN the card (no modal): one open at a time.
+    const [panel, setPanel] = useState<'none' | 'enroll' | 'disable' | 'regenerate'>('none')
     const enabled = status?.enabled ?? false
+
+    // Collapse any open panel whenever the enabled state flips (after enable/disable).
+    const [lastEnabled, setLastEnabled] = useState(enabled)
+    if (enabled !== lastEnabled) {
+        setLastEnabled(enabled)
+        setPanel('none')
+    }
 
     return (
         <Card className="overflow-hidden border-border/70">
@@ -593,23 +604,37 @@ function TwoFactorCard() {
                 <div className="flex flex-wrap items-center gap-2">
                     {enabled ? (
                         <>
-                            <Button variant="outline" size="sm" onClick={() => setRegenOpen(true)}>
+                            <Button variant="outline" size="sm" onClick={() => setPanel(panel === 'regenerate' ? 'none' : 'regenerate')}>
                                 <KeyRound className="size-3.5" /> {t('security.regenerate')}
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => setDisableOpen(true)}>
+                            <Button variant="outline" size="sm" onClick={() => setPanel(panel === 'disable' ? 'none' : 'disable')}>
                                 {t('security.disable')}
                             </Button>
                         </>
                     ) : (
-                        <Button size="sm" disabled={isLoading} onClick={() => setEnableOpen(true)}>
+                        <Button size="sm" disabled={isLoading} onClick={() => setPanel(panel === 'enroll' ? 'none' : 'enroll')}>
                             {t('security.enable')}
                         </Button>
                     )}
                 </div>
             </CardContent>
-            {enableOpen && <EnableTwoFactorDialog open={enableOpen} onOpenChange={setEnableOpen} />}
-            {disableOpen && <CodePromptDialog open={disableOpen} onOpenChange={setDisableOpen} mode="disable" />}
-            {regenOpen && <CodePromptDialog open={regenOpen} onOpenChange={setRegenOpen} mode="regenerate" />}
+
+            {/* Inline panels — rendered in the page, not a modal. */}
+            {panel === 'enroll' && (
+                <div className="border-t bg-muted/20 p-5">
+                    <EnrollTwoFactor onCancel={() => setPanel('none')} />
+                </div>
+            )}
+            {panel === 'disable' && (
+                <div className="border-t bg-muted/20 p-5">
+                    <CodePromptInline mode="disable" onCancel={() => setPanel('none')} />
+                </div>
+            )}
+            {panel === 'regenerate' && (
+                <div className="border-t bg-muted/20 p-5">
+                    <CodePromptInline mode="regenerate" onCancel={() => setPanel('none')} />
+                </div>
+            )}
         </Card>
     )
 }
@@ -637,102 +662,110 @@ function BackupCodes({ codes }: { codes: string[] }) {
     )
 }
 
-function EnableTwoFactorDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+/** A centered 6-digit / backup code input, shared by every 2FA form. */
+function CodeInput({ id, value, onChange, placeholder = '123456', maxLength = 6 }: {
+    id: string; value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number
+}) {
+    return (
+        <Input
+            id={id}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder={placeholder}
+            maxLength={maxLength}
+            className="text-center text-lg tracking-[0.3em]"
+        />
+    )
+}
+
+/** Inline 2FA enrollment: QR + secret → confirm code → one-time backup codes. */
+function EnrollTwoFactor({ onCancel }: { onCancel: () => void }) {
     const { t } = useTranslation()
     const setup = useSetupTwoFactor()
     const verify = useVerifyTwoFactor()
+    // Hold the QR/secret in LOCAL state (set from the setup response) rather than
+    // reading the mutation object — this is the pattern the main app uses and
+    // renders reliably.
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+    const [secret, setSecret] = useState('')
     const [code, setCode] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
 
-    // Generate the secret + QR exactly ONCE when the dialog mounts. This MUST NOT
-    // run during render or fire twice: each /2fa/setup call mints a fresh secret
-    // and overwrites the stored one, so a double-fire makes the displayed QR not
-    // match the persisted secret → "Invalid or expired token" on a scanned code.
-    // The ref guard survives StrictMode's double-invoked mount effect.
+    // Fire /2fa/setup exactly once on mount. Must not run during render or twice —
+    // each call mints a new secret and overwrites the stored one, so a double-fire
+    // would make the shown QR not match the persisted secret. Ref guard is
+    // StrictMode-safe.
     const setupMutate = setup.mutate
     const didSetup = useRef(false)
     useEffect(() => {
         if (didSetup.current) return
         didSetup.current = true
-        setupMutate(undefined, { onError: () => setError(t('security.setupFailed')) })
+        setupMutate(undefined, {
+            onSuccess: (d) => { setQrDataUrl(d.qrDataUrl); setSecret(d.secret) },
+            onError: () => setError(t('security.setupFailed')),
+        })
     }, [setupMutate, t])
 
     function onVerify(e: FormEvent) {
         e.preventDefault()
         setError(null)
         verify.mutate(code.replace(/\D/g, ''), {
-            onSuccess: (res) => {
-                setBackupCodes(res.backupCodes)
-                toast.success(t('security.enabledToast'))
-            },
-            onError: (err) => setError(err instanceof ApiError ? err.message : t('security.invalidCode')),
+            onSuccess: (res) => { setBackupCodes(res.backupCodes); toast.success(t('security.enabledToast')) },
+            onError: (err) => setError(twoFaError(err, t('security.invalidCode'))),
         })
     }
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>{t('security.mfaTitle')}</DialogTitle>
-                </DialogHeader>
+    if (backupCodes) {
+        return (
+            <div className="space-y-3">
+                <p className="text-sm font-medium">{t('security.backupCodesTitle')}</p>
+                <BackupCodes codes={backupCodes} />
+                <Button className="w-full" onClick={onCancel}>{t('security.savedThem')}</Button>
+            </div>
+        )
+    }
 
-                {backupCodes ? (
-                    <div className="space-y-3">
-                        <p className="text-sm font-medium">{t('security.backupCodesTitle')}</p>
-                        <BackupCodes codes={backupCodes} />
-                        <Button className="w-full" onClick={() => onOpenChange(false)}>{t('security.savedThem')}</Button>
-                    </div>
-                ) : (
-                    <form className="space-y-4" onSubmit={onVerify}>
-                        {error ? (
-                            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
-                        ) : null}
-                        <div className="space-y-2">
-                            <p className="text-xs font-medium text-muted-foreground">{t('security.setupStep1')}</p>
-                            <div className="flex justify-center">
-                                {setup.isPending || !setup.data ? (
-                                    <Skeleton className="size-44 rounded-xl" />
-                                ) : (
-                                    <img src={setup.data.qrDataUrl} alt="2FA QR code" className="size-44 rounded-xl border bg-white p-2" />
-                                )}
-                            </div>
-                            {setup.data?.secret && (
-                                <p className="text-center text-[11px] text-muted-foreground">
-                                    {t('security.orEnterSecret')}<br />
-                                    <code className="select-all font-mono text-xs tracking-wider text-foreground">{setup.data.secret}</code>
-                                </p>
-                            )}
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="enableCode">{t('security.setupStep2')}</Label>
-                            <Input
-                                id="enableCode"
-                                value={code}
-                                onChange={(e) => { setCode(e.target.value); if (error) setError(null) }}
-                                inputMode="numeric"
-                                autoComplete="one-time-code"
-                                placeholder="123456"
-                                maxLength={6}
-                                className="text-center text-lg tracking-[0.3em]"
-                            />
-                        </div>
-                        <DialogFooter>
-                            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t('security.cancel')}</Button>
-                            <Button type="submit" disabled={verify.isPending || code.replace(/\D/g, '').length < 6}>
-                                {verify.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                                {t('security.confirmEnable')}
-                            </Button>
-                        </DialogFooter>
-                    </form>
+    return (
+        <form className="space-y-4" onSubmit={onVerify}>
+            {error ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
+            ) : null}
+            <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">{t('security.setupStep1')}</p>
+                <div className="flex justify-center">
+                    {qrDataUrl ? (
+                        <img src={qrDataUrl} alt="2FA QR code" className="size-44 rounded-xl border bg-white p-2" />
+                    ) : (
+                        <Skeleton className="size-44 rounded-xl" />
+                    )}
+                </div>
+                {secret && (
+                    <p className="text-center text-[11px] text-muted-foreground">
+                        {t('security.orEnterSecret')}<br />
+                        <code className="select-all font-mono text-xs tracking-wider text-foreground">{secret}</code>
+                    </p>
                 )}
-            </DialogContent>
-        </Dialog>
+            </div>
+            <div className="space-y-1.5">
+                <Label htmlFor="enableCode">{t('security.setupStep2')}</Label>
+                <CodeInput id="enableCode" value={code} onChange={(v) => { setCode(v); if (error) setError(null) }} />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={onCancel}>{t('security.cancel')}</Button>
+                <Button type="submit" disabled={verify.isPending || !qrDataUrl || code.replace(/\D/g, '').length < 6}>
+                    {verify.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {t('security.confirmEnable')}
+                </Button>
+            </div>
+        </form>
     )
 }
 
-/** Prompts for a current TOTP code to either disable 2FA or regenerate backup codes. */
-function CodePromptDialog({ open, onOpenChange, mode }: { open: boolean; onOpenChange: (v: boolean) => void; mode: 'disable' | 'regenerate' }) {
+/** Inline current-code prompt for disabling 2FA or regenerating backup codes. */
+function CodePromptInline({ mode, onCancel }: { mode: 'disable' | 'regenerate'; onCancel: () => void }) {
     const { t } = useTranslation()
     const disable = useDisableTwoFactor()
     const regen = useRegenerateBackupCodes()
@@ -747,56 +780,42 @@ function CodePromptDialog({ open, onOpenChange, mode }: { open: boolean; onOpenC
         const token = code.replace(/\D/g, '')
         if (mode === 'disable') {
             disable.mutate(token, {
-                onSuccess: () => { toast.success(t('security.disabledToast')); onOpenChange(false) },
-                onError: (err) => setError(err instanceof ApiError ? err.message : t('security.invalidCode')),
+                onSuccess: () => toast.success(t('security.disabledToast')),
+                onError: (err) => setError(twoFaError(err, t('security.invalidCode'))),
             })
         } else {
             regen.mutate(token, {
                 onSuccess: (res) => setNewCodes(res.backupCodes),
-                onError: (err) => setError(err instanceof ApiError ? err.message : t('security.invalidCode')),
+                onError: (err) => setError(twoFaError(err, t('security.invalidCode'))),
             })
         }
     }
 
+    if (newCodes) {
+        return (
+            <div className="space-y-3">
+                <BackupCodes codes={newCodes} />
+                <Button className="w-full" onClick={onCancel}>{t('security.savedThem')}</Button>
+            </div>
+        )
+    }
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>{mode === 'disable' ? t('security.disable') : t('security.regenerate')}</DialogTitle>
-                </DialogHeader>
-                {newCodes ? (
-                    <div className="space-y-3">
-                        <BackupCodes codes={newCodes} />
-                        <Button className="w-full" onClick={() => onOpenChange(false)}>{t('security.savedThem')}</Button>
-                    </div>
-                ) : (
-                    <form className="space-y-4" onSubmit={onSubmit}>
-                        {error ? (
-                            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
-                        ) : null}
-                        <div className="space-y-1.5">
-                            <Label htmlFor="promptCode">{t('security.currentCode')}</Label>
-                            <Input
-                                id="promptCode"
-                                value={code}
-                                onChange={(e) => { setCode(e.target.value); if (error) setError(null) }}
-                                inputMode="numeric"
-                                autoComplete="one-time-code"
-                                placeholder="123456"
-                                maxLength={6}
-                                className="text-center text-lg tracking-[0.3em]"
-                            />
-                        </div>
-                        <DialogFooter>
-                            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>{t('security.cancel')}</Button>
-                            <Button type="submit" disabled={pending || code.replace(/\D/g, '').length < 6}>
-                                {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-                                {mode === 'disable' ? t('security.disable') : t('security.regenerate')}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                )}
-            </DialogContent>
-        </Dialog>
+        <form className="space-y-3" onSubmit={onSubmit}>
+            {error ? (
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>
+            ) : null}
+            <div className="space-y-1.5">
+                <Label htmlFor="promptCode">{t('security.currentCode')}</Label>
+                <CodeInput id="promptCode" value={code} onChange={(v) => { setCode(v); if (error) setError(null) }} />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={onCancel}>{t('security.cancel')}</Button>
+                <Button type="submit" disabled={pending || code.replace(/\D/g, '').length < 6}>
+                    {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {mode === 'disable' ? t('security.disable') : t('security.regenerate')}
+                </Button>
+            </div>
+        </form>
     )
 }
