@@ -82,6 +82,9 @@ export interface Recognition {
     isPinned: boolean
     submittedAt?: string | null
     publishedAt?: string | null
+    approvedAt?: string | null
+    rejectedAt?: string | null
+    rejectionReason?: string | null
     createdAt: string
     updatedAt: string
     // Joined on detail:
@@ -736,12 +739,17 @@ export function useSubmitRecognition() {
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
-export function useAnalyticsSummary(period: string = '30d') {
+// Backend gates analytics endpoints to hr_manager / super_admin / dept_head
+// — pass `enabled: false` from the caller when the current user lacks the
+// role, so we don't fire a guaranteed-403 request and trip the global error
+// toast.
+export function useAnalyticsSummary(period: string = '30d', opts: { enabled?: boolean } = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
+    const { enabled = true } = opts
     return useQuery({
         queryKey: ['recognition-analytics-summary', tenantId, period],
         queryFn: () => api.get<{ data: AnalyticsSummary }>(`${BASE}/analytics/summary?period=${encodeURIComponent(period)}`).then(r => r.data),
-        enabled: !!tenantId,
+        enabled: !!tenantId && enabled,
     })
 }
 

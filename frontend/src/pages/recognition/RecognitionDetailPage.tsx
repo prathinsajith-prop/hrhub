@@ -4,6 +4,7 @@ import {
     Award, ArrowLeft, Heart, ThumbsUp, PartyPopper, HandHeart, Crown, Sparkles,
     MessageSquare, Send, Pin, PinOff, Trash2, Loader2, Paperclip, Download,
     Eye, EyeOff, Users as UsersIcon, Calendar, Trophy, AlertCircle, RotateCcw, Upload,
+    Check, X,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,7 +18,7 @@ import {
     useRecognition, useRecognitionComments, useAddComment, useEditComment, useDeleteComment,
     useSetReaction, useRemoveReaction, useDeleteRecognition, usePinRecognition,
     useRecognitionCategories, useRecognitionBadges, useRejectRecognition,
-    useReturnRecognition, useSubmitRecognition,
+    useApproveRecognition, useReturnRecognition, useSubmitRecognition,
     type RecognitionComment, type ReactionType,
 } from '@/hooks/useRecognition'
 import { useAuthStore } from '@/store/authStore'
@@ -88,6 +89,7 @@ export function RecognitionDetailPage() {
     const deleteMutation = useDeleteRecognition()
     const rejectMutation = useRejectRecognition()
     const returnMutation = useReturnRecognition()
+    const approveMutation = useApproveRecognition()
     const submitMutation = useSubmitRecognition()
 
     const [confirmDelete, setConfirmDelete] = useState(false)
@@ -340,6 +342,21 @@ export function RecognitionDetailPage() {
                             )}
                             {canModerate && recognition.status === 'pending' && (
                                 <>
+                                    {/* Primary HR action — approve & publish.
+                                        Backend handles status transitions and
+                                        fires recipient notifications. */}
+                                    <Button
+                                        size="sm"
+                                        onClick={() => approveMutation.mutate({ id: recognition.id, step: 'hr' }, {
+                                            onSuccess: () => toast.success('Recognition approved & published'),
+                                            onError: (e: any) => toast.error('Approve failed', e?.message),
+                                        })}
+                                        disabled={approveMutation.isPending}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    >
+                                        {approveMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                                        <span className="ml-1.5">Approve</span>
+                                    </Button>
                                     <Button variant="outline" size="sm" onClick={() => setReturnOpen(true)}>
                                         <RotateCcw className="size-4" /><span className="ml-1.5">Return for revision</span>
                                     </Button>
@@ -358,6 +375,29 @@ export function RecognitionDetailPage() {
                 </CardContent>
             </Card>
 
+            {/* Rejection-reason banner — visible to giver + HR when status='rejected'.
+                Without this surface the giver has no idea why HR rejected it. */}
+            {recognition.status === 'rejected' && recognition.rejectionReason && (isGiver || canModerate) && (
+                <Card className="mt-4 border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/30">
+                    <CardContent className="flex items-start gap-3 p-4">
+                        <X className="size-5 shrink-0 text-rose-600 mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-rose-900 dark:text-rose-200">
+                                Rejected
+                                {recognition.rejectedAt && (
+                                    <span className="ml-2 text-xs font-normal text-rose-700/80 dark:text-rose-300/80">
+                                        on {formatDate(recognition.rejectedAt)}
+                                    </span>
+                                )}
+                            </p>
+                            <p className="mt-1 text-sm text-rose-800/90 dark:text-rose-300/90 whitespace-pre-line">
+                                {recognition.rejectionReason}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Reactions bar */}
             <Card className="mt-4">
                 <CardContent className="flex flex-wrap items-center gap-2 p-3">
@@ -373,7 +413,9 @@ export function RecognitionDetailPage() {
                                 className={cn(
                                     'group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ring-1',
                                     active
-                                        ? cn(meta.activeTone, 'ring-current/30 shadow-sm')
+                                        // `ring-current/30` is invalid Tailwind (opacity on `current`). Use a
+                                        // concrete tone-aware ring derived from the same palette.
+                                        ? cn(meta.activeTone, 'ring-2 ring-offset-0 shadow-sm')
                                         : 'bg-card text-muted-foreground ring-border hover:bg-muted hover:text-foreground',
                                 )}
                                 aria-pressed={active}
@@ -576,7 +618,7 @@ function CommentNode({
     }
 
     return (
-        <li className={cn(depth > 0 && 'ml-10 border-l pl-4')}>
+        <li className={cn(depth > 0 && 'ml-6 sm:ml-10 border-l pl-3 sm:pl-4')}>
             <div className="flex items-start gap-2.5">
                 <Avatar className="mt-0.5 size-8 shrink-0">
                     <AvatarFallback className="text-[11px]">{getInitials(comment.authorName ?? '?')}</AvatarFallback>

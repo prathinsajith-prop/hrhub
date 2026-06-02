@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
     Award, Trophy, Sparkles, Heart, ThumbsUp, PartyPopper, HandHeart, Crown,
-    Users, MessageSquare, Send, Pin, Loader2, Plus, Filter, Search, Share2,
+    Users, MessageSquare, Send, Pin, Loader2, Plus, Search, Share2,
     TrendingUp, Star, ChevronRight, X,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
@@ -19,7 +19,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogBody, toast } from '@/components/ui/overlays'
 import {
-    useRecognitionFeed, useCreateRecognition, useSetReaction, useRemoveReaction,
+    useRecognitionFeed, useRecognitionList, useCreateRecognition, useSetReaction, useRemoveReaction,
     useTrendingRecognitions, useRecognitionCategories, useRecognitionBadges,
     useTopGivers, useTopRecognized, useAnalyticsSummary,
     type Recognition, type ReactionType, type Visibility, type NominationType,
@@ -99,7 +99,6 @@ export function RecognitionFeedPage() {
     const { t } = useTranslation()
     const role = useAuthStore(s => s.user?.role)
     const canViewAnalytics = role === 'hr_manager' || role === 'super_admin' || role === 'dept_head'
-    const [showFilters, setShowFilters] = useState(false)
     const [showGiveDialog, setShowGiveDialog] = useState(false)
     const [trendingOnly, setTrendingOnly] = useState(false)
     const [categoryFilter, setCategoryFilter] = useState<string>('all')
@@ -107,35 +106,47 @@ export function RecognitionFeedPage() {
     const [statusFilter, setStatusFilter] = useState<string>('all')
     const [searchQuery, setSearchQuery] = useState('')
 
+    // Debounce the search input so we don't fire a query on every keystroke.
+    const [debouncedQuery, setDebouncedQuery] = useState('')
+    useEffect(() => {
+        const id = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300)
+        return () => clearTimeout(id)
+    }, [searchQuery])
+
+    // When any filter is active OR HR is using the status filter, switch from
+    // the visibility-scoped /feed endpoint to /recognition (list) so the
+    // backend can apply the filters server-side. Without this, filters only
+    // affect already-loaded pages — confusing behaviour.
+    const hasServerFilters = !!(
+        debouncedQuery ||
+        categoryFilter !== 'all' ||
+        visibilityFilter !== 'all' ||
+        (canViewAnalytics && statusFilter !== 'all')
+    )
+
     const feedQuery = useRecognitionFeed({ limit: 20 })
+    const listQuery = useRecognitionList({
+        limit: 20,
+        q: debouncedQuery || undefined,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined,
+        visibility: visibilityFilter !== 'all' ? visibilityFilter : undefined,
+        status: canViewAnalytics && statusFilter !== 'all' ? statusFilter : undefined,
+    })
+    const activeQuery = hasServerFilters ? listQuery : feedQuery
     const trendingQuery = useTrendingRecognitions()
     const categoriesQuery = useRecognitionCategories()
-    // Backend returns 403 on analytics endpoints for employees — only call when authorized.
-    const summaryQuery = useAnalyticsSummary('30d')
+    // Gate the analytics + leaderboard requests so plain employees don't get a 403.
+    const summaryQuery = useAnalyticsSummary('30d', { enabled: canViewAnalytics })
     const topGivers = useTopGivers('30d')
     const topRecognized = useTopRecognized('30d')
 
     const allItems = useMemo<Recognition[]>(
-        () => (feedQuery.data?.pages ?? []).flatMap(p => p.data),
-        [feedQuery.data],
+        () => (activeQuery.data?.pages ?? []).flatMap(p => p.data),
+        [activeQuery.data],
     )
 
     const trendingItems = trendingQuery.data ?? []
-    const sourceItems = trendingOnly ? trendingItems : allItems
-
-    const filteredItems = useMemo(() => {
-        const q = searchQuery.trim().toLowerCase()
-        return sourceItems.filter(r => {
-            if (categoryFilter !== 'all' && r.categoryKey !== categoryFilter) return false
-            if (visibilityFilter !== 'all' && r.visibility !== visibilityFilter) return false
-            if (canViewAnalytics && statusFilter !== 'all' && r.status !== statusFilter) return false
-            if (q) {
-                const hay = `${r.title} ${r.message} ${r.giverName ?? ''} ${(r.recipients ?? []).map(x => x.name).join(' ')}`.toLowerCase()
-                if (!hay.includes(q)) return false
-            }
-            return true
-        })
-    }, [sourceItems, categoryFilter, visibilityFilter, statusFilter, canViewAnalytics, searchQuery])
+    const filteredItems = trendingOnly ? trendingItems : allItems
 
     const pinned = filteredItems.filter(r => r.isPinned)
     const unpinned = filteredItems.filter(r => !r.isPinned)
@@ -150,23 +161,13 @@ export function RecognitionFeedPage() {
                 title={t('recognition.title', { defaultValue: 'Recognition' })}
                 description={t('recognition.description', { defaultValue: 'Celebrate great work across the organization' })}
                 actions={
-                    <>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<Filter className="size-4" />}
-                            onClick={() => setShowFilters(v => !v)}
-                        >
-                            {t('common.filter', { defaultValue: 'Filter' })}
-                        </Button>
-                        <Button
-                            onClick={() => setShowGiveDialog(true)}
-                            leftIcon={<Sparkles className="size-4" />}
-                            className="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-md hover:from-indigo-700 hover:via-violet-700 hover:to-fuchsia-700"
-                        >
-                            {t('recognition.giveRecognition', { defaultValue: 'Give Recognition' })}
-                        </Button>
-                    </>
+                    <Button
+                        onClick={() => setShowGiveDialog(true)}
+                        leftIcon={<Sparkles className="size-4" />}
+                        className="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-md hover:from-indigo-700 hover:via-violet-700 hover:to-fuchsia-700"
+                    >
+                        {t('recognition.giveRecognition', { defaultValue: 'Give Recognition' })}
+                    </Button>
                 }
             />
 
@@ -197,8 +198,8 @@ export function RecognitionFeedPage() {
                 </div>
             )}
 
-            {/* Sticky filter bar */}
-            <div className="sticky top-0 z-10 -mx-4 mt-6 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6">
+            {/* Sticky filter bar — `top-14` clears the global app header */}
+            <div className="sticky top-14 z-10 -mx-4 mt-6 border-b border-border bg-background/85 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:-mx-6 sm:px-6">
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="relative min-w-0 flex-1 max-w-md">
                         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -258,11 +259,6 @@ export function RecognitionFeedPage() {
                         </Button>
                     )}
                 </div>
-                {showFilters && (
-                    <p className="mt-2 text-[11px] text-muted-foreground">
-                        {t('recognition.filterHint', { defaultValue: 'Filters apply to the current feed view. Toggle Trending to see top reactions of the last 30 days.' })}
-                    </p>
-                )}
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -287,22 +283,22 @@ export function RecognitionFeedPage() {
 
                     {/* Feed */}
                     <div className="space-y-4">
-                        {feedQuery.isLoading ? (
+                        {activeQuery.isLoading ? (
                             [1, 2, 3].map(i => <Skeleton key={i} className="h-48 rounded-2xl" />)
                         ) : unpinned.length === 0 ? (
                             <EmptyState onCreate={() => setShowGiveDialog(true)} />
                         ) : (
                             <>
                                 {unpinned.map(r => <RecognitionCard key={r.id} r={r} />)}
-                                {!trendingOnly && feedQuery.hasNextPage && (
+                                {!trendingOnly && activeQuery.hasNextPage && (
                                     <div className="flex justify-center pt-2">
                                         <Button
                                             variant="outline"
-                                            onClick={() => feedQuery.fetchNextPage()}
-                                            disabled={feedQuery.isFetchingNextPage}
-                                            leftIcon={feedQuery.isFetchingNextPage ? <Loader2 className="size-4 animate-spin" /> : undefined}
+                                            onClick={() => activeQuery.fetchNextPage()}
+                                            disabled={activeQuery.isFetchingNextPage}
+                                            leftIcon={activeQuery.isFetchingNextPage ? <Loader2 className="size-4 animate-spin" /> : undefined}
                                         >
-                                            {feedQuery.isFetchingNextPage
+                                            {activeQuery.isFetchingNextPage
                                                 ? t('common.loading', { defaultValue: 'Loading…' })
                                                 : t('common.loadMore', { defaultValue: 'Load more' })}
                                         </Button>
@@ -443,8 +439,12 @@ function RecognitionCard({ r, compact = false }: { r: Recognition; compact?: boo
                                     <span>Achievement on {formatDate(r.achievementDate)}</span>
                                 </>
                             )}
-                            <span>·</span>
-                            <span className="capitalize">{r.visibility}</span>
+                            {r.visibility && r.visibility !== 'public' && (
+                                <>
+                                    <span>·</span>
+                                    <span className="capitalize">{r.visibility}</span>
+                                </>
+                            )}
                         </div>
                     </div>
                     {r.badge && (
@@ -463,13 +463,15 @@ function RecognitionCard({ r, compact = false }: { r: Recognition; compact?: boo
                     )}
                 </div>
 
-                {/* Category chip + points */}
+                {/* Category chip + points. `color-mix` darkens light category
+                    hues (yellow, lime, cyan) so the text stays readable on
+                    the 10% tinted background. */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span
                         className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1"
                         style={{
                             backgroundColor: withAlpha(color, 0.1),
-                            color: color,
+                            color: `color-mix(in oklab, ${color}, black 30%)`,
                             borderColor: withAlpha(color, 0.25),
                         }}
                     >

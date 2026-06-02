@@ -69,7 +69,10 @@
     "emptyDesc": "لقد اطّلعت على كل شيء.",
     "ack": "لقد قرأت هذا",
     "ackd": "تم الإقرار",
-    "acknowledged": "تم الإقرار"
+    "acknowledged": "تم الإقرار",
+    "readMore": "قراءة المزيد",
+    "showLess": "عرض أقل",
+    "markRead": "تعليم كمقروء"
   },
   "recognition": {
     "title": "التقدير",
@@ -105,8 +108,18 @@
     "jobSearch": "ابحث برقم الوظيفة أو العنوان…",
     "noJobs": "لا توجد وظائف شاغرة مطابقة.",
     "resume": "السيرة الذاتية",
-    "resumeLabel": "السيرة الذاتية (اختياري)",
-    "attachResume": "إرفاق السيرة الذاتية",
+    "resumeLabel": "السيرة الذاتية",
+    "attachResume": "ارفع السيرة الذاتية للتعبئة التلقائية",
+    "replace": "استبدال",
+    "rel": {
+      "formerColleague": "زميل سابق",
+      "currentColleague": "زميل حالي",
+      "friend": "صديق",
+      "family": "أحد أفراد العائلة",
+      "classmate": "زميل دراسة / جامعة",
+      "network": "شبكة مهنية",
+      "other": "أخرى"
+    },
     "resumeHint": "PDF أو Word أو صورة · حتى 10 ميغابايت. سنقرؤها ونملأ النموذج نيابة عنك.",
     "resumeTooLarge": "يجب ألا يتجاوز حجم السيرة الذاتية 10 ميغابايت",
     "resumeReading": "جارٍ قراءة السيرة الذاتية…",
@@ -117,7 +130,7 @@
     "candidateEmail": "البريد الإلكتروني",
     "candidatePhone": "الهاتف",
     "relationship": "كيف تعرفه؟",
-    "relationshipPlaceholder": "زميل سابق، صديق…",
+    "relationshipPlaceholder": "اختر…",
     "notes": "لماذا تُحيله؟",
     "notesPlaceholder": "ملاحظة قصيرة لفريق التوظيف…",
     "submit": "إرسال الإحالة",

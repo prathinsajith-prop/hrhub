@@ -69,7 +69,10 @@
     "emptyDesc": "You're all caught up.",
     "ack": "I have read this",
     "ackd": "Acknowledged",
-    "acknowledged": "Acknowledged"
+    "acknowledged": "Acknowledged",
+    "readMore": "Read more",
+    "showLess": "Show less",
+    "markRead": "Mark as read"
   },
   "recognition": {
     "title": "Recognition",
@@ -105,8 +108,18 @@
     "jobSearch": "Search by job no. or title…",
     "noJobs": "No open positions match.",
     "resume": "Resume",
-    "resumeLabel": "Resume (optional)",
-    "attachResume": "Attach resume",
+    "resumeLabel": "Resume",
+    "attachResume": "Upload résumé to auto-fill",
+    "replace": "Replace",
+    "rel": {
+      "formerColleague": "Former colleague",
+      "currentColleague": "Current colleague",
+      "friend": "Friend",
+      "family": "Family member",
+      "classmate": "University / classmate",
+      "network": "Professional network",
+      "other": "Other"
+    },
     "resumeHint": "PDF, Word, or image · up to 10 MB. We’ll read it and fill the form for you.",
     "resumeTooLarge": "Resume must be 10 MB or smaller",
     "resumeReading": "Reading résumé…",
@@ -117,7 +130,7 @@
     "candidateEmail": "Email",
     "candidatePhone": "Phone",
     "relationship": "How do you know them?",
-    "relationshipPlaceholder": "Former colleague, friend…",
+    "relationshipPlaceholder": "Select…",
     "notes": "Why are you referring them?",
     "notesPlaceholder": "A short note for the hiring team…",
     "submit": "Submit referral",

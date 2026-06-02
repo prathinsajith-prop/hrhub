@@ -1,12 +1,13 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles } from 'lucide-react'
+import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles, UploadCloud } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -35,6 +36,18 @@ const STAGE_TONE: Record<string, string> = {
 
 const MAX_RESUME_BYTES = 10 * 1024 * 1024 // 10 MB — matches the server limit
 const RESUME_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg,.webp'
+
+// "How do you know them?" — a fixed list keeps referrals consistent and reportable.
+// The stored value is the English string; the label is translated for display.
+const RELATIONSHIP_OPTIONS: Array<{ value: string; key: string }> = [
+    { value: 'Former colleague', key: 'referrals.rel.formerColleague' },
+    { value: 'Current colleague', key: 'referrals.rel.currentColleague' },
+    { value: 'Friend', key: 'referrals.rel.friend' },
+    { value: 'Family member', key: 'referrals.rel.family' },
+    { value: 'University / classmate', key: 'referrals.rel.classmate' },
+    { value: 'Professional network', key: 'referrals.rel.network' },
+    { value: 'Other', key: 'referrals.rel.other' },
+]
 
 function humanizeStage(stage: string | null): string {
     if (!stage) return 'Removed'
@@ -212,6 +225,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const [photo, setPhoto] = useState<Blob | null>(null)
     const [parsing, setParsing] = useState(false)
     const [parsedNote, setParsedNote] = useState<string | null>(null)
+    const [dragging, setDragging] = useState(false)
     const [form, setForm] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
 
     const reset = () => {
@@ -222,7 +236,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
 
     const emailValid = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.candidateEmail.trim())
-    const canSubmit = !!job && form.candidateName.trim().length > 0 && emailValid && !submit.isPending
+    const canSubmit = !!job && !!resume && form.candidateName.trim().length > 0 && emailValid && !submit.isPending
 
     function close() { onOpenChange(false); reset() }
 
@@ -295,7 +309,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 <div className="space-y-4">
                     {/* Résumé first — attach to auto-fill the fields below */}
                     <div className="space-y-1.5">
-                        <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume (optional)' })}</Label>
+                        <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume' })} *</Label>
                         <input
                             ref={fileRef}
                             type="file"
@@ -304,15 +318,21 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                             onChange={(e) => pickResume(e.target.files?.[0])}
                         />
                         {resume ? (
-                            <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                            <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5 text-sm">
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="flex min-w-0 items-center gap-2">
-                                        {parsing ? <Loader2 className="size-4 shrink-0 animate-spin text-primary" /> : <FileText className="size-4 shrink-0 text-muted-foreground" />}
-                                        <span className="truncate">{resume.name}</span>
+                                    <span className="flex min-w-0 items-center gap-2.5">
+                                        {parsing ? <Loader2 className="size-4 shrink-0 animate-spin text-primary" /> : <FileText className="size-4 shrink-0 text-primary" />}
+                                        <span className="min-w-0">
+                                            <span className="block truncate font-medium">{resume.name}</span>
+                                            <span className="block text-[11px] text-muted-foreground">{(resume.size / 1024).toFixed(0)} KB</span>
+                                        </span>
                                     </span>
-                                    <button type="button" onClick={() => { setResume(null); setPhoto(null); setParsedNote(null); if (fileRef.current) fileRef.current.value = '' }} className="shrink-0 text-muted-foreground hover:text-foreground">
-                                        <X className="size-4" />
-                                    </button>
+                                    <span className="flex shrink-0 items-center gap-1">
+                                        <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">{t('referrals.replace', { defaultValue: 'Replace' })}</button>
+                                        <button type="button" aria-label="Remove résumé" onClick={() => { setResume(null); setPhoto(null); setParsedNote(null); if (fileRef.current) fileRef.current.value = '' }} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                                            <X className="size-4" />
+                                        </button>
+                                    </span>
                                 </div>
                                 {(parsing || parsedNote) && (
                                     <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -322,11 +342,22 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                                 )}
                             </div>
                         ) : (
-                            <Button type="button" variant="outline" size="sm" className="w-full gap-2" onClick={() => fileRef.current?.click()}>
-                                <Paperclip className="size-4" /> {t('referrals.attachResume', { defaultValue: 'Attach resume' })}
-                            </Button>
+                            <button
+                                type="button"
+                                onClick={() => fileRef.current?.click()}
+                                onDragOver={(e: DragEvent) => { e.preventDefault(); setDragging(true) }}
+                                onDragLeave={() => setDragging(false)}
+                                onDrop={(e: DragEvent) => { e.preventDefault(); setDragging(false); pickResume(e.dataTransfer.files?.[0]) }}
+                                className={cn(
+                                    'flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed px-3 py-5 text-center transition-colors',
+                                    dragging ? 'border-primary bg-primary/5' : 'border-input hover:border-primary/40 hover:bg-muted/40',
+                                )}
+                            >
+                                <span className="grid size-9 place-items-center rounded-full bg-primary/10 text-primary"><UploadCloud className="size-4" /></span>
+                                <span className="text-sm font-medium">{t('referrals.attachResume', { defaultValue: 'Upload résumé to auto-fill' })}</span>
+                                <span className="text-[11px] text-muted-foreground">{t('referrals.resumeHint', { defaultValue: 'PDF, Word, or image · up to 10 MB. We’ll read it and fill the form for you.' })}</span>
+                            </button>
                         )}
-                        <p className="text-[11px] text-muted-foreground">{t('referrals.resumeHint', { defaultValue: 'PDF, Word, or image · up to 10 MB. We’ll read it and fill the form for you.' })}</p>
                     </div>
 
                     <div className="space-y-1.5">
@@ -352,7 +383,16 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 
                     <div className="space-y-1.5">
                         <Label>{t('referrals.relationship', { defaultValue: 'How do you know them?' })}</Label>
-                        <Input value={form.relationship} onChange={(e) => set('relationship')(e.target.value)} placeholder={t('referrals.relationshipPlaceholder', { defaultValue: 'Former colleague, friend…' })} />
+                        <Select value={form.relationship || undefined} onValueChange={set('relationship')}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder={t('referrals.relationshipPlaceholder', { defaultValue: 'Select…' })} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {RELATIONSHIP_OPTIONS.map((r) => (
+                                    <SelectItem key={r.value} value={r.value}>{t(r.key, { defaultValue: r.value })}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="space-y-1.5">
