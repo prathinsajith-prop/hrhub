@@ -723,6 +723,15 @@ export async function listCategories(tenantId: string) {
     const rows = await db.select().from(recognitionCategories)
         .where(eq(recognitionCategories.tenantId, tenantId))
         .orderBy(recognitionCategories.sortOrder, recognitionCategories.label)
+    // Lazy seed: tenants created before the recognition feature (or any tenant
+    // that's never had categories) get the defaults on first read, so the
+    // category picker is never empty.
+    if (rows.length === 0) {
+        await seedDefaultCategories(tenantId)
+        return db.select().from(recognitionCategories)
+            .where(eq(recognitionCategories.tenantId, tenantId))
+            .orderBy(recognitionCategories.sortOrder, recognitionCategories.label)
+    }
     return rows
 }
 
@@ -790,6 +799,13 @@ export async function listBadges(tenantId: string) {
     const rows = await db.select().from(recognitionBadges)
         .where(eq(recognitionBadges.tenantId, tenantId))
         .orderBy(recognitionBadges.sortOrder, recognitionBadges.label)
+    // Lazy seed defaults so the badge picker is never empty (see listCategories).
+    if (rows.length === 0) {
+        await seedDefaultBadges(tenantId)
+        return db.select().from(recognitionBadges)
+            .where(eq(recognitionBadges.tenantId, tenantId))
+            .orderBy(recognitionBadges.sortOrder, recognitionBadges.label)
+    }
     return rows
 }
 
@@ -1664,6 +1680,16 @@ export async function isManagerOfAnyRecipient(tenantId: string, recognitionId: s
     `)
     const rows = ((res as any).rows ?? res) as any[]
     return Array.isArray(rows) && rows.length > 0
+}
+
+/** Distinct direct-manager employee ids for a set of recipient employees.
+ *  Used to notify managers when a team member is recognized. */
+export async function resolveManagersOfRecipients(tenantId: string, recipientEmployeeIds: string[]): Promise<string[]> {
+    if (!recipientEmployeeIds.length) return []
+    const rows = await db.select({ managerId: employees.reportingTo })
+        .from(employees)
+        .where(and(eq(employees.tenantId, tenantId), inArray(employees.id, recipientEmployeeIds)))
+    return Array.from(new Set(rows.map((r) => r.managerId).filter((id): id is string => !!id)))
 }
 
 // Re-exports referenced by routes

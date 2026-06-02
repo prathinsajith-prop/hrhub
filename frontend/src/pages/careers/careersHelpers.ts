@@ -10,6 +10,14 @@ export function useJobTypeLabel() {
     return (type: string) => t(`careers.type.${type}`, { defaultValue: type })
 }
 
+/** Translates workplace_type codes to display labels. Public-careers safe. */
+export function useWorkplaceLabel() {
+    const { t } = useTranslation()
+    return (workplace: string) => t(`careers.workplace.${workplace}`, {
+        defaultValue: workplace === 'on_site' ? 'On-site' : workplace === 'hybrid' ? 'Hybrid' : workplace === 'remote' ? 'Remote' : workplace,
+    })
+}
+
 /** "AED 8,000 – 12,000", "From AED 8,000", or '' when no salary is set. */
 export function formatSalaryRange(min: string | null, max: string | null): string {
     const lo = min ? Number(min) : null

@@ -14,8 +14,14 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     title: text('title').notNull(),
     department: text('department'),
     location: text('location'),
+    // Employment-contract type. The DB column is plain text — the union is a
+    // TypeScript hint only — so widening the union doesn't need a migration.
+    // Internship/temporary/freelance were added with migration 0078.
     type: text('type').notNull().default('full_time')
-        .$type<'full_time' | 'part_time' | 'contract'>(),
+        .$type<'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary' | 'freelance'>(),
+    // Where the work happens. Independent of employment-contract type.
+    workplaceType: text('workplace_type').notNull().default('on_site')
+        .$type<'on_site' | 'hybrid' | 'remote'>(),
     status: text('status').notNull().default('draft')
         .$type<'draft' | 'open' | 'closed' | 'on_hold'>(),
     openings: integer('openings').notNull().default(1),
@@ -24,6 +30,12 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     industry: text('industry'),
     description: text('description'),
     requirements: jsonb('requirements').default([]),
+    // Free-text skill tags (e.g. "TypeScript", "Negotiation"). Stored as a
+    // jsonb string[] — searchable via @> for facet queries.
+    skills: jsonb('skills').$type<string[]>().notNull().default([]),
+    // Qualification bullets (e.g. "Bachelor's in CS", "PMP certified"). Same
+    // shape as skills — distinct semantic, separate UI section.
+    qualifications: jsonb('qualifications').$type<string[]>().notNull().default([]),
     closingDate: date('closing_date'),
     postedBy: uuid('posted_by').references(() => users.id),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -33,7 +45,10 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     tenantIdx: index('idx_jobs_tenant').on(t.tenantId),
     statusIdx: index('idx_jobs_status').on(t.status),
     tenantStatusIdx: index('idx_jobs_tenant_status').on(t.tenantId, t.status),
+    workplaceIdx: index('idx_jobs_workplace').on(t.tenantId, t.workplaceType),
     jobNoUniq: uniqueIndex('idx_jobs_tenant_no_uniq').on(t.tenantId, t.jobNo).where(sql`${t.jobNo} IS NOT NULL`),
+    // Serves the jobs list: WHERE tenant ORDER BY created_at DESC (backward scan).
+    tenantCreatedIdx: index('idx_jobs_tenant_created').on(t.tenantId, t.createdAt),
 }))
 
 export const jobApplications = pgTable('job_applications', {
@@ -53,6 +68,9 @@ export const jobApplications = pgTable('job_applications', {
     expectedSalary: numeric('expected_salary', { precision: 12, scale: 2 }),
     currentSalary: numeric('current_salary', { precision: 12, scale: 2 }),
     resumeUrl: text('resume_url'),
+    // Candidate photo (S3 key) — auto-extracted from the résumé on apply, or
+    // uploaded manually. Served as a presigned `avatar` URL by the service.
+    avatarUrl: text('avatar_url'),
     notes: text('notes'),
     appliedDate: date('applied_date').notNull().defaultNow(),
     // Origin of the candidate. 'direct' = added manually by HR; 'careers' =
@@ -73,6 +91,8 @@ export const jobApplications = pgTable('job_applications', {
     tenantStageIdx: index('idx_applications_tenant_stage').on(t.tenantId, t.stage),
     jobStageIdx: index('idx_applications_job_stage').on(t.jobId, t.stage),
     referrerIdx: index('idx_applications_referrer').on(t.referredByEmployeeId),
+    // Serves the candidates list: WHERE tenant ORDER BY created_at DESC (backward scan).
+    tenantCreatedIdx: index('idx_applications_tenant_created').on(t.tenantId, t.createdAt),
 }))
 
 export const recruitmentJobsRelations = relations(recruitmentJobs, ({ one, many }) => ({

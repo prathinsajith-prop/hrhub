@@ -4,14 +4,16 @@ import { useTranslation } from 'react-i18next'
 import { RichTextDisplay } from '@/components/ui/rich-text-display'
 import {
   ArrowLeft, Edit2, MapPin, Briefcase, Users,
-  Download, Eye, FileText, Star, Clock, CheckCircle2, XCircle, AlertCircle,
-  ChevronRight, Loader2,
+  Download, Eye, FileText, Star, CheckCircle2, XCircle, AlertCircle,
+  ChevronRight, Loader2, GraduationCap, Sparkles,
 } from 'lucide-react'
+import { JobTypeBadge, WorkplaceBadge, TagChip } from '@/components/shared/JobBadges'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useJob, useApplications, useRecruitmentStages } from '@/hooks/useRecruitment'
@@ -21,6 +23,13 @@ import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { labelFor } from '@/lib/enums'
 import { DEFAULT_STAGES, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import type { Job, Candidate, ApplicationStage } from '@/types'
+
+const SOURCE_FILTERS = [
+  { key: 'all' as const,      labelKey: 'recruitment.source.all',      activeClass: 'bg-foreground text-background border-foreground' },
+  { key: 'careers' as const,  labelKey: 'recruitment.source.careers',  activeClass: 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900/50' },
+  { key: 'referral' as const, labelKey: 'recruitment.source.referral', activeClass: 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-900/50' },
+  { key: 'direct' as const,   labelKey: 'recruitment.source.hr',       activeClass: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50' },
+]
 
 const JOB_STATUS_STYLE: Record<string, string> = {
   open:    'bg-success/10 text-success border-success/20',
@@ -43,7 +52,10 @@ function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentSt
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+            <CandidateSourceBadge source={c.source} referredByName={c.referredByName} className="shrink-0" />
+          </div>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
             <span className="text-[11px] text-muted-foreground">{c.nationality}</span>
             {c.experience > 0 && (
@@ -105,6 +117,7 @@ export function JobDetailPage() {
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = useState(false)
   const [stageFilter, setStageFilter] = useState<ApplicationStage | 'all'>('all')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'direct' | 'referral' | 'careers'>('all')
 
   const { data: jobData, isLoading: jobLoading } = useJob(id)
   const { data: appsData, isLoading: appsLoading } = useApplications({ jobId: id, limit: 200 })
@@ -128,13 +141,24 @@ export function JobDetailPage() {
     }, {}),
     [allCandidates],
   )
+  const sourceCounts = useMemo(
+    () => allCandidates.reduce<Record<'direct' | 'referral' | 'careers', number>>((acc, c) => {
+      const src = c.source ?? 'direct'
+      acc[src] = (acc[src] ?? 0) + 1
+      return acc
+    }, { direct: 0, referral: 0, careers: 0 }),
+    [allCandidates],
+  )
   const candidates = useMemo(
-    () => stageFilter === 'all' ? allCandidates : allCandidates.filter(c => c.stage === stageFilter),
-    [allCandidates, stageFilter],
+    () => allCandidates.filter(c =>
+      (stageFilter === 'all' || c.stage === stageFilter) &&
+      (sourceFilter === 'all' || (c.source ?? 'direct') === sourceFilter),
+    ),
+    [allCandidates, stageFilter, sourceFilter],
   )
 
   const { visibleCount, setVisibleCount, sentinelRef } = useInfiniteScroll(candidates.length)
-  useEffect(() => { setVisibleCount(20) }, [stageFilter, setVisibleCount])
+  useEffect(() => { setVisibleCount(20) }, [stageFilter, sourceFilter, setVisibleCount])
 
   if (jobLoading) {
     return (
@@ -202,10 +226,8 @@ export function JobDetailPage() {
                       {job.location}
                     </span>
                   )}
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="size-3.5" />
-                    {labelFor(job.type)}
-                  </span>
+                  <JobTypeBadge type={job.type} size="xs" variant="bordered" />
+                  {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="xs" variant="bordered" />}
                 </div>
               </div>
               <Button
@@ -286,7 +308,41 @@ export function JobDetailPage() {
                 </CardContent>
               </Card>
             )}
-            {!job.description && (!job.requirements || job.requirements.length === 0) && (
+            {job.skills && job.skills.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-sky-500" />
+                    {t('recruitment.jobDetail.skills', { defaultValue: 'Skills' })}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <div className="flex flex-wrap gap-1.5">
+                    {job.skills.map((s, i) => (
+                      <TagChip key={`${i}-${s}`} tone="sky">{s}</TagChip>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {job.qualifications && job.qualifications.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <GraduationCap className="size-3.5 text-emerald-500" />
+                    {t('recruitment.jobDetail.qualifications', { defaultValue: 'Qualifications' })}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <div className="flex flex-wrap gap-1.5">
+                    {job.qualifications.map((q, i) => (
+                      <TagChip key={`${i}-${q}`} tone="emerald">{q}</TagChip>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {!job.description && (!job.requirements || job.requirements.length === 0) && (!job.skills || job.skills.length === 0) && (!job.qualifications || job.qualifications.length === 0) && (
               <Card>
                 <CardContent className="py-10 text-center">
                   <FileText className="size-8 text-muted-foreground/20 mx-auto mb-2" />
@@ -350,6 +406,30 @@ export function JobDetailPage() {
                       )
                     })}
                   </div>
+              )}
+
+              {allCandidates.length > 0 && (
+                <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/5 flex-wrap">
+                  <span className="text-[11px] font-medium text-muted-foreground/70 mr-0.5">{t('recruitment.jobDetail.source', { defaultValue: 'Source' })}</span>
+                  {SOURCE_FILTERS.map(sf => {
+                    const count = sf.key === 'all' ? allCandidates.length : sourceCounts[sf.key]
+                    if (sf.key !== 'all' && count === 0) return null
+                    const isActive = sourceFilter === sf.key
+                    return (
+                      <button
+                        key={sf.key}
+                        type="button"
+                        onClick={() => setSourceFilter(isActive ? 'all' : sf.key)}
+                        className={cn(
+                          'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                          isActive ? sf.activeClass : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                        )}
+                      >
+                        {t(sf.labelKey)} · {count}
+                      </button>
+                    )
+                  })}
+                </div>
               )}
 
               <CardContent className="p-0">

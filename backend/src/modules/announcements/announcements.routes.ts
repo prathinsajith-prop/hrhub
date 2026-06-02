@@ -50,11 +50,33 @@ export default async function announcementsRoutes(fastify: any): Promise<void> {
     fastify.post('/', { ...manage, schema: { tags: ['Announcements'] } }, async (request: any, reply: any) => {
         const b = request.body as any
         if (!b?.title || !String(b.title).trim()) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Title is required' })
-        const row = await createAnnouncement(request.user.tenantId, request.user.id, request.user.name, {
+
+        // Publish timing: no date → publish now; past/now → publish immediately;
+        // a future date → schedule (the scheduler worker flips it when it's due).
+        // An explicit `status: 'draft'` keeps it a draft (Save-as-draft).
+        const publishAt = b.publishAt ? new Date(b.publishAt) : new Date()
+        const validDate = !Number.isNaN(publishAt.getTime())
+        const effectivePublishAt = validDate ? publishAt : new Date()
+        const saveAsDraft = b.status === 'draft'
+        const publishNow = !saveAsDraft && effectivePublishAt.getTime() <= Date.now()
+
+        let row = await createAnnouncement(request.user.tenantId, request.user.id, request.user.name, {
             title: String(b.title).trim(), body: b.body, category: b.category, priority: b.priority,
-            pinned: b.pinned, requireAck: b.requireAck, attachments: b.attachments, publishAt: b.publishAt, expireAt: b.expireAt,
+            pinned: b.pinned, requireAck: b.requireAck, attachments: b.attachments,
+            publishAt: effectivePublishAt.toISOString(), expireAt: b.expireAt,
         }, parseAudiences(b))
         audit(request, 'create', row.id, row.title, { category: row.category, priority: row.priority })
+
+        if (!saveAsDraft) {
+            const transitioned = await setStatus(request.user.tenantId, row.id, publishNow ? 'published' : 'scheduled')
+            if (transitioned) row = transitioned
+            if (publishNow) {
+                audit(request, 'publish', row.id, row.title, { priority: row.priority })
+                notifyAnnouncementPublished(request.user.tenantId, row, request.log).catch((err: unknown) => {
+                    request.log?.warn?.({ err, announcementId: row.id }, 'announcement publish fan-out failed')
+                })
+            }
+        }
         return reply.code(201).send({ data: row })
     })
 

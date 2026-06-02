@@ -178,13 +178,17 @@ export type JobStatus = 'draft' | 'open' | 'closed' | 'on_hold'
  */
 export type ApplicationStage = string
 
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary' | 'freelance'
+export type WorkplaceType = 'on_site' | 'hybrid' | 'remote'
+
 export interface Job {
   id: string
   jobNo?: string | null
   title: string
   department: string
   location: string
-  type: 'full_time' | 'part_time' | 'contract'
+  type: EmploymentType
+  workplaceType: WorkplaceType
   status: JobStatus
   openings: number
   applications: number
@@ -195,6 +199,8 @@ export interface Job {
   industry: IndustryType
   description: string
   requirements: string[]
+  skills: string[]
+  qualifications: string[]
 }
 
 export interface Candidate {

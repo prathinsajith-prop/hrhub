@@ -26,6 +26,7 @@ const EXT_MIME: Record<string, string> = {
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
 }
+const IMAGE_MIME: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }
 
 /**
  * Employee-portal referral endpoints.
@@ -114,10 +115,20 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
         // Parse multipart: collect text fields + buffer the (optional) resume.
         const fields: Record<string, string> = {}
         let pending: { buffer: Buffer; originalName: string; mimetype: string } | null = null
+        // Optional candidate photo, auto-extracted from the résumé client-side.
+        let photo: { buffer: Buffer; mimetype: string } | null = null
         for await (const part of (request as any).parts()) {
             if (part.type === 'file') {
                 const chunks: Buffer[] = []
                 for await (const chunk of part.file) chunks.push(chunk as Buffer)
+                if (part.fieldname === 'photo') {
+                    // Cap photo at 2 MB; just skip it if oversized rather than failing.
+                    if (!part.file.truncated && chunks.length) {
+                        const buf = Buffer.concat(chunks)
+                        if (buf.length <= 2 * 1024 * 1024) photo = { buffer: buf, mimetype: part.mimetype }
+                    }
+                    continue
+                }
                 if (part.file.truncated) {
                     return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: 'Resume exceeds the 10 MB limit.' })
                 }
@@ -184,6 +195,22 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
             }
         }
 
+        // Candidate photo (optional, best-effort): validate it's an image, store
+        // to S3. A failure here never blocks the referral — photo is a nicety.
+        let avatarUrl: string | null = null
+        if (photo) {
+            const ext = IMAGE_MIME[photo.mimetype]
+            if (ext) {
+                const key = buildS3Key(request.user.tenantId, `referrals/${jobId}/photo`, `photo${ext}`)
+                try {
+                    await uploadObject(key, photo.buffer, photo.mimetype)
+                    avatarUrl = key
+                } catch {
+                    // Swallow — proceed without the photo.
+                }
+            }
+        }
+
         // One transaction: create the pipeline candidate, then the referral.
         // The referrals (tenant, job, candidate_email) partial-unique index is the
         // race-safe backstop — a second submit raises 23505 and the WHOLE
@@ -199,6 +226,7 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                     phone: candidatePhone,
                     notes,
                     resumeUrl,
+                    avatarUrl,
                     stage: 'received',
                     source: 'referral',
                     referredByEmployeeId: employeeId,

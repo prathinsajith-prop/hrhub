@@ -12,6 +12,15 @@
     "allDepartments": "All departments",
     "allLocations": "All locations",
     "allTypes": "All types",
+    "allWorkplaces": "All workplaces",
+    "posted": "Posted",
+    "workplaceLabel": "Workplace",
+    "departmentLabel": "Department",
+    "locationLabel": "Location",
+    "openingsLabel": "Openings",
+    "closingLabel": "Closes",
+    "refLabel": "Ref",
+    "noDetailsYet": "Full role details coming soon. Apply below — the hiring team will share more when they reach out.",
     "clearFilters": "Clear",
     "resultsCount": "{{count}} results",
     "noMatches": "No roles match your filters",
@@ -21,6 +30,8 @@
     "backToJobs": "Back to all jobs",
     "aboutRole": "About the role",
     "requirements": "Requirements",
+    "skills": "Skills",
+    "qualifications": "Qualifications",
     "closingDate": "Closing {{date}}",
     "poweredBy": "Powered by HRHub",
     "companyNotFound": "Company not found",
@@ -30,7 +41,15 @@
     "type": {
       "full_time": "Full-time",
       "part_time": "Part-time",
-      "contract": "Contract"
+      "contract": "Contract",
+      "internship": "Internship",
+      "temporary": "Temporary",
+      "freelance": "Freelance"
+    },
+    "workplace": {
+      "on_site": "On-site",
+      "hybrid": "Hybrid",
+      "remote": "Remote"
     },
     "apply": {
       "title": "Apply for {{title}}",
@@ -617,7 +636,8 @@
       "careers": "Careers site",
       "referral": "Referral",
       "referredBy": "Referred by {{name}}",
-      "hr": "Added by HR"
+      "hr": "Added by HR",
+      "all": "All sources"
     },
     "jobTitle": "Job Title",
     "department": "Department",
@@ -747,10 +767,13 @@
       "fillRateCount": "{{applications}} / {{openings}} openings",
       "jobDescription": "Job Description",
       "requirements": "Requirements",
+      "skills": "Skills",
+      "qualifications": "Qualifications",
       "noDescription": "No description added yet.",
       "addDetails": "Add Details",
       "candidates": "Candidates",
       "pipeline": "Pipeline",
+      "source": "Source",
       "allCount": "All · {{count}}",
       "noCandidatesYet": "No candidates yet",
       "candidatesWillAppear": "Candidates who apply will appear here.",

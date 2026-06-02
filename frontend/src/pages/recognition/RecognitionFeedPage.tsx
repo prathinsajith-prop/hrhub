@@ -743,6 +743,7 @@ function GiveRecognitionDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                             searchPlaceholder="Search employees…"
                             emptyMessage="No matching employees."
                             filter={false}
+                            withAvatars
                             loading={employeesQuery.isLoading}
                             search={employeeSearch}
                             onSearchChange={setEmployeeSearch}
@@ -750,6 +751,7 @@ function GiveRecognitionDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                                 value: e.id,
                                 label: e.fullName ?? `${e.firstName} ${e.lastName}`,
                                 secondary: e.designation ?? e.department ?? undefined,
+                                avatar: e.avatarUrl ?? e.avatar ?? undefined,
                             }))}
                             selected={recipients.map(r => ({ value: r.id, label: r.name }))}
                             onChange={sel => setRecipients(sel.map(s => ({ id: s.value, name: s.label })))}

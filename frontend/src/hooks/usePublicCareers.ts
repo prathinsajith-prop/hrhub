@@ -13,13 +13,16 @@ export interface PublicJob {
     title: string
     department: string | null
     location: string | null
-    type: 'full_time' | 'part_time' | 'contract'
+    type: 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary' | 'freelance'
+    workplaceType: 'on_site' | 'hybrid' | 'remote'
     openings: number
     minSalary: string | null
     maxSalary: string | null
     industry: string | null
     description: string | null
     requirements: string[]
+    skills: string[]
+    qualifications: string[]
     closingDate: string | null
     createdAt: string
 }
@@ -38,6 +41,8 @@ export interface ApplyInput {
     expectedSalary?: string
     coverNote?: string
     resume: File
+    /** Candidate photo auto-extracted from the résumé (optional). */
+    photo?: Blob | null
 }
 
 export interface PublicJobsPage {
@@ -56,12 +61,14 @@ export interface JobFilters {
     department?: string
     location?: string
     type?: string
+    workplaceType?: string
 }
 
 export interface PublicJobFacets {
     departments: string[]
     locations: string[]
     types: string[]
+    workplaceTypes: string[]
 }
 
 const enc = encodeURIComponent
@@ -72,15 +79,16 @@ const enc = encodeURIComponent
  * cleanly and the server re-filters from offset 0.
  */
 export function usePublicJobs(companyCode: string, filters: JobFilters = {}) {
-    const { q, department, location, type } = filters
+    const { q, department, location, type, workplaceType } = filters
     return useInfiniteQuery<PublicJobsPage, Error, InfiniteData<PublicJobsPage>, readonly ['public-jobs', string, JobFilters], number>({
-        queryKey: ['public-jobs', companyCode, { q, department, location, type }],
+        queryKey: ['public-jobs', companyCode, { q, department, location, type, workplaceType }],
         queryFn: ({ pageParam }) => {
             const qs = new URLSearchParams({ limit: String(JOBS_PAGE_SIZE), offset: String(pageParam) })
             if (q) qs.set('q', q)
             if (department) qs.set('department', department)
             if (location) qs.set('location', location)
             if (type) qs.set('type', type)
+            if (workplaceType) qs.set('workplaceType', workplaceType)
             return publicApi.get<PublicJobsPage>(`/public/careers/${enc(companyCode)}/jobs?${qs}`)
         },
         initialPageParam: 0,
@@ -125,6 +133,7 @@ export function useApplyToJob(companyCode: string, jobId: string) {
             if (input.expectedSalary) fd.append('expectedSalary', input.expectedSalary)
             if (input.coverNote) fd.append('coverNote', input.coverNote)
             fd.append('resume', input.resume)
+            if (input.photo) fd.append('photo', input.photo, 'photo.jpg')
             return publicApi.upload<{ data: { id: string } }>(`/public/careers/${enc(companyCode)}/jobs/${enc(jobId)}/apply`, fd)
         },
     })

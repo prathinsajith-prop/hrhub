@@ -33,6 +33,7 @@ import {
     redeemPoints,
     recordRecognitionPoints,
     resolveRecipientUserIds,
+    resolveManagersOfRecipients,
     submitForApproval,
     approveRecognition,
     rejectRecognition,
@@ -103,8 +104,21 @@ export default async function recognitionRoutes(fastify: any): Promise<void> {
                 type: 'success',
                 title: 'You received a recognition',
                 message: `${giverName} appreciated you: ${recognition.title}`,
-                actionUrl: `/recognition/${recognition.id}`,
+                // Recipients are employees who read in the portal — deep-link to the
+                // portal recognition detail (not the admin /recognition route, which 404s there).
+                actionUrl: `/me/recognition/${recognition.id}`,
             })
+            // Also notify the recipients' direct managers (excluding the giver).
+            const managerIds = (await resolveManagersOfRecipients(request.user.tenantId, recipientEmployeeIds))
+                .filter((id) => id !== recognition.giverEmployeeId)
+            if (managerIds.length) {
+                await notifyEmployeesBulk(request.user.tenantId, managerIds, {
+                    type: 'info',
+                    title: 'A team member was recognized',
+                    message: `${recognition.title}`,
+                    actionUrl: `/me/recognition/${recognition.id}`,
+                })
+            }
         } catch (err) {
             request.log?.warn?.({ err, recognitionId: recognition?.id }, 'recognition publish fan-out failed')
         }

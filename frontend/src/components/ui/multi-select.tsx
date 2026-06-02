@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, getInitials } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 
@@ -9,6 +9,17 @@ export interface MultiSelectOption {
     label: string
     /** Smaller muted text under the label (e.g. an employee's designation). */
     secondary?: string
+    /** Avatar image URL — shows a small avatar (initials fallback) in the list. */
+    avatar?: string
+}
+
+/** Small avatar shown in option rows: image if available, initials otherwise. */
+function OptionAvatar({ src, name }: { src?: string; name: string }) {
+    return (
+        <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+            {src ? <img src={src} alt={name} className="size-full object-cover" /> : getInitials(name)}
+        </span>
+    )
 }
 
 interface MultiSelectProps {
@@ -30,6 +41,8 @@ interface MultiSelectProps {
     /** Filter `options` internally by the search box. Set false when the parent
      *  already returns filtered options (server-side search). Default: true. */
     filter?: boolean
+    /** Show an avatar (option.avatar image, initials fallback) on each row. */
+    withAvatars?: boolean
 }
 
 /**
@@ -45,6 +58,7 @@ export function MultiSelect({
     emptyMessage = 'No results.',
     disabled = false, className,
     search: controlledSearch, onSearchChange, loading = false, filter = true,
+    withAvatars = false,
 }: MultiSelectProps) {
     const [open, setOpen] = useState(false)
     const [internalSearch, setInternalSearch] = useState('')
@@ -138,6 +152,7 @@ export function MultiSelect({
                                                     )}>
                                                         {isSel && <Check className="size-3" />}
                                                     </span>
+                                                    {withAvatars && <OptionAvatar src={opt.avatar} name={opt.label} />}
                                                     <span className="min-w-0 flex-1">
                                                         <span className="block text-sm leading-tight text-foreground">{opt.label}</span>
                                                         {opt.secondary && <span className="block text-[11px] leading-tight text-muted-foreground mt-0.5">{opt.secondary}</span>}

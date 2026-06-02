@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, FileText, XCircle, Upload } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, Upload } from 'lucide-react'
 import { BulkImportJobsDialog } from './BulkImportJobsDialog'
 import { BulkImportCandidatesDialog } from './BulkImportCandidatesDialog'
 import {
@@ -28,7 +28,9 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { cn, formatCurrency, formatDate, getInitials, onActivate, splitFullName } from '@/lib/utils'
-import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useUploadCandidatePhoto, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { ResumeUpload } from '@/components/shared/ResumeUpload'
+import type { ParsedResume } from '@/lib/resume-parser'
 import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import { StageBadge } from '@/components/shared/StageBadge'
 import { useRecruitmentSocket } from '@/hooks/useRecruitmentSocket'
@@ -410,12 +412,22 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [expectedSalary, setExpectedSalary] = useState('')
   const [notes, setNotes] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [photo, setPhoto] = useState<Blob | null>(null)
   const createApp = useCreateApplication()
   const uploadResume = useUploadResume()
+  const uploadPhoto = useUploadCandidatePhoto()
 
   const reset = () => {
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
-    setExperience(''); setExpectedSalary(''); setNotes(''); setResumeFile(null)
+    setExperience(''); setExpectedSalary(''); setNotes(''); setResumeFile(null); setPhoto(null)
+  }
+
+  // Pre-fill empty fields from the parsed résumé; never overwrite what's typed.
+  const handleParsed = (p: ParsedResume) => {
+    if (p.name) setName(prev => prev || p.name!)
+    if (p.email) setEmail(prev => prev || p.email!)
+    if (p.phone) setPhone(prev => prev || p.phone!)
+    if (p.experienceYears != null) setExperience(prev => prev || String(p.experienceYears))
   }
 
   const handleSave = async () => {
@@ -448,6 +460,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           return
         }
       }
+      // Photo (auto-extracted from the résumé) is best-effort — never block on it.
+      if (photo && newId) {
+        try { await uploadPhoto.mutateAsync({ id: newId, photo }) } catch { /* ignore */ }
+      }
       toast.success('Candidate added', `${name.trim()} added to the pipeline.`)
       reset()
       onOpenChange(false)
@@ -464,6 +480,16 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           <DialogTitle>Add Candidate</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-4">
+          {/* Résumé first — upload to auto-fill the fields below */}
+          <div className="space-y-1.5">
+            <Label>Resume</Label>
+            <ResumeUpload file={resumeFile} onFile={setResumeFile} onParsed={handleParsed} onPhoto={setPhoto} />
+          </div>
+          <div className="relative flex items-center gap-3 py-0.5">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">or enter details manually</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
           <div className="space-y-1.5">
             <Label required>Job</Label>
             <Select value={jobId || undefined} onValueChange={setJobId}>
@@ -513,40 +539,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
             <Label>Notes</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Source, recruiter remarks, etc." />
           </div>
-          <div className="space-y-1.5">
-            <Label>Resume</Label>
-            <Label className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg border border-dashed border-border cursor-pointer transition-colors',
-              'hover:border-primary/50 hover:bg-primary/5',
-              resumeFile && 'border-primary/40 bg-primary/5',
-            )}>
-              <input
-                type="file"
-                aria-label="Attach resume"
-                accept=".pdf,.doc,.docx"
-                className="sr-only"
-                onChange={e => setResumeFile(e.target.files?.[0] ?? null)}
-              />
-              <FileText className={cn('size-4 shrink-0', resumeFile ? 'text-primary' : 'text-muted-foreground')} />
-              <span className={cn('text-sm truncate', resumeFile ? 'text-foreground' : 'text-muted-foreground')}>
-                {resumeFile ? resumeFile.name : 'Attach resume (PDF, DOC, DOCX)'}
-              </span>
-              {resumeFile && (
-                <button
-                  type="button"
-                  onClick={e => { e.preventDefault(); setResumeFile(null) }}
-                  className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
-                  aria-label="Remove resume"
-                >
-                  <XCircle className="size-4" />
-                </button>
-              )}
-            </Label>
-          </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending} leftIcon={<Plus className="size-3.5" />}>
+          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending || uploadPhoto.isPending} leftIcon={<Plus className="size-3.5" />}>
             Add to pipeline
           </Button>
         </DialogFooter>
@@ -1093,12 +1089,15 @@ export function RecruitmentPage() {
                         department: r.department,
                         location: r.location,
                         type: r.type,
+                        workplaceType: r.workplaceType,
                         status: 'draft',
                         openings: r.openings,
                         minSalary: r.minSalary,
                         maxSalary: r.maxSalary,
                         description: r.description,
                         requirements: r.requirements,
+                        skills: r.skills,
+                        qualifications: r.qualifications,
                         closingDate: r.closingDate,
                       })))
                       toast.success(`${selected.length} job(s) duplicated`, 'Draft copies created.')

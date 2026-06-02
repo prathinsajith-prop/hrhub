@@ -39,7 +39,7 @@ export function CandidateSourceBadge({
     }
     // 'direct' / undefined → added manually by HR
     return (
-        <span className={cn(base, 'bg-muted text-muted-foreground ring-border', className)}>
+        <span className={cn(base, 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/50', className)}>
             <Building2 className="size-2.5" />
             {t('recruitment.source.hr')}
         </span>

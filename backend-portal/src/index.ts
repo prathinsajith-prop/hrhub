@@ -25,6 +25,7 @@ import performanceRoutes from './modules/performance/performance.routes.js'
 import profileChangesRoutes from './modules/profile-changes/profile-changes.routes.js'
 import referralsRoutes from './modules/referrals/referrals.routes.js'
 import announcementsRoutes from './modules/announcements/announcements.routes.js'
+import recognitionRoutes from './modules/recognition/recognition.routes.js'
 
 async function bootstrap() {
     const env = loadEnv()
@@ -117,6 +118,7 @@ async function bootstrap() {
     await app.register(profileChangesRoutes, { prefix: '/api/v1/profile-changes' })
     await app.register(referralsRoutes, { prefix: '/api/v1/referrals' })
     await app.register(announcementsRoutes, { prefix: '/api/v1/announcements' })
+    await app.register(recognitionRoutes, { prefix: '/api/v1/recognition' })
 
     // /health is registered at the top of bootstrap (before plugins) so probes never
     // depend on the rest of the stack. /health/detailed runs DB+S3 round-trips and

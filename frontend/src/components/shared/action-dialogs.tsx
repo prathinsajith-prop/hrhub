@@ -29,7 +29,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
-    JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS,
+    JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS, WORKPLACE_TYPE_OPTIONS,
     VISA_APPLICATION_TYPE_OPTIONS, VISA_PRIORITY_OPTIONS,
     LEAVE_TYPE_OPTIONS,
     GENDER_OPTIONS, MARITAL_STATUS_OPTIONS, CONTRACT_TYPE_OPTIONS,
@@ -194,6 +194,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [departmentId, setDepartmentId] = useState('')
     const [location, setLocation] = useState('')
     const [type, setType] = useState('full_time')
+    const [workplaceType, setWorkplaceType] = useState('on_site')
     const [openings, setOpenings] = useState(1)
     const [minSalary, setMinSalary] = useState(0)
     const [maxSalary, setMaxSalary] = useState(0)
@@ -202,6 +203,10 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [status, setStatus] = useState<'open' | 'draft'>('open')
     const [requirements, setRequirements] = useState<string[]>([])
     const [reqInput, setReqInput] = useState('')
+    const [skills, setSkills] = useState<string[]>([])
+    const [skillInput, setSkillInput] = useState('')
+    const [qualifications, setQualifications] = useState<string[]>([])
+    const [qualInput, setQualInput] = useState('')
     const reqInputRef = useRef<HTMLInputElement>(null)
     const createJob = useCreateJob()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
@@ -212,8 +217,10 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     if (!open && prevOpen) {
         setPrevOpen(false)
         setTitle(''); setDepartment(''); setDepartmentId(''); setLocation(''); setType('full_time')
+        setWorkplaceType('on_site')
         setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
         setClosingDate(''); setStatus('open'); setRequirements([]); setReqInput('')
+        setSkills([]); setSkillInput(''); setQualifications([]); setQualInput('')
     } else if (open && !prevOpen) {
         setPrevOpen(true)
     }
@@ -230,6 +237,28 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             setRequirements(r => r.slice(0, -1))
     }, [addRequirement, reqInput, requirements.length])
 
+    const addSkill = useCallback(() => {
+        const val = skillInput.trim()
+        if (val && !skills.includes(val)) setSkills(s => [...s, val])
+        setSkillInput('')
+    }, [skillInput, skills])
+
+    const onSkillKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSkill() }
+        if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1))
+    }, [addSkill, skillInput, skills.length])
+
+    const addQualification = useCallback(() => {
+        const val = qualInput.trim()
+        if (val && !qualifications.includes(val)) setQualifications(q => [...q, val])
+        setQualInput('')
+    }, [qualInput, qualifications])
+
+    const onQualKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addQualification() }
+        if (e.key === 'Backspace' && !qualInput && qualifications.length > 0) setQualifications(q => q.slice(0, -1))
+    }, [addQualification, qualInput, qualifications.length])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
         if (!ok) {
@@ -237,7 +266,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             return
         }
         createJob.mutate(
-            { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements },
+            { title, department, location: location || null, type, workplaceType, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications },
             {
                 onSuccess: () => {
                     toast.success('Job posted', `${title} has been ${status === 'draft' ? 'saved as draft' : 'posted'}.`)
@@ -250,7 +279,10 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent size="xl">
+            {/* `full` = max-w-6xl (~1152px). The form is dense (left meta column +
+                rich-text editor + chip lists) so the extra width keeps the rich
+                text editor readable without crowding the metadata column. */}
+            <DialogContent size="full">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Post New Job</DialogTitle>
@@ -271,7 +303,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
                 <DialogBody className="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border min-h-0">
                     {/* ── Left: job metadata ── */}
-                    <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
+                    <div className="md:w-[38%] lg:w-[36%] shrink-0 overflow-y-auto p-5 space-y-4">
 
                         <div className="space-y-1.5">
                             <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
@@ -309,8 +341,24 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
+                                <Label>Workplace Type</Label>
+                                <Select value={workplaceType} onValueChange={setWorkplaceType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {WORKPLACE_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
                                 <Label>Openings</Label>
                                 <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                                <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                             </div>
                         </div>
 
@@ -322,14 +370,9 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} placeholder="Max" className="flex-1" />
                             </div>
                         </div>
-
-                        <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
-                        </div>
                     </div>
 
-                    {/* ── Right: description + requirements ── */}
+                    {/* ── Right: description + requirements + skills + qualifications ── */}
                     <div className="flex-1 overflow-y-auto p-5 space-y-4">
                         <div className="space-y-1.5">
                             <Label>Job Description</Label>
@@ -341,35 +384,47 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5"><Tag className="size-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            {requirements.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
-                                    {requirements.map(r => (
-                                        <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
-                                            {r}
-                                            <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
-                                                <XIcon className="size-3" />
-                                            </button>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <input
-                                    ref={reqInputRef}
-                                    value={reqInput}
-                                    onChange={e => setReqInput(e.target.value)}
-                                    onKeyDown={onReqKeyDown}
-                                    aria-label="Add requirement"
-                                    placeholder="e.g. 3+ years experience · Press Enter to add"
-                                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                                <Button type="button" variant="outline" size="sm" onClick={addRequirement} disabled={!reqInput.trim()}>
-                                    <Plus className="size-3.5" />
-                                </Button>
-                            </div>
-                        </div>
+                        <ChipsField
+                            label="Requirements"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={requirements}
+                            onRemove={(v) => setRequirements(prev => prev.filter(x => x !== v))}
+                            inputRef={reqInputRef}
+                            inputValue={reqInput}
+                            onInputChange={setReqInput}
+                            onKeyDown={onReqKeyDown}
+                            onAdd={addRequirement}
+                            placeholder="e.g. 3+ years experience · Press Enter to add"
+                        />
+
+                        <ChipsField
+                            label="Skills"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={skills}
+                            onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                            inputValue={skillInput}
+                            onInputChange={setSkillInput}
+                            onKeyDown={onSkillKeyDown}
+                            onAdd={addSkill}
+                            placeholder="e.g. TypeScript, Negotiation · Press Enter to add"
+                            chipClassName="bg-sky-100 text-sky-700"
+                        />
+
+                        <ChipsField
+                            label="Qualifications"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={qualifications}
+                            onRemove={(v) => setQualifications(prev => prev.filter(x => x !== v))}
+                            inputValue={qualInput}
+                            onInputChange={setQualInput}
+                            onKeyDown={onQualKeyDown}
+                            onAdd={addQualification}
+                            placeholder="e.g. Bachelor's in CS, PMP · Press Enter to add"
+                            chipClassName="bg-emerald-100 text-emerald-700"
+                        />
                     </div>
                 </DialogBody>
 
@@ -381,6 +436,62 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    )
+}
+
+/**
+ * Reusable chip-input field. Used for Requirements / Skills / Qualifications
+ * on the New/Edit Job dialogs and any future tag-style list inputs. Press
+ * Enter to add; Backspace on empty input removes the last chip.
+ */
+function ChipsField({
+    label, optional, icon, chips, onRemove,
+    inputRef, inputValue, onInputChange, onKeyDown, onAdd,
+    placeholder, chipClassName,
+}: {
+    label: string
+    optional?: boolean
+    icon?: React.ReactNode
+    chips: string[]
+    onRemove: (value: string) => void
+    inputRef?: React.RefObject<HTMLInputElement | null>
+    inputValue: string
+    onInputChange: (v: string) => void
+    onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void
+    onAdd: () => void
+    placeholder?: string
+    chipClassName?: string
+}) {
+    return (
+        <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">{icon}{label}{optional && <span className="text-xs font-normal text-muted-foreground">(optional)</span>}</Label>
+            {chips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5" role="list" aria-label={label}>
+                    {chips.map(c => (
+                        <span key={c} role="listitem" className={cn('inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full', chipClassName ?? 'bg-primary/10 text-primary')}>
+                            {c}
+                            <button type="button" aria-label={`Remove "${c}"`} onClick={() => onRemove(c)} className="ml-0.5 opacity-60 hover:opacity-100">
+                                <XIcon className="size-3" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+            <div className="flex gap-2">
+                <input
+                    ref={inputRef}
+                    value={inputValue}
+                    onChange={e => onInputChange(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    aria-label={`Add ${label.toLowerCase()}`}
+                    placeholder={placeholder}
+                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <Button type="button" variant="outline" size="sm" onClick={onAdd} disabled={!inputValue.trim()}>
+                    <Plus className="size-3.5" />
+                </Button>
+            </div>
+        </div>
     )
 }
 
@@ -2028,13 +2139,14 @@ export function EditJobDialog({
 }: {
     open: boolean
     onOpenChange: (o: boolean) => void
-    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[] }
+    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; workplaceType?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[]; skills?: string[]; qualifications?: string[] }
 }) {
     const [title, setTitle] = useState(job.title ?? '')
     const [department, setDepartment] = useState(job.department ?? '')
     const [departmentId, setDepartmentId] = useState('')
     const [location, setLocation] = useState(job.location ?? '')
     const [type, setType] = useState(job.type ?? 'full_time')
+    const [workplaceType, setWorkplaceType] = useState(job.workplaceType ?? 'on_site')
     const [openings, setOpenings] = useState(job.openings ?? 1)
     const [minSalary, setMinSalary] = useState(Number(job.minSalary ?? 0))
     const [maxSalary, setMaxSalary] = useState(Number(job.maxSalary ?? 0))
@@ -2043,6 +2155,10 @@ export function EditJobDialog({
     const [closingDate, setClosingDate] = useState(job.closingDate ?? '')
     const [requirements, setRequirements] = useState<string[]>(job.requirements ?? [])
     const [reqInput, setReqInput] = useState('')
+    const [skills, setSkills] = useState<string[]>(job.skills ?? [])
+    const [skillInput, setSkillInput] = useState('')
+    const [qualifications, setQualifications] = useState<string[]>(job.qualifications ?? [])
+    const [qualInput, setQualInput] = useState('')
     const editReqInputRef = useRef<HTMLInputElement>(null)
     const updateJob = useUpdateJob()
     const { data: orgUnitsRawEdit = [] } = useOrgUnits()
@@ -2053,10 +2169,13 @@ export function EditJobDialog({
     if (open && !prevEditJobOpen) {
         setPrevEditJobOpen(true)
         setTitle(job.title ?? ''); setLocation(job.location ?? '')
-        setType(job.type ?? 'full_time'); setOpenings(job.openings ?? 1)
+        setType(job.type ?? 'full_time'); setWorkplaceType(job.workplaceType ?? 'on_site')
+        setOpenings(job.openings ?? 1)
         setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
         setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
         setClosingDate(job.closingDate ?? ''); setRequirements(job.requirements ?? [])
+        setSkills(job.skills ?? []); setSkillInput('')
+        setQualifications(job.qualifications ?? []); setQualInput('')
         const match = orgOptionsEdit.find(o => o.label === job.department)
         setDepartmentId(match?.value ?? '')
         setDepartment(job.department ?? '')
@@ -2076,6 +2195,28 @@ export function EditJobDialog({
             setRequirements(r => r.slice(0, -1))
     }, [addEditRequirement, reqInput, requirements.length])
 
+    const addSkillEdit = useCallback(() => {
+        const val = skillInput.trim()
+        if (val && !skills.includes(val)) setSkills(s => [...s, val])
+        setSkillInput('')
+    }, [skillInput, skills])
+
+    const onSkillKeyDownEdit = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSkillEdit() }
+        if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1))
+    }, [addSkillEdit, skillInput, skills.length])
+
+    const addQualEdit = useCallback(() => {
+        const val = qualInput.trim()
+        if (val && !qualifications.includes(val)) setQualifications(q => [...q, val])
+        setQualInput('')
+    }, [qualInput, qualifications])
+
+    const onQualKeyDownEdit = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addQualEdit() }
+        if (e.key === 'Backspace' && !qualInput && qualifications.length > 0) setQualifications(q => q.slice(0, -1))
+    }, [addQualEdit, qualInput, qualifications.length])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
         if (!ok) {
@@ -2083,7 +2224,7 @@ export function EditJobDialog({
             return
         }
         updateJob.mutate(
-            { id: job.id, data: { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements } },
+            { id: job.id, data: { title, department, location: location || null, type, workplaceType, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications } },
             {
                 onSuccess: () => {
                     toast.success('Job updated', `${title} has been saved.`)
@@ -2096,7 +2237,9 @@ export function EditJobDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent size="xl">
+            {/* `full` = max-w-6xl (~1152px). Matches NewJobDialog so the layout
+                feels identical when editing vs creating. */}
+            <DialogContent size="full">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Edit Job</DialogTitle>
@@ -2115,7 +2258,7 @@ export function EditJobDialog({
 
                 <DialogBody className="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border min-h-0">
                     {/* ── Left: job metadata ── */}
-                    <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
+                    <div className="md:w-[38%] lg:w-[36%] shrink-0 overflow-y-auto p-5 space-y-4">
 
                         <div className="space-y-1.5">
                             <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
@@ -2153,8 +2296,24 @@ export function EditJobDialog({
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
+                                <Label>Workplace Type</Label>
+                                <Select value={workplaceType} onValueChange={setWorkplaceType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {WORKPLACE_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
                                 <Label>Openings</Label>
                                 <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                                <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                             </div>
                         </div>
 
@@ -2166,14 +2325,9 @@ export function EditJobDialog({
                                 <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} placeholder="Max" className="flex-1" />
                             </div>
                         </div>
-
-                        <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
-                        </div>
                     </div>
 
-                    {/* ── Right: description + requirements ── */}
+                    {/* ── Right: description + requirements + skills + qualifications ── */}
                     <div className="flex-1 overflow-y-auto p-5 space-y-4">
                         <div className="space-y-1.5">
                             <Label>Job Description</Label>
@@ -2185,35 +2339,47 @@ export function EditJobDialog({
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5"><Tag className="size-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            {requirements.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
-                                    {requirements.map(r => (
-                                        <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
-                                            {r}
-                                            <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
-                                                <XIcon className="size-3" />
-                                            </button>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <input
-                                    ref={editReqInputRef}
-                                    value={reqInput}
-                                    onChange={e => setReqInput(e.target.value)}
-                                    onKeyDown={onEditReqKeyDown}
-                                    aria-label="Add requirement"
-                                    placeholder="e.g. 3+ years experience · Press Enter to add"
-                                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                                <Button type="button" variant="outline" size="sm" onClick={addEditRequirement} disabled={!reqInput.trim()}>
-                                    <Plus className="size-3.5" />
-                                </Button>
-                            </div>
-                        </div>
+                        <ChipsField
+                            label="Requirements"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={requirements}
+                            onRemove={(v) => setRequirements(prev => prev.filter(x => x !== v))}
+                            inputRef={editReqInputRef}
+                            inputValue={reqInput}
+                            onInputChange={setReqInput}
+                            onKeyDown={onEditReqKeyDown}
+                            onAdd={addEditRequirement}
+                            placeholder="e.g. 3+ years experience · Press Enter to add"
+                        />
+
+                        <ChipsField
+                            label="Skills"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={skills}
+                            onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                            inputValue={skillInput}
+                            onInputChange={setSkillInput}
+                            onKeyDown={onSkillKeyDownEdit}
+                            onAdd={addSkillEdit}
+                            placeholder="e.g. TypeScript, Negotiation · Press Enter to add"
+                            chipClassName="bg-sky-100 text-sky-700"
+                        />
+
+                        <ChipsField
+                            label="Qualifications"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={qualifications}
+                            onRemove={(v) => setQualifications(prev => prev.filter(x => x !== v))}
+                            inputValue={qualInput}
+                            onInputChange={setQualInput}
+                            onKeyDown={onQualKeyDownEdit}
+                            onAdd={addQualEdit}
+                            placeholder="e.g. Bachelor's in CS, PMP · Press Enter to add"
+                            chipClassName="bg-emerald-100 text-emerald-700"
+                        />
                     </div>
                 </DialogBody>
 

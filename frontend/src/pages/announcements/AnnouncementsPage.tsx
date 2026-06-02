@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateTimePicker } from '@/components/ui/date-picker'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -271,8 +272,8 @@ function AnnouncementDialog({ announcement, open, onOpenChange }: { announcement
                         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.requireAck} onChange={e => set('requireAck')(e.target.checked)} /> Require acknowledgement</label>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5"><Label className="text-xs">Schedule publish (optional)</Label><Input type="datetime-local" value={form.publishAt} onChange={e => set('publishAt')(e.target.value)} /></div>
-                        <div className="space-y-1.5"><Label className="text-xs">Expire (optional)</Label><Input type="datetime-local" value={form.expireAt} onChange={e => set('expireAt')(e.target.value)} /></div>
+                        <div className="space-y-1.5"><Label className="text-xs">Schedule publish (optional)</Label><DateTimePicker value={form.publishAt} onChange={set('publishAt')} placeholder="Publish now" /></div>
+                        <div className="space-y-1.5"><Label className="text-xs">Expire (optional)</Label><DateTimePicker value={form.expireAt} onChange={set('expireAt')} placeholder="No expiry" /></div>
                     </div>
                 </DialogBody>
                 <DialogFooter>

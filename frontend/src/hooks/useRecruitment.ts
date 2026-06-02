@@ -221,6 +221,22 @@ export function useUploadResume() {
     })
 }
 
+/** Attach a candidate photo (e.g. one auto-extracted from the résumé). */
+export function useUploadCandidatePhoto() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ id, photo }: { id: string; photo: Blob }) => {
+            const fd = new FormData()
+            fd.append('photo', photo, 'photo.jpg')
+            return api.upload<{ data: { s3Key: string; downloadUrl: string } }>(`/applications/${id}/photo`, fd)
+        },
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['applications-kanban'] })
+            qc.invalidateQueries({ queryKey: ['applications'] })
+        },
+    })
+}
+
 // ─── Bulk import (job listings) ──────────────────────────────────────────────
 //
 // Same shape as the bulk-asset hooks: a no-cache validate mutation

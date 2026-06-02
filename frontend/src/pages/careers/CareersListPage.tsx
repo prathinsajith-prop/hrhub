@@ -1,12 +1,13 @@
 /**
  * Public job listings — /careers/:companyCode
- * Editorial hero + server-side filters + a 4-up grid of square tiles with
- * infinite scroll (25 per page, fetched from the API as the user scrolls).
+ * Editorial hero + server-side filters + a 3-up grid of richer job cards with
+ * infinite scroll. Each card surfaces type/workplace badges, salary, a skills
+ * preview, and closing date so candidates can scan without opening every role.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MapPin, Building2, Briefcase, ArrowRight, Banknote, Loader2, Search, X } from 'lucide-react'
+import { MapPin, Building2, Briefcase, ArrowRight, Banknote, Loader2, Search, X, CalendarClock, Users } from 'lucide-react'
 import { usePublicJobs, usePublicJobFacets, type JobFilters } from '@/hooks/usePublicCareers'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,14 +15,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { PUBLIC_ROUTES } from '@/lib/routes'
 import { PublicShell, CareersError } from './careersShared'
-import { useJobTypeLabel, formatSalaryRange } from './careersHelpers'
+import { useJobTypeLabel, useWorkplaceLabel, formatSalaryRange } from './careersHelpers'
+import { JobTypeBadge, WorkplaceBadge, TagChip, formatPostedAgo } from '@/components/shared/JobBadges'
+import { formatDate } from '@/lib/utils'
 
 const ALL = 'all'
+const SKILLS_PREVIEW = 3 // how many skill chips to show on the card before "+N more"
 
 export function CareersListPage() {
     const { companyCode = '' } = useParams<{ companyCode: string }>()
     const { t } = useTranslation()
     const typeLabel = useJobTypeLabel()
+    const workplaceLabel = useWorkplaceLabel()
 
     // ── Filter state (search is debounced before it hits the query key) ──
     const [searchInput, setSearchInput] = useState('')
@@ -29,14 +34,15 @@ export function CareersListPage() {
     const [department, setDepartment] = useState('')
     const [location, setLocation] = useState('')
     const [type, setType] = useState('')
+    const [workplaceType, setWorkplaceType] = useState('')
     useEffect(() => {
         const id = setTimeout(() => setQ(searchInput.trim()), 300)
         return () => clearTimeout(id)
     }, [searchInput])
 
-    const filters: JobFilters = { q: q || undefined, department: department || undefined, location: location || undefined, type: type || undefined }
-    const hasActiveFilters = !!(q || department || location || type)
-    const clearFilters = () => { setSearchInput(''); setQ(''); setDepartment(''); setLocation(''); setType('') }
+    const filters: JobFilters = { q: q || undefined, department: department || undefined, location: location || undefined, type: type || undefined, workplaceType: workplaceType || undefined }
+    const hasActiveFilters = !!(q || department || location || type || workplaceType)
+    const clearFilters = () => { setSearchInput(''); setQ(''); setDepartment(''); setLocation(''); setType(''); setWorkplaceType('') }
 
     const { data, isLoading, isError, isFetching, isPlaceholderData, fetchNextPage, hasNextPage, isFetchingNextPage } = usePublicJobs(companyCode, filters)
     const { data: facetsRes } = usePublicJobFacets(companyCode)
@@ -63,8 +69,8 @@ export function CareersListPage() {
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="mt-4 h-10 w-72" />
                     <Skeleton className="mt-3 h-4 w-96 max-w-full" />
-                    <div className="mt-9 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="aspect-square w-full rounded-2xl" />)}
+                    <div className="mt-9 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-64 w-full rounded-2xl" />)}
                     </div>
                 </div>
             </PublicShell>
@@ -116,6 +122,9 @@ export function CareersListPage() {
                     {!!facets?.types.length && (
                         <FacetSelect value={type} onChange={setType} allLabel={t('careers.allTypes')} options={facets.types} renderLabel={typeLabel} />
                     )}
+                    {!!facets?.workplaceTypes?.length && (
+                        <FacetSelect value={workplaceType} onChange={setWorkplaceType} allLabel={t('careers.allWorkplaces', { defaultValue: 'All workplaces' })} options={facets.workplaceTypes} renderLabel={workplaceLabel} />
+                    )}
 
                     {hasActiveFilters && (
                         <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
@@ -137,36 +146,17 @@ export function CareersListPage() {
                         {hasActiveFilters && <Button variant="outline" size="sm" onClick={clearFilters} className="mt-4">{t('careers.clearFilters')}</Button>}
                     </div>
                 ) : (
-                    <ul className={`grid grid-cols-1 gap-4 transition-opacity sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${refetchingFilters ? 'opacity-50' : ''}`}>
-                        {jobs.map((job, i) => {
-                            const salary = formatSalaryRange(job.minSalary, job.maxSalary)
-                            return (
-                                <li key={job.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
-                                    <Link
-                                        to={PUBLIC_ROUTES.careersJob(companyCode, job.id)}
-                                        className="card-hover group flex aspect-square flex-col rounded-2xl border border-border/70 bg-card p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                                    >
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{typeLabel(job.type)}</span>
-                                            {job.openings > 1 && <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground tabular-figures">{job.openings} {t('careers.openingsShort')}</span>}
-                                        </div>
-
-                                        <h2 className="mt-3.5 line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight transition-colors group-hover:text-primary">{job.title}</h2>
-
-                                        <div className="mt-2.5 flex flex-col gap-1.5 text-[13px] text-muted-foreground">
-                                            {job.department && <span className="inline-flex items-center gap-1.5"><Building2 className="size-3.5 shrink-0 opacity-70" /><span className="truncate">{job.department}</span></span>}
-                                            {job.location && <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5 shrink-0 opacity-70" /><span className="truncate">{job.location}</span></span>}
-                                            {salary && <span className="inline-flex items-center gap-1.5 font-medium text-foreground/80 tabular-figures"><Banknote className="size-3.5 shrink-0 opacity-70" /><span className="truncate">{salary}</span></span>}
-                                        </div>
-
-                                        <div className="mt-auto flex items-center justify-between border-t border-border/60 pt-3 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-                                            <span>{t('careers.viewRole')}</span>
-                                            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
-                                        </div>
-                                    </Link>
-                                </li>
-                            )
-                        })}
+                    <ul className={`grid grid-cols-1 gap-5 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${refetchingFilters ? 'opacity-50' : ''}`}>
+                        {jobs.map((job, i) => (
+                            <li key={job.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
+                                <JobCard
+                                    job={job}
+                                    href={PUBLIC_ROUTES.careersJob(companyCode, job.id)}
+                                    skillsPreview={SKILLS_PREVIEW}
+                                    t={t}
+                                />
+                            </li>
+                        ))}
                     </ul>
                 )}
 
@@ -178,6 +168,114 @@ export function CareersListPage() {
                 )}
             </div>
         </PublicShell>
+    )
+}
+
+/**
+ * One job tile for the public listing. Designed to be scannable:
+ *   • Top stripe — type + workplace badges (colour-coded) and "posted X ago"
+ *   • Title (line-clamp-2)
+ *   • Department / Location / Salary / Openings rows
+ *   • Skills preview (first N chips + overflow counter)
+ *   • Footer — closing date + "View role →"
+ */
+function JobCard({
+    job,
+    href,
+    skillsPreview,
+    t,
+}: {
+    job: import('@/hooks/usePublicCareers').PublicJob
+    href: string
+    skillsPreview: number
+    t: ReturnType<typeof useTranslation>['t']
+}) {
+    const salary = formatSalaryRange(job.minSalary, job.maxSalary)
+    const postedAgo = formatPostedAgo(job.createdAt)
+    const visibleSkills = (job.skills ?? []).slice(0, skillsPreview)
+    const extraSkills = Math.max(0, (job.skills ?? []).length - visibleSkills.length)
+
+    return (
+        <Link
+            to={href}
+            className="card-hover group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+            {/* Header — badges + posted-ago */}
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <JobTypeBadge type={job.type} size="sm" />
+                    {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="sm" />}
+                </div>
+                {postedAgo && (
+                    <span className="text-[11px] font-medium text-muted-foreground/80 tabular-figures whitespace-nowrap pt-0.5">
+                        {postedAgo}
+                    </span>
+                )}
+            </div>
+
+            {/* Title */}
+            <h2 className="mt-4 line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
+                {job.title}
+            </h2>
+
+            {/* Meta */}
+            <div className="mt-3 space-y-1.5 text-[13px] text-muted-foreground">
+                {job.department && (
+                    <span className="flex items-center gap-1.5">
+                        <Building2 className="size-3.5 shrink-0 opacity-70" />
+                        <span className="truncate">{job.department}</span>
+                    </span>
+                )}
+                {job.location && (
+                    <span className="flex items-center gap-1.5">
+                        <MapPin className="size-3.5 shrink-0 opacity-70" />
+                        <span className="truncate">{job.location}</span>
+                    </span>
+                )}
+                {salary && (
+                    <span className="flex items-center gap-1.5 font-semibold text-foreground/90 tabular-figures">
+                        <Banknote className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        <span className="truncate">{salary}</span>
+                    </span>
+                )}
+                {job.openings > 1 && (
+                    <span className="flex items-center gap-1.5">
+                        <Users className="size-3.5 shrink-0 opacity-70" />
+                        <span>{t('careers.openingsCount', { count: job.openings })}</span>
+                    </span>
+                )}
+            </div>
+
+            {/* Skills preview */}
+            {visibleSkills.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                    {visibleSkills.map(s => (
+                        <TagChip key={s} tone="sky">{s}</TagChip>
+                    ))}
+                    {extraSkills > 0 && (
+                        <TagChip tone="slate">+{extraSkills}</TagChip>
+                    )}
+                </div>
+            )}
+
+            {/* Footer */}
+            <div className="mt-auto pt-4">
+                <div className="flex items-center justify-between border-t border-border/60 pt-3">
+                    {job.closingDate ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground tabular-figures">
+                            <CalendarClock className="size-3.5 opacity-70" />
+                            {t('careers.closingDate', { date: formatDate(job.closingDate) })}
+                        </span>
+                    ) : (
+                        <span />
+                    )}
+                    <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
+                        {t('careers.viewRole')}
+                        <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
+                    </span>
+                </div>
+            </div>
+        </Link>
     )
 }
 

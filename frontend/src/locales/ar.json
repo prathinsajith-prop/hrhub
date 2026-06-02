@@ -12,6 +12,15 @@
     "allDepartments": "كل الأقسام",
     "allLocations": "كل المواقع",
     "allTypes": "كل الأنواع",
+    "allWorkplaces": "كل أماكن العمل",
+    "posted": "نُشر",
+    "workplaceLabel": "مكان العمل",
+    "departmentLabel": "القسم",
+    "locationLabel": "الموقع",
+    "openingsLabel": "الشواغر",
+    "closingLabel": "ينتهي",
+    "refLabel": "المرجع",
+    "noDetailsYet": "ستتوفر تفاصيل الوظيفة قريباً. تقدّم أدناه — سيشاركك فريق التوظيف المزيد عند التواصل.",
     "clearFilters": "مسح",
     "resultsCount": "{{count}} نتيجة",
     "noMatches": "لا توجد وظائف تطابق عوامل التصفية",
@@ -21,6 +30,8 @@
     "backToJobs": "العودة إلى جميع الوظائف",
     "aboutRole": "عن الوظيفة",
     "requirements": "المتطلبات",
+    "skills": "المهارات",
+    "qualifications": "المؤهلات",
     "closingDate": "ينتهي في {{date}}",
     "poweredBy": "مشغّل بواسطة HRHub",
     "companyNotFound": "الشركة غير موجودة",
@@ -30,7 +41,15 @@
     "type": {
       "full_time": "دوام كامل",
       "part_time": "دوام جزئي",
-      "contract": "عقد"
+      "contract": "عقد",
+      "internship": "تدريب",
+      "temporary": "مؤقت",
+      "freelance": "عمل حر"
+    },
+    "workplace": {
+      "on_site": "في الموقع",
+      "hybrid": "هجين",
+      "remote": "عن بُعد"
     },
     "apply": {
       "title": "التقديم على وظيفة {{title}}",
@@ -617,7 +636,8 @@
       "careers": "موقع الوظائف",
       "referral": "ترشيح",
       "referredBy": "رشّحه {{name}}",
-      "hr": "أضافه فريق الموارد البشرية"
+      "hr": "أضافه فريق الموارد البشرية",
+      "all": "كل المصادر"
     },
     "jobTitle": "المسمى الوظيفي",
     "department": "القسم",
@@ -747,10 +767,13 @@
       "fillRateCount": "{{applications}} / {{openings}} شاغر",
       "jobDescription": "وصف الوظيفة",
       "requirements": "المتطلبات",
+      "skills": "المهارات",
+      "qualifications": "المؤهلات",
       "noDescription": "لم يتم إضافة وصف بعد.",
       "addDetails": "إضافة تفاصيل",
       "candidates": "المرشحون",
       "pipeline": "خط الأنابيب",
+      "source": "المصدر",
       "allCount": "الكل · {{count}}",
       "noCandidatesYet": "لا يوجد مرشحون بعد",
       "candidatesWillAppear": "سيظهر المرشحون الذين يتقدمون هنا.",

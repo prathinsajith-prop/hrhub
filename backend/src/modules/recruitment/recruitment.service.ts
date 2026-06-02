@@ -87,12 +87,15 @@ const PUBLIC_JOB_COLUMNS = {
     department: recruitmentJobs.department,
     location: recruitmentJobs.location,
     type: recruitmentJobs.type,
+    workplaceType: recruitmentJobs.workplaceType,
     openings: recruitmentJobs.openings,
     minSalary: recruitmentJobs.minSalary,
     maxSalary: recruitmentJobs.maxSalary,
     industry: recruitmentJobs.industry,
     description: recruitmentJobs.description,
     requirements: recruitmentJobs.requirements,
+    skills: recruitmentJobs.skills,
+    qualifications: recruitmentJobs.qualifications,
     closingDate: recruitmentJobs.closingDate,
     createdAt: recruitmentJobs.createdAt,
 }
@@ -100,9 +103,9 @@ const PUBLIC_JOB_COLUMNS = {
 /** Paginated, filterable list of a tenant's publicly visible (open) jobs. */
 export async function listPublicJobs(
     tenantId: string,
-    params: { limit: number; offset: number; q?: string; department?: string; location?: string; type?: string },
+    params: { limit: number; offset: number; q?: string; department?: string; location?: string; type?: string; workplaceType?: string },
 ) {
-    const { limit, offset, q, department, location, type } = params
+    const { limit, offset, q, department, location, type, workplaceType } = params
 
     const conds = Conditions.create()
         .tenant(recruitmentJobs.tenantId, tenantId)
@@ -111,6 +114,7 @@ export async function listPublicJobs(
         .match(recruitmentJobs.department, department)
         .match(recruitmentJobs.location, location)
         .match(recruitmentJobs.type, type)
+        .match(recruitmentJobs.workplaceType, workplaceType)
         .search(q, recruitmentJobs.title, recruitmentJobs.department, recruitmentJobs.location)
 
     const rows = await db.select({ ...PUBLIC_JOB_COLUMNS, totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
@@ -124,12 +128,13 @@ export async function listPublicJobs(
     return { jobs, total, limit, offset, hasMore: offset + limit < total }
 }
 
-/** Distinct filter facets (departments, locations, types) across open jobs. */
+/** Distinct filter facets (departments, locations, types, workplace) across open jobs. */
 export async function getPublicJobFacets(tenantId: string) {
     const rows = await db.select({
         department: recruitmentJobs.department,
         location: recruitmentJobs.location,
         type: recruitmentJobs.type,
+        workplaceType: recruitmentJobs.workplaceType,
     })
         .from(recruitmentJobs)
         .where(and(
@@ -145,6 +150,7 @@ export async function getPublicJobFacets(tenantId: string) {
         departments: uniqSorted(rows.map(r => r.department)),
         locations: uniqSorted(rows.map(r => r.location)),
         types: uniqSorted(rows.map(r => r.type)),
+        workplaceTypes: uniqSorted(rows.map(r => r.workplaceType)),
     }
 }
 
@@ -228,6 +234,7 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
     const data = await Promise.all(rows.map(async r => ({
         ...r,
         resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
+        avatar: (await resolveAvatarUrl(r.avatarUrl)) ?? undefined,
     })))
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
@@ -262,7 +269,11 @@ export async function getApplication(tenantId: string, id: string) {
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .limit(1)
     if (!row) return null
-    return { ...row, resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl }
+    return {
+        ...row,
+        resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl,
+        avatar: (await resolveAvatarUrl(row.avatarUrl)) ?? undefined,
+    }
 }
 
 export async function updateApplicationStage(tenantId: string, id: string, stage: string) {

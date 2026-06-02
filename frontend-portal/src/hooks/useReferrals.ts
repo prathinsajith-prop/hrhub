@@ -37,6 +37,8 @@ export interface SubmitReferralBody {
     relationship?: string
     notes?: string
     resume?: File | null
+    /** Candidate photo auto-extracted from the résumé (optional). */
+    photo?: Blob | null
 }
 
 /**
@@ -79,6 +81,7 @@ export function useSubmitReferral() {
             if (body.relationship) fd.append('relationship', body.relationship)
             if (body.notes) fd.append('notes', body.notes)
             if (body.resume) fd.append('resume', body.resume)
+            if (body.photo) fd.append('photo', body.photo, 'photo.jpg')
             return api.upload<{ data: MyReferral }>('/referrals', fd).then((r) => r.data)
         },
         onSuccess: () => {

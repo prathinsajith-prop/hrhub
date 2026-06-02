@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText } from 'lucide-react'
+import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
+import { parseResumeFile, extractResumeImage } from '@/lib/resume-parser'
 
 // Pipeline stage → badge tone. Keys are the seeded recruitment stage keys; we
 // degrade gracefully (slate) for any custom/unknown stage.
@@ -208,11 +209,14 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const fileRef = useRef<HTMLInputElement | null>(null)
     const [job, setJob] = useState<ReferralJob | null>(null)
     const [resume, setResume] = useState<File | null>(null)
+    const [photo, setPhoto] = useState<Blob | null>(null)
+    const [parsing, setParsing] = useState(false)
+    const [parsedNote, setParsedNote] = useState<string | null>(null)
     const [form, setForm] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
 
     const reset = () => {
         setForm({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
-        setJob(null); setResume(null)
+        setJob(null); setResume(null); setPhoto(null); setParsedNote(null)
         if (fileRef.current) fileRef.current.value = ''
     }
     const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -230,6 +234,29 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
             return
         }
         setResume(file)
+        setParsedNote(null)
+        setParsing(true)
+        // Photo extraction runs alongside text parsing; neither blocks the form.
+        extractResumeImage(file).then(setPhoto).catch(() => setPhoto(null))
+        parseResumeFile(file)
+            .then((p) => {
+                // Only fill what the referrer hasn't already typed.
+                setForm((prev) => ({
+                    ...prev,
+                    candidateName: prev.candidateName || p.name || '',
+                    candidateEmail: prev.candidateEmail || p.email || '',
+                    candidatePhone: prev.candidatePhone || p.phone || '',
+                }))
+                const filled = (['name', 'email', 'phone'] as const).filter((k) => p[k])
+                if (p.textLength === 0) {
+                    setParsedNote(t('referrals.resumeUnreadable', { defaultValue: 'Couldn’t read text (scanned résumé?) — please fill the fields manually.' }))
+                } else if (filled.length) {
+                    setParsedNote(t('referrals.resumeAutofilled', { defaultValue: 'Auto-filled from résumé — please review.' }))
+                    toast.success(t('referrals.resumeRead', { defaultValue: 'Résumé read — we pre-filled the form.' }))
+                }
+            })
+            .catch(() => { /* parsing is best-effort */ })
+            .finally(() => setParsing(false))
     }
 
     function handleSubmit() {
@@ -243,6 +270,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 relationship: form.relationship.trim() || undefined,
                 notes: form.notes.trim() || undefined,
                 resume,
+                photo,
             },
             {
                 onSuccess: () => {
@@ -265,6 +293,42 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 </DialogHeader>
 
                 <div className="space-y-4">
+                    {/* Résumé first — attach to auto-fill the fields below */}
+                    <div className="space-y-1.5">
+                        <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume (optional)' })}</Label>
+                        <input
+                            ref={fileRef}
+                            type="file"
+                            accept={RESUME_ACCEPT}
+                            className="hidden"
+                            onChange={(e) => pickResume(e.target.files?.[0])}
+                        />
+                        {resume ? (
+                            <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        {parsing ? <Loader2 className="size-4 shrink-0 animate-spin text-primary" /> : <FileText className="size-4 shrink-0 text-muted-foreground" />}
+                                        <span className="truncate">{resume.name}</span>
+                                    </span>
+                                    <button type="button" onClick={() => { setResume(null); setPhoto(null); setParsedNote(null); if (fileRef.current) fileRef.current.value = '' }} className="shrink-0 text-muted-foreground hover:text-foreground">
+                                        <X className="size-4" />
+                                    </button>
+                                </div>
+                                {(parsing || parsedNote) && (
+                                    <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                        <Sparkles className="size-3 text-primary" />
+                                        {parsing ? t('referrals.resumeReading', { defaultValue: 'Reading résumé…' }) : parsedNote}
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <Button type="button" variant="outline" size="sm" className="w-full gap-2" onClick={() => fileRef.current?.click()}>
+                                <Paperclip className="size-4" /> {t('referrals.attachResume', { defaultValue: 'Attach resume' })}
+                            </Button>
+                        )}
+                        <p className="text-[11px] text-muted-foreground">{t('referrals.resumeHint', { defaultValue: 'PDF, Word, or image · up to 10 MB. We’ll read it and fill the form for you.' })}</p>
+                    </div>
+
                     <div className="space-y-1.5">
                         <Label>{t('referrals.job', { defaultValue: 'Open position' })} *</Label>
                         <JobCombobox value={job} onChange={setJob} />
@@ -289,34 +353,6 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     <div className="space-y-1.5">
                         <Label>{t('referrals.relationship', { defaultValue: 'How do you know them?' })}</Label>
                         <Input value={form.relationship} onChange={(e) => set('relationship')(e.target.value)} placeholder={t('referrals.relationshipPlaceholder', { defaultValue: 'Former colleague, friend…' })} />
-                    </div>
-
-                    {/* Resume upload (optional) */}
-                    <div className="space-y-1.5">
-                        <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume (optional)' })}</Label>
-                        <input
-                            ref={fileRef}
-                            type="file"
-                            accept={RESUME_ACCEPT}
-                            className="hidden"
-                            onChange={(e) => pickResume(e.target.files?.[0])}
-                        />
-                        {resume ? (
-                            <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-                                <span className="flex min-w-0 items-center gap-2">
-                                    <FileText className="size-4 shrink-0 text-muted-foreground" />
-                                    <span className="truncate">{resume.name}</span>
-                                </span>
-                                <button type="button" onClick={() => { setResume(null); if (fileRef.current) fileRef.current.value = '' }} className="shrink-0 text-muted-foreground hover:text-foreground">
-                                    <X className="size-4" />
-                                </button>
-                            </div>
-                        ) : (
-                            <Button type="button" variant="outline" size="sm" className="w-full gap-2" onClick={() => fileRef.current?.click()}>
-                                <Paperclip className="size-4" /> {t('referrals.attachResume', { defaultValue: 'Attach resume' })}
-                            </Button>
-                        )}
-                        <p className="text-[11px] text-muted-foreground">{t('referrals.resumeHint', { defaultValue: 'PDF, Word, or image · up to 10 MB' })}</p>
                     </div>
 
                     <div className="space-y-1.5">

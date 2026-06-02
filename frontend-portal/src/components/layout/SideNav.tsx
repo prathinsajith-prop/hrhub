@@ -14,6 +14,7 @@ import {
     Clock,
     UserPlus,
     Megaphone,
+    Trophy,
 } from 'lucide-react'
 
 import { useAuthStore } from '@/store/authStore'
@@ -27,6 +28,7 @@ type NavItem = { to: string; label: string; icon: typeof Home; end?: boolean }
 const PERSONAL_ITEMS: NavItem[] = [
     { to: ROUTES.employeeHome, label: 'nav.home', icon: Home, end: true },
     { to: ROUTES.employeeAnnouncements, label: 'nav.announcements', icon: Megaphone },
+    { to: ROUTES.employeeRecognition, label: 'nav.recognition', icon: Trophy },
     { to: ROUTES.employeeLeave, label: 'nav.leave', icon: Calendar },
     { to: ROUTES.employeePayslips, label: 'nav.payslips', icon: Receipt },
     { to: ROUTES.employeeAttendance, label: 'nav.attendance', icon: Clock },

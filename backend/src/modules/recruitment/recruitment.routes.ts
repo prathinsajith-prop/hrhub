@@ -193,13 +193,16 @@ export default async function (fastify: any): Promise<void> {
                     title: { type: 'string' },
                     department: { type: 'string' },
                     location: { type: 'string' },
-                    type: { type: 'string', enum: ['full_time', 'part_time', 'contract'] },
+                    type: { type: 'string', enum: ['full_time', 'part_time', 'contract', 'internship', 'temporary', 'freelance'] },
+                    workplaceType: { type: 'string', enum: ['on_site', 'hybrid', 'remote'] },
                     openings: { type: 'integer', minimum: 1 },
                     minSalary: { type: 'number' },
                     maxSalary: { type: 'number' },
                     industry: { type: 'string' },
                     description: { type: 'string' },
                     requirements: { type: 'array', items: { type: 'string' } },
+                    skills: { type: 'array', items: { type: 'string' } },
+                    qualifications: { type: 'array', items: { type: 'string' } },
                     closingDate: { type: 'string' },
                 },
             },
@@ -537,6 +540,7 @@ export default async function (fastify: any): Promise<void> {
             ...(b.department !== undefined && { department: b.department as string }),
             ...(b.location !== undefined && { location: b.location as string }),
             ...(b.type !== undefined && { type: b.type as never }),
+            ...(b.workplaceType !== undefined && { workplaceType: b.workplaceType as never }),
             ...(b.status !== undefined && { status: b.status as never }),
             ...(b.openings !== undefined && { openings: Number(b.openings) }),
             ...(b.minSalary !== undefined && { minSalary: b.minSalary as string }),
@@ -544,6 +548,8 @@ export default async function (fastify: any): Promise<void> {
             ...(b.industry !== undefined && { industry: b.industry as string }),
             ...(b.description !== undefined && { description: b.description as string }),
             ...(b.requirements !== undefined && { requirements: b.requirements as never }),
+            ...(b.skills !== undefined && { skills: b.skills as never }),
+            ...(b.qualifications !== undefined && { qualifications: b.qualifications as never }),
             ...(b.closingDate !== undefined && { closingDate: b.closingDate as string }),
         })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
@@ -820,6 +826,44 @@ export default async function (fastify: any): Promise<void> {
         }).catch(() => { })
         const downloadUrl = await generateDownloadUrl(s3Key, 3600, safeName)
         return reply.send({ data: { s3Key, downloadUrl } })
+    })
+
+    // POST /api/v1/applications/:id/photo — attach a candidate photo (e.g. one
+    // auto-extracted from the résumé). Stored as the candidate's avatar.
+    fastify.post('/applications/:id/photo', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'pro_officer')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const app = await getApplication(request.user.tenantId, id)
+        if (!app) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+
+        const part = await request.file()
+        if (!part) return reply.code(400).send({ message: 'No file provided' })
+        const chunks: Buffer[] = []
+        for await (const chunk of part.file) chunks.push(chunk as Buffer)
+        const buffer = Buffer.concat(chunks)
+        if (buffer.length > 2 * 1024 * 1024) return reply.code(413).send({ message: 'Image must be under 2 MB' })
+
+        const allowedImageMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+        }
+        const detected = await fileTypeFromBuffer(buffer)
+        const mime = detected?.mime ?? part.mimetype
+        if (!allowedImageMime[mime]) return reply.code(415).send({ message: 'Only JPEG, PNG or WebP images are accepted' })
+
+        const photoKey = buildS3Key(request.user.tenantId, `applications/${id}/photo`, `photo${allowedImageMime[mime]}`)
+        try {
+            await uploadObject(photoKey, buffer, mime)
+        } catch {
+            return reply.code(503).send({ message: 'File storage unavailable. Please try again.' })
+        }
+        const updated = await updateApplication(request.user.tenantId, id, { avatarUrl: photoKey } as never)
+        if (!updated) return reply.code(404).send({ message: 'Application not found' })
+        const downloadUrl = await generateDownloadUrl(photoKey, 86400)
+        return reply.send({ data: { s3Key: photoKey, downloadUrl } })
     })
 
     // POST /api/v1/applications/:id/convert-to-employee
@@ -1106,13 +1150,13 @@ export default async function (fastify: any): Promise<void> {
     const browseLimit = { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }
     const applyLimit = { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }
 
-    // GET /api/v1/public/careers/:companyCode/jobs?limit=&offset=&q=&department=&location=&type=
+    // GET /api/v1/public/careers/:companyCode/jobs?limit=&offset=&q=&department=&location=&type=&workplaceType=
     fastify.get('/public/careers/:companyCode/jobs', {
         ...browseLimit,
         schema: { tags: ['Recruitment'] },
     }, async (request: any, reply: any) => {
         const { companyCode } = request.params as { companyCode: string }
-        const query = request.query as { limit?: string; offset?: string; q?: string; department?: string; location?: string; type?: string }
+        const query = request.query as { limit?: string; offset?: string; q?: string; department?: string; location?: string; type?: string; workplaceType?: string }
         const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 50)
         const offset = Math.max(Number(query.offset) || 0, 0)
         const tenant = await getPublicTenantByCode(companyCode)
@@ -1124,6 +1168,7 @@ export default async function (fastify: any): Promise<void> {
             department: query.department?.trim() || undefined,
             location: query.location?.trim() || undefined,
             type: query.type?.trim() || undefined,
+            workplaceType: query.workplaceType?.trim() || undefined,
         })
         return reply.send({ data: { company: { name: tenant.name, companyCode: tenant.companyCode }, ...page } })
     })
@@ -1173,14 +1218,28 @@ export default async function (fastify: any): Promise<void> {
             'application/msword': '.doc',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
         }
+        const allowedImageMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+        }
         const fields: Record<string, string> = {}
         let buffer: Buffer | null = null
         let partMime = ''
+        // Optional candidate photo — extracted from the résumé client-side and
+        // sent alongside it. Never blocks the application if it's missing/invalid.
+        let photoBuffer: Buffer | null = null
         for await (const part of request.parts()) {
             if (part.type === 'file') {
                 const chunks: Buffer[] = []
                 for await (const chunk of part.file) chunks.push(chunk as Buffer)
-                buffer = Buffer.concat(chunks)
+                const data = Buffer.concat(chunks)
+                if (part.fieldname === 'photo') {
+                    // Cap the photo at 2 MB; just skip it if oversized rather than failing the apply.
+                    if (!part.file.truncated && data.length > 0 && data.length <= 2 * 1024 * 1024) photoBuffer = data
+                    continue
+                }
+                buffer = data
                 partMime = part.mimetype
                 if (part.file.truncated || buffer.length > 5 * 1024 * 1024) {
                     return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: 'Resume must be under 5 MB' })
@@ -1229,6 +1288,23 @@ export default async function (fastify: any): Promise<void> {
             application = { ...application, resumeUrl: s3Key } as never
         } catch {
             // Swallow — application is already persisted; HR can request the CV later.
+        }
+
+        // Attach the candidate photo (best-effort). Validated by magic bytes so a
+        // mislabelled or non-image part is silently ignored, never failing the apply.
+        if (photoBuffer) {
+            try {
+                const imgDetected = await fileTypeFromBuffer(photoBuffer)
+                const imgExt = imgDetected ? allowedImageMime[imgDetected.mime] : undefined
+                if (imgExt) {
+                    const photoKey = buildS3Key(tenant.id, `applications/${application.id}/photo`, `photo${imgExt}`)
+                    await uploadObject(photoKey, photoBuffer, imgDetected!.mime)
+                    await updateApplication(tenant.id, application.id, { avatarUrl: photoKey } as never)
+                    application = { ...application, avatarUrl: photoKey } as never
+                }
+            } catch {
+                // Swallow — photo is a nicety, not required.
+            }
         }
 
         recordActivity({

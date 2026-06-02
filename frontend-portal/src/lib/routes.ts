@@ -14,6 +14,8 @@ export const ROUTES = {
     employeePerformance: '/me/performance',
     employeeReferrals: '/me/referrals',
     employeeAnnouncements: '/me/announcements',
+    employeeRecognition: '/me/recognition',
+    employeeRecognitionDetail: (id = ':id') => `/me/recognition/${id}`,
     notifications: '/notifications',
 
     // Manager mode (dept_head only)

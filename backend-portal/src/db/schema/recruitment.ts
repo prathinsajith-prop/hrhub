@@ -51,6 +51,8 @@ export const jobApplications = pgTable('job_applications', {
     expectedSalary: numeric('expected_salary', { precision: 12, scale: 2 }),
     currentSalary: numeric('current_salary', { precision: 12, scale: 2 }),
     resumeUrl: text('resume_url'),
+    // Candidate photo (S3 key) — auto-extracted from the résumé on referral/apply.
+    avatarUrl: text('avatar_url'),
     notes: text('notes'),
     appliedDate: date('applied_date').notNull().defaultNow(),
     source: text('source').notNull().default('direct').$type<'direct' | 'referral' | 'careers'>(),
