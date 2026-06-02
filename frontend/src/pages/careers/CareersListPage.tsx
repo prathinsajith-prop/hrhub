@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MapPin, Building2, Briefcase, ArrowRight, Banknote, Loader2, Search, X, CalendarClock, Users, Hash } from 'lucide-react'
+import { MapPin, Building2, Briefcase, ArrowRight, Banknote, Loader2, Search, X, CalendarClock, Users, Hash, Clock } from 'lucide-react'
 import { usePublicJobs, usePublicJobFacets, type JobFilters } from '@/hooks/usePublicCareers'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -69,8 +69,8 @@ export function CareersListPage() {
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="mt-4 h-10 w-72" />
                     <Skeleton className="mt-3 h-4 w-96 max-w-full" />
-                    <div className="mt-9 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-64 w-full rounded-2xl" />)}
+                    <div className="mt-9 flex flex-col gap-3">
+                        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-2xl" />)}
                     </div>
                 </div>
             </PublicShell>
@@ -146,10 +146,10 @@ export function CareersListPage() {
                         {hasActiveFilters && <Button variant="outline" size="sm" onClick={clearFilters} className="mt-4">{t('careers.clearFilters')}</Button>}
                     </div>
                 ) : (
-                    <ul className={`grid grid-cols-1 gap-5 transition-opacity sm:grid-cols-2 lg:grid-cols-3 ${refetchingFilters ? 'opacity-50' : ''}`}>
+                    <ul className={`flex flex-col gap-3 transition-opacity ${refetchingFilters ? 'opacity-50' : ''}`}>
                         {jobs.map((job, i) => (
-                            <li key={job.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
-                                <JobCard
+                            <li key={job.id} className="animate-fade-in" style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}>
+                                <JobRow
                                     job={job}
                                     href={PUBLIC_ROUTES.careersJob(companyCode, job.id)}
                                     skillsPreview={SKILLS_PREVIEW}
@@ -172,14 +172,16 @@ export function CareersListPage() {
 }
 
 /**
- * One job tile for the public listing. Designed to be scannable:
- *   • Top stripe — type + workplace badges (colour-coded) and "posted X ago"
- *   • Title (line-clamp-2)
- *   • Department / Location / Salary / Openings rows
- *   • Skills preview (first N chips + overflow counter)
- *   • Footer — closing date + "View role →"
+ * One job row for the public listing. Horizontal layout — easier to scan a
+ * long list of openings than the previous square-tile grid.
+ *
+ * Desktop layout (md+):
+ *   [ Badges + Title + Meta (dept · location · industry · salary) + Skills ]    [ Posted/Ref · Closes · View → ]
+ *
+ * Mobile (<md): stacks vertically with the right-side column collapsing to a
+ * tight footer row.
  */
-function JobCard({
+function JobRow({
     job,
     href,
     skillsPreview,
@@ -198,91 +200,93 @@ function JobCard({
     return (
         <Link
             to={href}
-            className="card-hover group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="card-hover group block rounded-2xl border border-border/70 bg-card p-4 transition-all hover:border-primary/40 hover:shadow-md sm:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-            {/* Header — badges + ref/posted */}
-            <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <JobTypeBadge type={job.type} size="sm" />
-                    {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="sm" />}
-                </div>
-                <div className="flex flex-col items-end gap-0.5 pt-0.5 shrink-0">
-                    {postedAgo && (
-                        <span className="text-[11px] font-medium text-muted-foreground/80 tabular-figures whitespace-nowrap">
-                            {postedAgo}
-                        </span>
-                    )}
-                    {job.jobNo && (
-                        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/60 tabular-figures whitespace-nowrap">
-                            <Hash className="size-2.5 opacity-70" />{job.jobNo}
-                        </span>
-                    )}
-                </div>
-            </div>
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
+                {/* ── Left: badges + title + meta + skills ── */}
+                <div className="min-w-0 flex-1">
+                    {/* Badges row */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <JobTypeBadge type={job.type} size="sm" />
+                        {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="sm" />}
+                    </div>
 
-            {/* Title */}
-            <h2 className="mt-4 line-clamp-2 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary">
-                {job.title}
-            </h2>
+                    {/* Title */}
+                    <h2 className="mt-2.5 font-display text-lg font-semibold leading-snug tracking-tight text-foreground transition-colors group-hover:text-primary sm:text-xl">
+                        {job.title}
+                    </h2>
 
-            {/* Meta */}
-            <div className="mt-3 space-y-1.5 text-[13px] text-muted-foreground">
-                {job.department && (
-                    <span className="flex items-center gap-1.5">
-                        <Building2 className="size-3.5 shrink-0 opacity-70" />
-                        <span className="truncate">{job.department}</span>
-                    </span>
-                )}
-                {job.location && (
-                    <span className="flex items-center gap-1.5">
-                        <MapPin className="size-3.5 shrink-0 opacity-70" />
-                        <span className="truncate">{job.location}</span>
-                    </span>
-                )}
-                {job.industry && (
-                    <span className="flex items-center gap-1.5">
-                        <Briefcase className="size-3.5 shrink-0 opacity-70" />
-                        <span className="truncate">{job.industry}</span>
-                    </span>
-                )}
-                {salary && (
-                    <span className="flex items-center gap-1.5 font-semibold text-foreground/90 tabular-figures">
-                        <Banknote className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                        <span className="truncate">{salary}</span>
-                    </span>
-                )}
-                {job.openings > 1 && (
-                    <span className="flex items-center gap-1.5">
-                        <Users className="size-3.5 shrink-0 opacity-70" />
-                        <span>{t('careers.openingsCount', { count: job.openings })}</span>
-                    </span>
-                )}
-            </div>
+                    {/* Meta — inline on a single wrap-friendly line */}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted-foreground">
+                        {job.department && (
+                            <span className="inline-flex items-center gap-1.5">
+                                <Building2 className="size-3.5 shrink-0 opacity-70" />
+                                <span className="truncate">{job.department}</span>
+                            </span>
+                        )}
+                        {job.location && (
+                            <span className="inline-flex items-center gap-1.5">
+                                <MapPin className="size-3.5 shrink-0 opacity-70" />
+                                <span className="truncate">{job.location}</span>
+                            </span>
+                        )}
+                        {job.industry && (
+                            <span className="inline-flex items-center gap-1.5">
+                                <Briefcase className="size-3.5 shrink-0 opacity-70" />
+                                <span className="truncate">{job.industry}</span>
+                            </span>
+                        )}
+                        {job.openings > 1 && (
+                            <span className="inline-flex items-center gap-1.5">
+                                <Users className="size-3.5 shrink-0 opacity-70" />
+                                <span>{t('careers.openingsCount', { count: job.openings })}</span>
+                            </span>
+                        )}
+                        {salary && (
+                            <span className="inline-flex items-center gap-1.5 font-semibold text-foreground/90 tabular-figures">
+                                <Banknote className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span className="truncate">{salary}</span>
+                            </span>
+                        )}
+                    </div>
 
-            {/* Skills preview */}
-            {visibleSkills.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                    {visibleSkills.map(s => (
-                        <TagChip key={s} tone="sky">{s}</TagChip>
-                    ))}
-                    {extraSkills > 0 && (
-                        <TagChip tone="slate">+{extraSkills}</TagChip>
+                    {/* Skills preview */}
+                    {visibleSkills.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                            {visibleSkills.map(s => (
+                                <TagChip key={s} tone="sky">{s}</TagChip>
+                            ))}
+                            {extraSkills > 0 && (
+                                <TagChip tone="slate">+{extraSkills}</TagChip>
+                            )}
+                        </div>
                     )}
                 </div>
-            )}
 
-            {/* Footer */}
-            <div className="mt-auto pt-4">
-                <div className="flex items-center justify-between border-t border-border/60 pt-3">
-                    {job.closingDate ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground tabular-figures">
-                            <CalendarClock className="size-3.5 opacity-70" />
-                            {t('careers.closingDate', { date: formatDate(job.closingDate) })}
-                        </span>
-                    ) : (
-                        <span />
-                    )}
-                    <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
+                {/* ── Right: meta + CTA. Stacks under content on mobile. ── */}
+                <div className="flex shrink-0 flex-row items-center justify-between gap-3 border-t border-border/60 pt-3 md:flex-col md:items-end md:justify-start md:gap-2 md:border-t-0 md:pt-0 md:min-w-[180px]">
+                    {/* Posted / ref / closing — left-aligned on mobile */}
+                    <div className="flex flex-col gap-0.5 md:items-end">
+                        {postedAgo && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground/80 tabular-figures whitespace-nowrap">
+                                <Clock className="size-3 opacity-70" />{postedAgo}
+                            </span>
+                        )}
+                        {job.jobNo && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/60 tabular-figures whitespace-nowrap">
+                                <Hash className="size-2.5 opacity-70" />{job.jobNo}
+                            </span>
+                        )}
+                        {job.closingDate && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground tabular-figures whitespace-nowrap">
+                                <CalendarClock className="size-3 opacity-70" />
+                                {t('careers.closingDate', { date: formatDate(job.closingDate) })}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* CTA */}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-3 py-1.5 text-sm font-medium text-foreground/90 transition-colors group-hover:bg-primary group-hover:text-primary-foreground whitespace-nowrap">
                         {t('careers.viewRole')}
                         <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
                     </span>

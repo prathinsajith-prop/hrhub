@@ -20,7 +20,7 @@ import { RichTextDisplay } from '@/components/ui/rich-text-display'
 import { ResumeUpload } from '@/components/shared/ResumeUpload'
 import type { ParsedResume } from '@/lib/resume-parser'
 import { toast } from '@/components/ui/overlays'
-import { formatDate } from '@/lib/utils'
+import { formatDate, cn } from '@/lib/utils'
 import { PUBLIC_ROUTES } from '@/lib/routes'
 import { PublicShell, CareersError } from './careersShared'
 import { formatSalaryRange } from './careersHelpers'
@@ -30,6 +30,7 @@ export function CareersJobPage() {
     const { companyCode = '', jobId = '' } = useParams<{ companyCode: string; jobId: string }>()
     const { t } = useTranslation()
     const { data, isLoading, isError } = usePublicJob(companyCode, jobId)
+    const [tab, setTab] = useState<'overview' | 'application'>('overview')
 
     if (isLoading) {
         return (
@@ -69,38 +70,108 @@ export function CareersJobPage() {
                     {t('careers.backToJobs')}
                 </Link>
 
-                <div className="mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-                    {/* ── Posting ── */}
-                    <article className="animate-fade-in min-w-0">
-                        {/* Headline badges + ref no */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            <JobTypeBadge type={job.type} size="md" variant="bordered" />
-                            {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="md" variant="bordered" />}
-                            {job.jobNo && (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                    <Hash className="size-3 opacity-70" />{job.jobNo}
-                                </span>
+                {/* Hero — anchored job header, shown above both tabs.
+                    All structured details live here in two regions so we don't
+                    duplicate them in a body sidebar:
+                      • Top region: company eyebrow + title + badges + ref + meta
+                      • Bottom region (divided): salary · employment type · workplace
+                        · openings · closes + the primary Apply CTA */}
+                <header className="mt-5 animate-fade-in overflow-hidden rounded-2xl border border-border/70 bg-card/70 shadow-sm backdrop-blur-sm">
+                    <div aria-hidden className="h-1 w-full bg-gradient-to-r from-primary via-primary/55 to-transparent" />
+                    <div className="p-6 sm:p-7">
+                        <p className="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">{company.name}</p>
+                        <div className="mt-2.5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                                <h1 className="font-display text-[26px] font-semibold leading-tight tracking-tight sm:text-4xl">{job.title}</h1>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <JobTypeBadge type={job.type} size="md" variant="bordered" />
+                                    {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="md" variant="bordered" />}
+                                    {job.jobNo && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                            <Hash className="size-3 opacity-70" />{job.jobNo}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                                    {job.department && <span className="inline-flex items-center gap-1.5"><Building2 className="size-4 opacity-70" />{job.department}</span>}
+                                    {job.location && <span className="inline-flex items-center gap-1.5"><MapPin className="size-4 opacity-70" />{job.location}</span>}
+                                    {job.industry && <span className="inline-flex items-center gap-1.5"><Briefcase className="size-4 opacity-70" />{job.industry}</span>}
+                                    {job.createdAt && (
+                                        <span className="inline-flex items-center gap-1.5">
+                                            <Clock className="size-4 opacity-70" />
+                                            {t('careers.posted', { defaultValue: 'Posted' })} {formatPostedAgo(job.createdAt)}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            {/* Primary CTA — top-right, immediately visible */}
+                            {tab !== 'application' && (
+                                <Button size="lg" onClick={() => setTab('application')} className="shrink-0 sm:min-w-[150px]">
+                                    {t('careers.applyNow', { defaultValue: 'Apply now' })}
+                                </Button>
                             )}
                         </div>
 
-                        <h1 className="mt-4 font-display text-3xl font-semibold leading-tight tracking-tight sm:text-[40px]">{job.title}</h1>
-
-                        {/* Compact meta row — first line of facts */}
-                        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                            {job.department && <span className="inline-flex items-center gap-1.5"><Building2 className="size-4 opacity-70" />{job.department}</span>}
-                            {job.location && <span className="inline-flex items-center gap-1.5"><MapPin className="size-4 opacity-70" />{job.location}</span>}
-                            {job.industry && <span className="inline-flex items-center gap-1.5"><Briefcase className="size-4 opacity-70" />{job.industry}</span>}
-                            {job.createdAt && (
-                                <span className="inline-flex items-center gap-1.5">
-                                    <Clock className="size-4 opacity-70" />
-                                    {t('careers.posted', { defaultValue: 'Posted' })} {formatPostedAgo(job.createdAt)}
-                                </span>
-                            )}
+                        {/* Divided details strip — key facts at a glance */}
+                        <div className="mt-5 border-t border-border/60 pt-4">
+                            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+                                {salary && (
+                                    <HeroFact icon={<Banknote className="size-3.5 text-emerald-600 dark:text-emerald-400" />} label={t('careers.salaryLabel')}>
+                                        <span className="tabular-figures">{salary}</span>
+                                    </HeroFact>
+                                )}
+                                <HeroFact icon={<Briefcase className="size-3.5" />} label={t('careers.typeLabel', { defaultValue: 'Employment type' })}>
+                                    {t(`careers.type.${job.type}`, { defaultValue: job.type })}
+                                </HeroFact>
+                                {job.workplaceType && (
+                                    <HeroFact icon={<Building2 className="size-3.5" />} label={t('careers.workplaceLabel', { defaultValue: 'Workplace' })}>
+                                        {t(`careers.workplace.${job.workplaceType}`, { defaultValue: job.workplaceType })}
+                                    </HeroFact>
+                                )}
+                                {job.openings > 0 && (
+                                    <HeroFact icon={<Users className="size-3.5" />} label={t('careers.openingsLabel', { defaultValue: 'Openings' })}>
+                                        <span className="tabular-figures">{job.openings}</span>
+                                    </HeroFact>
+                                )}
+                                {job.closingDate && (
+                                    <HeroFact icon={<CalendarDays className="size-3.5" />} label={t('careers.closingLabel', { defaultValue: 'Closes' })}>
+                                        <span className="tabular-figures">{formatDate(job.closingDate)}</span>
+                                    </HeroFact>
+                                )}
+                            </dl>
                         </div>
+                    </div>
+                </header>
+
+                {/* Overview / Application tabs */}
+                <div className="mt-6 border-b border-border">
+                    <nav className="-mb-px flex gap-1" aria-label={t('careers.jobSections', { defaultValue: 'Job sections' })}>
+                        {([['overview', t('careers.overview', { defaultValue: 'Overview' })], ['application', t('careers.applicationTab', { defaultValue: 'Application' })]] as const).map(([key, label]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setTab(key)}
+                                className={cn(
+                                    'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+                                    tab === key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
+                                )}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </nav>
+                </div>
+
+                {tab === 'overview' ? (
+                <div className="mt-6">
+                    {/* Body is now single-column — the header carries all the
+                        structured details (salary, type, workplace, openings,
+                        closes) so we don't repeat them in a sidebar. */}
+                    <article className="animate-fade-in min-w-0 divide-y divide-border/60 rounded-2xl border border-border/70 bg-card/60 px-6 shadow-sm sm:px-7">
 
                         {/* About */}
                         {job.description && job.description !== '<p></p>' && (
-                            <section className="mt-7">
+                            <section className="py-6">
                                 <SectionTitle>{t('careers.aboutRole')}</SectionTitle>
                                 <RichTextDisplay html={job.description} className="mt-3 text-[15px] text-foreground/80" />
                             </section>
@@ -108,7 +179,7 @@ export function CareersJobPage() {
 
                         {/* Requirements */}
                         {job.requirements?.length > 0 && (
-                            <section className="mt-7">
+                            <section className="py-6">
                                 <SectionTitle>{t('careers.requirements')}</SectionTitle>
                                 {/* Line design (matches the section-title accent bar) —
                                     cleaner than a checkmark list for free-form requirements. */}
@@ -125,7 +196,7 @@ export function CareersJobPage() {
 
                         {/* Skills — always rendered so the field is visible
                             even when the job hasn't listed any yet. */}
-                        <section className="mt-7">
+                        <section className="py-6">
                             <SectionTitle>
                                 <Sparkles className="inline size-3.5 text-sky-500 ltr:mr-1.5 rtl:ml-1.5 align-[-1px]" />
                                 {t('careers.skills', { defaultValue: 'Skills' })}
@@ -144,7 +215,7 @@ export function CareersJobPage() {
                         </section>
 
                         {/* Qualifications — always rendered too */}
-                        <section className="mt-7">
+                        <section className="py-6">
                             <SectionTitle>
                                 <GraduationCap className="inline size-3.5 text-emerald-500 ltr:mr-1.5 rtl:ml-1.5 align-[-1px]" />
                                 {t('careers.qualifications', { defaultValue: 'Qualifications' })}
@@ -164,7 +235,7 @@ export function CareersJobPage() {
 
                         {/* Friendly fallback so the article never looks empty */}
                         {!hasBodyContent && (
-                            <section className="mt-7 rounded-2xl border border-dashed border-border/70 bg-card/50 p-6 text-center">
+                            <section className="py-8 text-center">
                                 <div className="mx-auto grid size-10 place-items-center rounded-full bg-muted text-muted-foreground">
                                     <Info className="size-4" />
                                 </div>
@@ -173,112 +244,32 @@ export function CareersJobPage() {
                         )}
                     </article>
 
-                    {/* ── Sidebar: Job summary + Apply form (sticky on desktop) ── */}
-                    <aside className="animate-fade-in space-y-3" style={{ animationDelay: '60ms' }}>
-                        <JobSummaryCard
-                            salary={salary}
-                            type={job.type}
-                            openings={job.openings}
-                            closingDate={job.closingDate}
-                            workplaceType={job.workplaceType}
-                            department={job.department}
-                            location={job.location}
-                            industry={job.industry}
-                            jobNo={job.jobNo}
-                            t={t}
-                        />
-                        <div className="lg:sticky lg:top-20">
-                            <ApplyForm companyCode={companyCode} jobId={jobId} jobTitle={job.title} />
-                        </div>
-                    </aside>
                 </div>
+                ) : (
+                    /* Application tab — wider container so the résumé dropzone
+                        and the inline 2-col form fields breathe properly. */
+                    <div className="mx-auto mt-6 max-w-4xl">
+                        <ApplyForm companyCode={companyCode} jobId={jobId} jobTitle={job.title} />
+                    </div>
+                )}
             </div>
         </PublicShell>
     )
 }
 
 /**
- * Compact "Job summary" panel — surfaces salary, openings, closing date,
- * workplace type, department, location, and ref number in one scannable list.
- * Replaces the sparse salary-only card that wasted vertical space above the
- * apply form.
+ * One labeled fact inside the hero's bottom strip — stacks as a small
+ * uppercase label above a foreground value. Used for salary, employment type,
+ * workplace, openings, closes. Keeps the strip information-dense without
+ * needing a separate sidebar panel.
  */
-function JobSummaryCard({
-    salary, type, openings, closingDate, workplaceType, department, location, industry, jobNo, t,
-}: {
-    salary: string
-    type: string
-    openings: number
-    closingDate: string | null
-    workplaceType: string | null
-    department: string | null
-    location: string | null
-    industry: string | null
-    jobNo: string | null
-    t: ReturnType<typeof useTranslation>['t']
-}) {
+function HeroFact({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
     return (
-        <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
-            {salary && (
-                <div className="pb-3 border-b border-border/60">
-                    <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t('careers.salaryLabel')}</div>
-                    <div className="mt-0.5 inline-flex items-center gap-1.5 font-display text-lg font-semibold tabular-figures">
-                        <Banknote className="size-4 text-emerald-600 dark:text-emerald-400" />{salary}
-                    </div>
-                </div>
-            )}
-            <dl className={`grid grid-cols-1 gap-2.5 text-sm ${salary ? 'pt-3' : ''}`}>
-                {/* Employment type — labeled row so it's not just the headline badge */}
-                <SummaryRow icon={<Briefcase className="size-3.5" />} label={t('careers.typeLabel', { defaultValue: 'Employment type' })}>
-                    {t(`careers.type.${type}`, { defaultValue: type })}
-                </SummaryRow>
-                {workplaceType && (
-                    <SummaryRow icon={<Building2 className="size-3.5" />} label={t('careers.workplaceLabel', { defaultValue: 'Workplace' })}>
-                        {t(`careers.workplace.${workplaceType}`, { defaultValue: workplaceType })}
-                    </SummaryRow>
-                )}
-                {department && (
-                    <SummaryRow icon={<Briefcase className="size-3.5" />} label={t('careers.departmentLabel', { defaultValue: 'Department' })}>
-                        {department}
-                    </SummaryRow>
-                )}
-                {industry && (
-                    <SummaryRow icon={<Building2 className="size-3.5" />} label={t('careers.industryLabel', { defaultValue: 'Industry' })}>
-                        {industry}
-                    </SummaryRow>
-                )}
-                {location && (
-                    <SummaryRow icon={<MapPin className="size-3.5" />} label={t('careers.locationLabel', { defaultValue: 'Location' })}>
-                        {location}
-                    </SummaryRow>
-                )}
-                {openings > 0 && (
-                    <SummaryRow icon={<Users className="size-3.5" />} label={t('careers.openingsLabel', { defaultValue: 'Openings' })}>
-                        <span className="tabular-figures">{openings}</span>
-                    </SummaryRow>
-                )}
-                {closingDate && (
-                    <SummaryRow icon={<CalendarDays className="size-3.5" />} label={t('careers.closingLabel', { defaultValue: 'Closes' })}>
-                        <span className="tabular-figures">{formatDate(closingDate)}</span>
-                    </SummaryRow>
-                )}
-                {jobNo && (
-                    <SummaryRow icon={<Hash className="size-3.5" />} label={t('careers.refLabel', { defaultValue: 'Ref' })}>
-                        <span className="tabular-figures font-mono text-xs">{jobNo}</span>
-                    </SummaryRow>
-                )}
-            </dl>
-        </div>
-    )
-}
-
-function SummaryRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
-    return (
-        <div className="flex items-start justify-between gap-3">
-            <dt className="inline-flex items-center gap-1.5 text-muted-foreground text-[13px]">
+        <div className="min-w-0">
+            <dt className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <span className="opacity-70">{icon}</span>{label}
             </dt>
-            <dd className="text-right text-[13px] font-medium text-foreground/90 min-w-0 truncate">{children}</dd>
+            <dd className="mt-0.5 truncate text-sm font-semibold text-foreground/90">{children}</dd>
         </div>
     )
 }

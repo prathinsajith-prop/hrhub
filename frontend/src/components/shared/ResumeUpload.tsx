@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type DragEvent } from 'react'
-import { UploadCloud, FileText, X, Loader2, Sparkles } from 'lucide-react'
+import { UploadCloud, Paperclip, Eye, Trash2, Loader2, Sparkles } from 'lucide-react'
 import { cn, formatFileSize } from '@/lib/utils'
 import { toast } from '@/components/ui/overlays'
 import { parseResumeFile, extractResumeImage, type ParsedResume } from '@/lib/resume-parser'
@@ -79,6 +79,23 @@ export function ResumeUpload({
         }
     }
 
+    // Open the picked file in a new tab (PDF/images preview inline; .doc(x)
+    // downloads — same as any browser). Works on the local File, pre-upload.
+    function view() {
+        if (!file) return
+        const url = URL.createObjectURL(file)
+        window.open(url, '_blank', 'noopener')
+        setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+
+    function remove() {
+        reqRef.current++
+        onFile(null)
+        setParsedNote(null)
+        setParsing(false)
+        onPhoto?.(null)
+    }
+
     return (
         <div>
             <input
@@ -92,21 +109,37 @@ export function ResumeUpload({
                 onChange={e => { pick(e.target.files?.[0]); e.target.value = '' }}
             />
             {file ? (
-                <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+                // Dashed chip: filename + view/remove, with "Replace file or drag
+                // and drop here" — and the whole tile accepts a drop to replace.
+                <div
+                    onDragOver={e => { if (!disabled) { e.preventDefault(); setDragging(true) } }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={(e: DragEvent) => { e.preventDefault(); setDragging(false); if (!disabled) pick(e.dataTransfer.files?.[0]) }}
+                    className={cn(
+                        'rounded-xl border border-dashed px-3 py-3 transition-colors',
+                        dragging ? 'border-primary bg-primary/5' : 'border-border bg-muted/30',
+                    )}
+                >
                     <div className="flex items-center justify-between gap-2">
                         <span className="inline-flex min-w-0 items-center gap-2.5 text-sm">
-                            {parsing ? <Loader2 className="size-4 shrink-0 animate-spin text-primary" /> : <FileText className="size-4 shrink-0 text-primary" />}
+                            {parsing ? <Loader2 className="size-4 shrink-0 animate-spin text-primary" /> : <Paperclip className="size-4 shrink-0 text-muted-foreground" />}
                             <span className="min-w-0">
                                 <span className="block truncate font-medium">{file.name}</span>
                                 <span className="block text-[11px] text-muted-foreground tabular-figures">{formatFileSize(file.size)}</span>
                             </span>
                         </span>
-                        <span className="flex shrink-0 items-center gap-1">
-                            <button type="button" onClick={() => inputRef.current?.click()} className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">Replace</button>
-                            <button type="button" onClick={() => { reqRef.current++; onFile(null); setParsedNote(null); setParsing(false); onPhoto?.(null) }} aria-label="Remove résumé" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
-                                <X className="size-4" />
+                        <span className="flex shrink-0 items-center gap-0.5">
+                            <button type="button" onClick={view} aria-label="View résumé" title="View" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                                <Eye className="size-4" />
+                            </button>
+                            <button type="button" onClick={remove} aria-label="Remove résumé" title="Remove" disabled={disabled} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
+                                <Trash2 className="size-4" />
                             </button>
                         </span>
+                    </div>
+                    <div className="mt-2.5 border-t border-border/60 pt-2 text-center text-xs text-muted-foreground">
+                        <button type="button" onClick={() => inputRef.current?.click()} disabled={disabled} className="font-medium text-primary hover:underline disabled:opacity-50">Replace file</button>
+                        {' '}or drag and drop here
                     </div>
                     {(parsing || parsedNote) && (
                         <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
