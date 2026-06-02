@@ -659,7 +659,9 @@ function ApprovalRow({ r, onApprove, onReject, onHold, onReturn }: { r: Recognit
     return (
         <Card>
             <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
+                {/* Stack on mobile so the 4 action buttons don't break the card.
+                    Side-by-side once we have md-width to keep the queue dense. */}
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                             <span className="font-medium text-foreground">{r.giverName ?? 'Unknown'}</span>
@@ -680,11 +682,13 @@ function ApprovalRow({ r, onApprove, onReject, onHold, onReturn }: { r: Recognit
                             {r.points > 0 && <span>· {r.points} pts</span>}
                         </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1 flex-wrap justify-end">
-                        <Button variant="outline" size="sm" onClick={onReturn} leftIcon={<Undo2 className="size-3.5" />}>Return</Button>
-                        <Button variant="outline" size="sm" onClick={onHold} leftIcon={<PauseCircle className="size-3.5" />}>Hold</Button>
-                        <Button variant="outline" size="sm" onClick={onReject} leftIcon={<XCircle className="size-3.5 text-rose-600" />}>Reject</Button>
-                        <Button size="sm" onClick={onApprove} leftIcon={<CheckCircle2 className="size-3.5" />}>Approve</Button>
+                    {/* On mobile: full-width grid of 4 buttons (Approve first
+                        as the primary path). On md+: right-aligned row. */}
+                    <div className="grid grid-cols-2 gap-1 md:flex md:shrink-0 md:items-center md:gap-1 md:justify-end">
+                        <Button size="sm" onClick={onApprove} leftIcon={<CheckCircle2 className="size-3.5" />} className="md:order-4">Approve</Button>
+                        <Button variant="outline" size="sm" onClick={onReject} leftIcon={<XCircle className="size-3.5 text-rose-600" />} className="md:order-3">Reject</Button>
+                        <Button variant="outline" size="sm" onClick={onHold} leftIcon={<PauseCircle className="size-3.5" />} className="md:order-2">Hold</Button>
+                        <Button variant="outline" size="sm" onClick={onReturn} leftIcon={<Undo2 className="size-3.5" />} className="md:order-1">Return</Button>
                     </div>
                 </div>
             </CardContent>

@@ -165,9 +165,12 @@ function Podium({ entries, type }: { entries: LeaderboardEntry[]; type: LeaderTy
                         const isFirst = rank === 1
                         return (
                             <div key={entry.employeeId} className="flex flex-col items-center">
-                                <div className="mb-2 flex flex-col items-center gap-2">
+                                {/* `relative` parent so the sparkles + crown
+                                    medals position against the avatar, not the
+                                    nearest distant ancestor (the Card). */}
+                                <div className="relative mb-2 flex flex-col items-center gap-2">
                                     {isFirst && (
-                                        <div className="absolute -translate-y-9">
+                                        <div className="absolute -top-7 left-1/2 -translate-x-1/2">
                                             <Sparkles className="size-5 text-yellow-500 animate-pulse" />
                                         </div>
                                     )}
@@ -180,9 +183,9 @@ function Podium({ entries, type }: { entries: LeaderboardEntry[]; type: LeaderTy
                                             src={entry.avatarUrl}
                                             size="lg"
                                         />
-                                    </div>
-                                    <div className="absolute -translate-y-2 translate-x-7">
-                                        {icon}
+                                        <div className="absolute -right-1 -bottom-1 rounded-full bg-background p-0.5 shadow-sm">
+                                            {icon}
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="text-center">
@@ -330,7 +333,7 @@ function AnalyticsTab({ period }: { period: Period }) {
 
     return (
         <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <KpiTile
                     label="Total recognitions"
                     value={data.totalRecognitions}
@@ -578,7 +581,8 @@ function BadgesDistributionTable({
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.toSorted((a, b) => b.count - a.count).map((r) => {
+                                {/* `toSorted` is ES2023; use spread+sort for broader lib compat. */}
+                                {[...rows].sort((a, b) => b.count - a.count).map((r) => {
                                     const tone = BADGE_LEVEL_TONE[r.level] ?? BADGE_LEVEL_TONE.bronze
                                     return (
                                         <tr key={r.badgeKey} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
