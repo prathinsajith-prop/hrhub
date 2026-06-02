@@ -9,17 +9,17 @@ import { ProfileTab } from './sections/ProfileTab'
 import { NotificationsTab } from './sections/NotificationsTab'
 import { SecurityTab, ActivityTab } from './sections/SecurityTab'
 
+const tabs = [
+    { value: 'profile', label: 'My Profile', icon: UserCircle, desc: 'Photo, name & department' },
+    { value: 'company', label: 'Company', icon: Building2, desc: 'Profile, regional & legal info' },
+    { value: 'notifications', label: 'Notifications', icon: Bell, desc: 'Email & push preferences' },
+    { value: 'security', label: 'Security', icon: Shield, desc: 'Password, 2FA, IP allowlist' },
+    { value: 'activity', label: 'Activity', icon: Clock, desc: 'Login & session history' },
+] as const
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function SettingsPage() {
     const { t } = useTranslation()
-
-    const tabs = [
-        { value: 'profile', label: 'My Profile', icon: UserCircle, desc: 'Photo, name & department' },
-        { value: 'company', label: 'Company', icon: Building2, desc: 'Profile, regional & legal info' },
-        { value: 'notifications', label: 'Notifications', icon: Bell, desc: 'Email & push preferences' },
-        { value: 'security', label: 'Security', icon: Shield, desc: 'Password, 2FA, IP allowlist' },
-        { value: 'activity', label: 'Activity', icon: Clock, desc: 'Login & session history' },
-    ] as const
 
     return (
         <PageWrapper width="default">

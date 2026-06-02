@@ -681,7 +681,7 @@ export function AppDetailPage() {
                                         <div className="flex items-center gap-4">
                                             <RechartsPie width={100} height={100}>
                                                 <Pie data={pieData} dataKey="value" cx={45} cy={45} innerRadius={25} outerRadius={45}>
-                                                    {pieData.map((entry, i) => <Cell key={`cell-${i}`} fill={entry.color} />)}
+                                                    {pieData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                                                 </Pie>
                                             </RechartsPie>
                                             <div className="space-y-1.5 flex-1">

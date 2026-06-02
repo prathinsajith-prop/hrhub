@@ -140,16 +140,17 @@ interface Props {
     compact?: boolean
 }
 
+// Draft selection edited inside the picker before Apply commits it.
+const toRange = (v: ReportDateRangeValue): Range => ({
+    startDate: fromIso(v.startDate) ?? new Date(),
+    endDate: fromIso(v.endDate) ?? new Date(),
+    key: 'selection',
+})
+
 export function DateRangePresets({ value, onChange, className }: Props) {
     const [open, setOpen] = useState(false)
     const staticRanges = useMemo(() => buildStaticRanges(), [])
 
-    // Draft selection edited inside the picker before Apply commits it.
-    const toRange = (v: ReportDateRangeValue): Range => ({
-        startDate: fromIso(v.startDate) ?? new Date(),
-        endDate: fromIso(v.endDate) ?? new Date(),
-        key: 'selection',
-    })
     const [draft, setDraft] = useState<Range>(() => toRange(value))
 
     // Re-sync the draft from the external value when it changes (e.g. parent

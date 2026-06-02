@@ -733,8 +733,8 @@ export function AttendancePage() {
                                         outerRadius={80}
                                         paddingAngle={2}
                                     >
-                                        {pieData.map((entry, i) => (
-                                            <Cell key={i} fill={entry.color} strokeWidth={0} />
+                                        {pieData.map((entry) => (
+                                            <Cell key={entry.name} fill={entry.color} strokeWidth={0} />
                                         ))}
                                     </Pie>
                                     <Tooltip
@@ -1428,6 +1428,23 @@ interface ResolvedImportRow extends ImportRow {
     resolvedVia: 'employee_no' | 'mapper_id' | null
 }
 
+/**
+ * Sample template rows. Covers both identity columns:
+ *   - employee_no  (HRHub's own employee code)
+ *   - mapper_id    (biometric device user id; takes precedence when both are set)
+ *
+ * One file format for the sample (.xlsx) keeps the UI uncluttered. The
+ * parser still accepts CSV uploads — only the sample-download surface
+ * is xlsx-only.
+ */
+const SAMPLE_HEADER = ['employee_no', 'mapper_id', 'date', 'in_time', 'out_time', 'in_notes', 'out_notes', 'location']
+const SAMPLE_ROWS: ReadonlyArray<ReadonlyArray<string>> = [
+    ['EMP-001', '', '2026-05-19', '09:00', '18:00', 'On-time', 'End of shift', 'Office'],
+    ['EMP-001', '', '2026-05-19', '19:00', '21:30', 'Overtime in', 'Overtime out', 'Office'],
+    ['', '101', '2026-05-20', '08:55', '17:30', 'Biometric punch', 'Auto out', 'Site A'],
+    ['EMP-002', '', '2026-05-20', '09:10', '', 'Forgot punch-out', '', 'Site B'],
+]
+
 function ImportAttendancePunchesDialog({
     open, onOpenChange, employees,
 }: {
@@ -1564,23 +1581,6 @@ function ImportAttendancePunchesDialog({
             toast.error('Empty file', 'No data rows found in the file.')
         }
     }
-
-    /**
-     * Sample template rows. Covers both identity columns:
-     *   - employee_no  (HRHub's own employee code)
-     *   - mapper_id    (biometric device user id; takes precedence when both are set)
-     *
-     * One file format for the sample (.xlsx) keeps the UI uncluttered. The
-     * parser still accepts CSV uploads — only the sample-download surface
-     * is xlsx-only.
-     */
-    const SAMPLE_HEADER = ['employee_no', 'mapper_id', 'date', 'in_time', 'out_time', 'in_notes', 'out_notes', 'location']
-    const SAMPLE_ROWS: ReadonlyArray<ReadonlyArray<string>> = [
-        ['EMP-001', '', '2026-05-19', '09:00', '18:00', 'On-time', 'End of shift', 'Office'],
-        ['EMP-001', '', '2026-05-19', '19:00', '21:30', 'Overtime in', 'Overtime out', 'Office'],
-        ['', '101', '2026-05-20', '08:55', '17:30', 'Biometric punch', 'Auto out', 'Site A'],
-        ['EMP-002', '', '2026-05-20', '09:10', '', 'Forgot punch-out', '', 'Site B'],
-    ]
 
     async function downloadSample() {
         // Lazy-load xlsx — same reason as the import path: it's a heavy

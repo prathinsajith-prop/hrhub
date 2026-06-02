@@ -84,7 +84,7 @@ function NoteHistory({ notes }: { notes: string | undefined }) {
     return (
         <ol className="space-y-3">
             {entries.map((e, i) => (
-                <li key={i} className="border-l-2 border-border pl-3 py-1">
+                <li key={`${i}-${e.stamp ?? ''}`} className="border-l-2 border-border pl-3 py-1">
                     {(e.stamp || e.label) && (
                         <div className="flex items-center gap-2 mb-1">
                             {e.stamp && <span className="text-[11px] text-muted-foreground tabular-nums">{e.stamp}</span>}

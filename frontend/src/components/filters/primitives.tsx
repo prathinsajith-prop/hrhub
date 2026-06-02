@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { AppliedFilter, FilterConfig, FilterOperator } from '@/lib/filters'
 import { DEFAULT_OPERATORS, DEFAULT_OPERATOR_BY_TYPE } from './operators'
 import { OperatorPills } from './OperatorPills'
@@ -145,6 +145,12 @@ export function DateRangeFilter({ config, value, onChange }: PrimitiveProps) {
 }
 
 // ─── NumberRangeFilter ───────────────────────────────────────────────────────
+function toNum(s: string): number | undefined {
+    if (s === '' || s === undefined) return undefined
+    const n = Number(s)
+    return Number.isNaN(n) ? undefined : n
+}
+
 export function NumberRangeFilter({ config, value, onChange }: PrimitiveProps) {
     const ops = operatorsFor(config)
     const op = (value?.operator ?? defaultOp(config)) as FilterOperator
@@ -157,12 +163,6 @@ export function NumberRangeFilter({ config, value, onChange }: PrimitiveProps) {
         const empty = (next.min === undefined || Number.isNaN(next.min)) && (next.max === undefined || Number.isNaN(next.max))
         onChange(empty ? null : { value: next, operator: op })
     }
-    const toNum = (s: string): number | undefined => {
-        if (s === '' || s === undefined) return undefined
-        const n = Number(s)
-        return Number.isNaN(n) ? undefined : n
-    }
-
     return (
         <div>
             <OperatorPills value={op} onChange={(o) => {
@@ -310,13 +310,18 @@ export function AutocompleteFilter({ config, value, onChange }: PrimitiveProps) 
             <div className="max-h-40 overflow-y-auto border rounded-md divide-y">
                 {loading && <div className="px-2 py-1.5 text-xs text-muted-foreground">Loading…</div>}
                 {!loading && results.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">No results</div>}
-                {results.filter((o) => !arrVal.includes(String(o.value))).map((o) => (
-                    <button
-                        key={String(o.value)} type="button"
-                        onClick={() => add(String(o.value))}
-                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted"
-                    >{o.label}</button>
-                ))}
+                {results.reduce<ReactNode[]>((acc, o) => {
+                    if (!arrVal.includes(String(o.value))) {
+                        acc.push(
+                            <button
+                                key={String(o.value)} type="button"
+                                onClick={() => add(String(o.value))}
+                                className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted"
+                            >{o.label}</button>
+                        )
+                    }
+                    return acc
+                }, [])}
             </div>
         </div>
     )

@@ -563,9 +563,9 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                             </div>
                             {showTemplates && (
                                 <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
-                                    {ONBOARDING_TEMPLATE_STEPS.map((t, i) => (
+                                    {ONBOARDING_TEMPLATE_STEPS.map((t) => (
                                         <button
-                                            key={i}
+                                            key={t.title}
                                             type="button"
                                             onClick={() => applyTemplateStep(t)}
                                             className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
@@ -580,6 +580,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                 type="text"
                                 value={newTitle}
                                 onChange={(e) => setNewTitle(e.target.value)}
+                                aria-label="Title"
                                 placeholder="e.g. Issue laptop"
                                 className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
                             />
@@ -591,6 +592,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                     type="text"
                                     value={newOwner}
                                     onChange={(e) => setNewOwner(e.target.value)}
+                                    aria-label="Owner"
                                     placeholder="e.g. IT, HR"
                                     className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
                                 />

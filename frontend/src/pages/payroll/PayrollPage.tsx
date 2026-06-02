@@ -302,8 +302,8 @@ function PayrollCharts({ runs }: { runs: PayrollRun[] }) {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {statusData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  {statusData.map((d, i) => (
+                    <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
@@ -2189,6 +2189,7 @@ function AddAdjustmentDialog({
             <div className="space-y-1.5">
               <Label>Notes (optional)</Label>
               <input
+                aria-label="Notes"
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}

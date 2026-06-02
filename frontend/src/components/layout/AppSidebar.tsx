@@ -120,15 +120,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navGroups = React.useMemo(() => {
     const roles = (userRoles?.length ? userRoles : role ? [role] : []) as UserRole[]
     if (roles.length === 0) return []
-    return allNavGroups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => {
-          const routeKey = getNavRouteKey(item.url)
-          return routeKey ? canAccessRouteForRoles(roles, routeKey) : true
-        }),
-      }))
-      .filter((group) => group.items.length > 0)
+    return allNavGroups.reduce<typeof allNavGroups>((acc, group) => {
+      const items = group.items.filter((item) => {
+        const routeKey = getNavRouteKey(item.url)
+        return routeKey ? canAccessRouteForRoles(roles, routeKey) : true
+      })
+      if (items.length > 0) acc.push({ ...group, items })
+      return acc
+    }, [])
   }, [allNavGroups, userRoles, role])
 
 

@@ -507,6 +507,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
             )}>
               <input
                 type="file"
+                aria-label="Attach resume"
                 accept=".pdf,.doc,.docx"
                 className="sr-only"
                 onChange={e => setResumeFile(e.target.files?.[0] ?? null)}

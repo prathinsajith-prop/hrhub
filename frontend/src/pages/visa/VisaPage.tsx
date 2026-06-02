@@ -249,17 +249,18 @@ function VisaRowActions({ visa: v }: { visa: VisaApplication }) {
   )
 }
 
+const urgencyStyles: Record<string, string> = {
+  critical: 'text-destructive',
+  urgent: 'text-warning',
+  normal: 'text-muted-foreground',
+}
+
 function VisaDetailButton({ visa: v }: { visa: VisaApplication }) {
   const [open, setOpen] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const navigate = useNavigate()
   const advanceStep = useAdvanceVisaStep()
   const cancelVisa = useCancelVisa()
-  const urgencyStyles: Record<string, string> = {
-    critical: 'text-destructive',
-    urgent: 'text-warning',
-    normal: 'text-muted-foreground',
-  }
   const isDone = v.currentStep >= v.totalSteps
   const isActivated = v.status === 'active'
   const isCancelled = v.status === 'cancelled' || v.status === 'expired'

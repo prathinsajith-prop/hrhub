@@ -516,6 +516,7 @@ export function OnboardingPage() {
                         <Label className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border cursor-pointer hover:bg-muted/80 transition-colors">
                             <input
                                 type="checkbox"
+                                aria-label="Use default template"
                                 checked={useTemplate}
                                 onChange={e => setUseTemplate(e.target.checked)}
                                 className="mt-0.5 size-4 rounded accent-primary"

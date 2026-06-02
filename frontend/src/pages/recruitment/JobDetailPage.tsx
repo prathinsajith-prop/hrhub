@@ -277,7 +277,7 @@ export function JobDetailPage() {
                 <CardContent className="px-4 pb-4">
                   <ul className="space-y-1.5">
                     {job.requirements.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <li key={`${i}-${r}`} className="flex items-start gap-2 text-sm text-muted-foreground">
                         <CheckCircle2 className="size-3.5 text-success mt-0.5 shrink-0" />
                         <span>{r}</span>
                       </li>

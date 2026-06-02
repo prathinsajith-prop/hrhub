@@ -664,13 +664,14 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
   // Build flat department options with full breadcrumb path (Branch → Division → Department)
   const deptOptions: ComboboxOption[] = React.useMemo(() => {
     return orgUnits
-      .filter(u => u.type === 'department')
-      .map(dept => {
+      .reduce<ComboboxOption[]>((acc, dept) => {
+        if (dept.type !== 'department') return acc
         const division = orgUnits.find(u => u.id === dept.parentId && u.type === 'division')
         const branch = division ? orgUnits.find(u => u.id === division.parentId && u.type === 'branch') : null
         const parts = [branch?.name, division?.name, dept.name].filter(Boolean)
-        return { value: dept.id, label: parts.join(' → ') }
-      })
+        acc.push({ value: dept.id, label: parts.join(' → ') })
+        return acc
+      }, [])
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [orgUnits])
 
@@ -766,8 +767,10 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
                 value={toDesignation}
                 onValueChange={setToDesignation}
                 options={(Array.isArray(designationList) ? designationList : [])
-                  .filter((d: { isActive: boolean }) => d.isActive)
-                  .map((d: { name: string }) => ({ value: d.name, label: d.name }))}
+                  .reduce<Array<{ value: string; label: string }>>((acc, d: { name: string; isActive: boolean }) => {
+                    if (d.isActive) acc.push({ value: d.name, label: d.name })
+                    return acc
+                  }, [])}
                 placeholder="Select or type designation…"
                 searchPlaceholder="Search or create…"
                 clearable
@@ -948,6 +951,11 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
 })
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  active:    { label: 'Activate', past: 'activated', confirmLabel: 'Activate', variant: 'success'  as const, description: 'This will set the employee status back to active.' },
+  suspended: { label: 'Suspend',  past: 'suspended', confirmLabel: 'Suspend',  variant: 'warning'  as const, description: 'The employee will be suspended and cannot log in.' },
+}
 
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
@@ -1161,11 +1169,6 @@ export function EmployeeDetailPage() {
 
   // Terminated or suspended employees must not be granted/managed system access
   const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
-
-  const STATUS_CONFIG = {
-    active:    { label: 'Activate', past: 'activated', confirmLabel: 'Activate', variant: 'success'  as const, description: 'This will set the employee status back to active.' },
-    suspended: { label: 'Suspend',  past: 'suspended', confirmLabel: 'Suspend',  variant: 'warning'  as const, description: 'The employee will be suspended and cannot log in.' },
-  }
 
   function handleStatusChange() {
     if (!statusTarget || !e) return
@@ -1946,9 +1949,10 @@ export function EmployeeDetailPage() {
                         <Select value={visaForm.visaType} onValueChange={v => setVisaForm(f => ({ ...f, visaType: v }))}>
                           <SelectTrigger className="h-9"><SelectValue placeholder="Select visa type…" /></SelectTrigger>
                           <SelectContent>
-                            {Object.entries(VISA_TYPE_LABELS).filter(([k]) => ['employment', 'investor', 'dependent', 'mission'].includes(k)).map(([k, v]) => (
-                              <SelectItem key={k} value={k}>{v}</SelectItem>
-                            ))}
+                            {Object.entries(VISA_TYPE_LABELS).reduce<React.ReactNode[]>((acc, [k, v]) => {
+                              if (VISA_FORM_TYPES.has(k)) acc.push(<SelectItem key={k} value={k}>{v}</SelectItem>)
+                              return acc
+                            }, [])}
                           </SelectContent>
                         </Select>
                       </div>
@@ -2156,6 +2160,7 @@ export function EmployeeDetailPage() {
                       type="text"
                       value={docSearch}
                       onChange={e => setDocSearch(e.target.value)}
+                      aria-label="Search documents"
                       placeholder="Search by name, type or category…"
                       className="w-full pl-9 pr-8 h-9 text-sm rounded-md border border-input bg-background outline-none focus:ring-2 focus:ring-ring/50 placeholder:text-muted-foreground"
                     />
@@ -2992,7 +2997,7 @@ export function EmployeeDetailPage() {
       })()}
 
       {/* Hidden avatar input */}
-      <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
+      <input ref={avatarInputRef} type="file" aria-label="Upload avatar" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
       {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
@@ -3425,6 +3430,8 @@ function TerminateDialog({
 
 type DependentFormData = Omit<Dependent, 'id' | 'employeeId' | 'reference' | 'createdByName' | 'createdAt' | 'updatedAt'>
 
+const BLANK_DEPENDENT: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
+
 function DependentFormDialog({
   open, onOpenChange, dependent, onSave, isSaving,
 }: {
@@ -3434,8 +3441,7 @@ function DependentFormDialog({
   onSave: (data: DependentFormData) => void
   isSaving: boolean
 }) {
-  const blank: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
-  const [form, setForm] = React.useState<DependentFormData>(blank)
+  const [form, setForm] = React.useState<DependentFormData>(BLANK_DEPENDENT)
 
   const [prevDepOpen, setPrevDepOpen] = React.useState(false)
   if (open && !prevDepOpen) {
@@ -3447,7 +3453,7 @@ function DependentFormDialog({
       nationality: dependent.nationality,
       visaNumber: dependent.visaNumber,
       medicalInsurance: dependent.medicalInsurance,
-    } : blank)
+    } : BLANK_DEPENDENT)
   } else if (!open && prevDepOpen) {
     setPrevDepOpen(false)
   }
@@ -3647,7 +3653,7 @@ function AddWarningDialog({
               </>
             )}
           </div>
-          <input ref={fileRef} type="file" className="hidden"
+          <input ref={fileRef} type="file" aria-label="Upload supporting document" className="hidden"
             accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
             onChange={e => pickFile(e.target.files?.[0])} />
         </div>

@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/authStore'
 import { canAccessRouteForRoles, type RouteKey } from '@/lib/permissions'
 import type { UserRole } from '@/types'
 import { socket } from '@/lib/socket'
+import { EngageLayout, EngageIndexRedirect } from '@/pages/engage/EngageLayout'
 
 // Code-split all pages - only loaded when navigated to
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage').then(m => ({ default: m.LoginPage })))

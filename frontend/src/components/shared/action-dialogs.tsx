@@ -169,22 +169,22 @@ function ManagerPicker({
 
 // Build flat department options with hierarchy path for the org structure picker.
 export function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { branchId: string; divisionId: string; headEmployeeId: string | null; headEmployeeName: string | null }> {
-    return units
-        .filter(u => u.type === 'department' && u.isActive)
-        .map(dept => {
-            const division = units.find(u => u.id === dept.parentId)
-            const branch = division ? units.find(u => u.id === division.parentId) : null
-            const path = [branch?.name, division?.name].filter(Boolean).join(' → ')
-            return {
-                value: dept.id,
-                label: dept.name,
-                secondary: path || undefined,
-                branchId: branch?.id ?? '',
-                divisionId: division?.id ?? '',
-                headEmployeeId: dept.headEmployeeId ?? null,
-                headEmployeeName: dept.headEmployeeName ?? null,
-            }
+    return units.reduce<Array<ComboboxOption & { branchId: string; divisionId: string; headEmployeeId: string | null; headEmployeeName: string | null }>>((acc, dept) => {
+        if (dept.type !== 'department' || !dept.isActive) return acc
+        const division = units.find(u => u.id === dept.parentId)
+        const branch = division ? units.find(u => u.id === division.parentId) : null
+        const path = [branch?.name, division?.name].filter(Boolean).join(' → ')
+        acc.push({
+            value: dept.id,
+            label: dept.name,
+            secondary: path || undefined,
+            branchId: branch?.id ?? '',
+            divisionId: division?.id ?? '',
+            headEmployeeId: dept.headEmployeeId ?? null,
+            headEmployeeName: dept.headEmployeeName ?? null,
         })
+        return acc
+    }, [])
 }
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
@@ -361,6 +361,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                     value={reqInput}
                                     onChange={e => setReqInput(e.target.value)}
                                     onKeyDown={onReqKeyDown}
+                                    aria-label="Add requirement"
                                     placeholder="e.g. 3+ years experience · Press Enter to add"
                                     className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 />
@@ -820,9 +821,11 @@ export function AddEmployeeDialog({
         // percentage rate for percentage_of_basic) — the backend resolver
         // re-computes the AED at run time, so storing the raw value lets
         // basic-changes recalculate downstream components correctly.
-        const salaryComponents = activeEarnings
-            .map((c) => ({ componentId: c.id, amount: parseFloat(form.componentAmounts[c.id] || '0') || 0 }))
-            .filter((a) => a.amount > 0)
+        const salaryComponents = activeEarnings.reduce<Array<{ componentId: string; amount: number }>>((acc, c) => {
+            const amount = parseFloat(form.componentAmounts[c.id] || '0') || 0
+            if (amount > 0) acc.push({ componentId: c.id, amount })
+            return acc
+        }, [])
         try {
             // Auto-create designation if it's a new name not in the existing list
             if (form.designation) {
@@ -1111,8 +1114,10 @@ export function AddEmployeeDialog({
                                     value={form.designation}
                                     onValueChange={v => setForm(f => ({ ...f, designation: v }))}
                                     options={(Array.isArray(designationList) ? designationList : [])
-                                        .filter((d: { isActive: boolean }) => d.isActive)
-                                        .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                        .reduce<Array<{ value: string; label: string }>>((acc, d: { id: string; name: string; isActive: boolean }) => {
+                                            if (d.isActive) acc.push({ value: d.name, label: d.name })
+                                            return acc
+                                        }, [])}
                                     placeholder="Select or type designation…"
                                     searchPlaceholder="Search or create…"
                                     clearable
@@ -1654,8 +1659,10 @@ export function EditEmploymentDialog({
                                 value={form.designation}
                                 onValueChange={v => setForm(f => ({ ...f, designation: v }))}
                                 options={(Array.isArray(designationList) ? designationList : [])
-                                    .filter((d: { isActive: boolean }) => d.isActive)
-                                    .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                    .reduce<Array<{ value: string; label: string }>>((acc, d: { id: string; name: string; isActive: boolean }) => {
+                                        if (d.isActive) acc.push({ value: d.name, label: d.name })
+                                        return acc
+                                    }, [])}
                                 placeholder="Select or type designation…"
                                 searchPlaceholder="Search or create…"
                                 clearable
@@ -1679,9 +1686,10 @@ export function EditEmploymentDialog({
                             <Combobox
                                 value={form.shiftId}
                                 onValueChange={v => setForm(f => ({ ...f, shiftId: v }))}
-                                options={shifts
-                                    .filter(s => s.isActive || s.id === form.shiftId)
-                                    .map(s => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` }))}
+                                options={shifts.reduce<Array<{ value: string; label: string }>>((acc, s) => {
+                                    if (s.isActive || s.id === form.shiftId) acc.push({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` })
+                                    return acc
+                                }, [])}
                                 placeholder="Select shift…"
                                 searchPlaceholder="Search shifts…"
                                 emptyMessage="No shifts found. Add them in Org Settings → Shifts."
@@ -1828,9 +1836,11 @@ export function EditPayrollDialog({
         // Per-component assignments store the RAW user input (the resolver
         // re-applies the percentage at run time using the freshly-resolved
         // basic, so basic changes cascade automatically).
-        const salaryComponents = earningsCatalog
-            .map((c) => ({ componentId: c.id, amount: parseFloat(componentAmounts[c.id] || '0') || 0 }))
-            .filter((a) => a.amount > 0)
+        const salaryComponents = earningsCatalog.reduce<Array<{ componentId: string; amount: number }>>((acc, c) => {
+            const amount = parseFloat(componentAmounts[c.id] || '0') || 0
+            if (amount > 0) acc.push({ componentId: c.id, amount })
+            return acc
+        }, [])
         const result = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
         if (Object.keys(result.errors).length) {
             setErrors(result.errors)
@@ -2193,6 +2203,7 @@ export function EditJobDialog({
                                     value={reqInput}
                                     onChange={e => setReqInput(e.target.value)}
                                     onKeyDown={onEditReqKeyDown}
+                                    aria-label="Add requirement"
                                     placeholder="e.g. 3+ years experience · Press Enter to add"
                                     className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 />

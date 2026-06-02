@@ -151,7 +151,10 @@ export function BulkImportDialog({ open, onOpenChange, config }: Props) {
 
     const handleCommit = async () => {
         if (!validation) return
-        const okRows = validation.rows.filter((r) => r.ok).map((r) => r.value ?? r.raw)
+        const okRows = validation.rows.reduce<Record<string, unknown>[]>((acc, r) => {
+            if (r.ok) acc.push(r.value ?? r.raw)
+            return acc
+        }, [])
         if (okRows.length === 0) {
             toast.error('Nothing to import', 'All rows had errors.')
             return
@@ -263,6 +266,7 @@ export function BulkImportDialog({ open, onOpenChange, config }: Props) {
                 <input
                     ref={inputRef}
                     type="file"
+                    aria-label="Upload spreadsheet file"
                     className="hidden"
                     accept=".xlsx,.xls,.csv"
                     onChange={(e) => {

@@ -79,12 +79,13 @@ function OtpInput({ onComplete }: { onComplete: (code: string) => void }) {
     <div className="flex gap-1.5 sm:gap-2.5 justify-center" onPaste={handlePaste}>
       {digits.map((d, i) => (
         <input
-          key={i}
+          key={`otp-${i}`}
           ref={el => { refs.current[i] = el }}
           type="text"
           inputMode="numeric"
           pattern="[0-9]*"
           maxLength={1}
+          aria-label={`Verification code digit ${i + 1}`}
           autoComplete={i === 0 ? 'one-time-code' : 'off'}
           value={d}
           onChange={e => handleChange(i, e.target.value)}

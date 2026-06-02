@@ -280,6 +280,7 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
                         <input
                             ref={fileInputRef}
                             type="file"
+                            aria-label="File"
                             className="hidden"
                             accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
                             onChange={e => { pickFile(e.target.files?.[0]); setErrors(err => ({ ...err, file: undefined })) }}

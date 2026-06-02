@@ -448,6 +448,7 @@ export function VisaDetailPage() {
                                         type="number"
                                         min="0"
                                         step="0.01"
+                                        aria-label="Amount (AED)"
                                         className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                                         value={costForm.amount || ''}
                                         onChange={e => setCostForm(f => ({ ...f, amount: Number(e.target.value) }))}
@@ -475,6 +476,7 @@ export function VisaDetailPage() {
                                 <span className="text-xs text-muted-foreground">Description (optional)</span>
                                 <input
                                     type="text"
+                                    aria-label="Description"
                                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                                     value={costForm.description ?? ''}
                                     onChange={e => setCostForm(f => ({ ...f, description: e.target.value || undefined }))}

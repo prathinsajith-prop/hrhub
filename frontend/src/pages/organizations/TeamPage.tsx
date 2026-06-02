@@ -761,7 +761,7 @@ function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, 
             {hasMore && (
                 <div ref={sentinelRef} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-4">
                     {[...Array(Math.min(TEAMS_PAGE_SIZE, teams.length - visibleCount))].map((_, i) => (
-                        <TeamGridSkeletonRow key={i} />
+                        <TeamGridSkeletonRow key={`team-skeleton-${i}`} />
                     ))}
                 </div>
             )}

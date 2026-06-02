@@ -213,6 +213,7 @@ export function CountrySelect({
                             <input
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
+                                aria-label="Search country"
                                 placeholder="Search country..."
                                 className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none focus:ring-1 focus:ring-ring"
                             />

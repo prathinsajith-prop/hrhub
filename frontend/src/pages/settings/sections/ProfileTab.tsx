@@ -119,6 +119,7 @@ export function ProfileTab() {
                         <input
                             ref={fileRef}
                             type="file"
+                            aria-label={t('settingsDetail.profile.changePhoto')}
                             accept="image/jpeg,image/png,image/webp,image/gif"
                             className="hidden"
                             onChange={(e) => {

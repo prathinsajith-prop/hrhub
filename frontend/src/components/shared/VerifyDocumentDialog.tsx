@@ -231,6 +231,7 @@ export function VerifyDocumentDialog({ open, onOpenChange, document }: Props) {
                             <textarea
                                 value={reason}
                                 onChange={(e) => setReason(e.target.value)}
+                                aria-label="Reason for rejection"
                                 rows={3}
                                 placeholder="e.g. Document is blurry - please re-upload a clear scan."
                                 className="w-full text-sm rounded-md border border-red-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-400/40"

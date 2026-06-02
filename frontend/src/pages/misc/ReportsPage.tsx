@@ -116,6 +116,15 @@ function EmptyChart({ message = 'No data available' }: { message?: string }) {
  * expiring in that bucket. Selected pill picks up the tone defined in
  * `DOC_TYPE_TONE` so the active filter is colour-coded to its category.
  */
+const EXPIRY_FILTER_TYPES: Array<{ key: DocType | 'all'; label: string; tone?: string }> = [
+    { key: 'all',         label: 'All Documents' },
+    { key: 'visa',        label: DOC_TYPE_LABEL.visa,        tone: DOC_TYPE_TONE.visa },
+    { key: 'passport',    label: DOC_TYPE_LABEL.passport,    tone: DOC_TYPE_TONE.passport },
+    { key: 'emirates_id', label: DOC_TYPE_LABEL.emirates_id, tone: DOC_TYPE_TONE.emirates_id },
+    { key: 'labour_card', label: DOC_TYPE_LABEL.labour_card, tone: DOC_TYPE_TONE.labour_card },
+    { key: 'contract',    label: DOC_TYPE_LABEL.contract,    tone: DOC_TYPE_TONE.contract },
+]
+
 function ExpiryTypeFilter({
     docTypeFilter,
     setDocTypeFilter,
@@ -134,17 +143,9 @@ function ExpiryTypeFilter({
             </div>
         )
     }
-    const types: Array<{ key: DocType | 'all'; label: string; tone?: string }> = [
-        { key: 'all',         label: 'All Documents' },
-        { key: 'visa',        label: DOC_TYPE_LABEL.visa,        tone: DOC_TYPE_TONE.visa },
-        { key: 'passport',    label: DOC_TYPE_LABEL.passport,    tone: DOC_TYPE_TONE.passport },
-        { key: 'emirates_id', label: DOC_TYPE_LABEL.emirates_id, tone: DOC_TYPE_TONE.emirates_id },
-        { key: 'labour_card', label: DOC_TYPE_LABEL.labour_card, tone: DOC_TYPE_TONE.labour_card },
-        { key: 'contract',    label: DOC_TYPE_LABEL.contract,    tone: DOC_TYPE_TONE.contract },
-    ]
     return (
         <div className="flex flex-wrap gap-1.5">
-            {types.map((t) => {
+            {EXPIRY_FILTER_TYPES.map((t) => {
                 const count = t.key === 'all' ? byType?.total.total ?? 0 : byType?.[t.key].total ?? 0
                 const active = docTypeFilter === t.key
                 return (

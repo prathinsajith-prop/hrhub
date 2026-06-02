@@ -268,7 +268,7 @@ export function HRDashboard() {
                   <ResponsiveContainer width="100%" height={140}>
                     <PieChart>
                       <Pie data={nationalityData} cx="50%" cy="50%" innerRadius={42} outerRadius={64} paddingAngle={3} dataKey="value">
-                        {nationalityData.map((entry, i) => <Cell key={`cell-${i}`} fill={entry.fill} stroke="none" />)}
+                        {nationalityData.map((entry) => <Cell key={entry.name} fill={entry.fill} stroke="none" />)}
                       </Pie>
                       <Tooltip formatter={(v: string | number | readonly (string | number)[] | undefined) => [v, 'Employees']} contentStyle={tooltipStyle} />
                     </PieChart>
@@ -314,7 +314,7 @@ export function HRDashboard() {
                   <YAxis dataKey="dept" type="category" tick={{ fontSize: 11, fill: CHART_COLORS.axis }} axisLine={false} tickLine={false} width={72} />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
-                    {departmentData.map((_, i) => <Cell key={`cell-${i}`} fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'} />)}
+                    {departmentData.map((d, i) => <Cell key={d.dept} fill={i === 0 ? CHART_COLORS.primary : 'hsl(var(--primary) / 0.25)'} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -512,7 +512,7 @@ export function HRDashboard() {
                   </p>
                 ) : (
                   <ul className="space-y-2">
-                    {todays.map((b, i) => {
+                    {todays.map((b) => {
                       // Initials fallback when no avatar is on file. Two chars,
                       // first letters of first + last name.
                       const initials = b.name
@@ -523,7 +523,7 @@ export function HRDashboard() {
                         .join('')
                       return (
                         <li
-                          key={i}
+                          key={b.employeeNo}
                           className="flex items-center justify-between gap-3 rounded-lg border border-pink-200 bg-pink-50 px-3 py-2 dark:border-pink-900/60 dark:bg-pink-950/30"
                         >
                           <div className="flex min-w-0 items-center gap-3">
@@ -593,8 +593,8 @@ export function HRDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {anniversaryData.map((a, i) => (
-                      <tr key={i} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                    {anniversaryData.map((a) => (
+                      <tr key={a.employeeNo} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                         <td className="py-2.5 font-medium">{a.name}</td>
                         <td className="py-2.5 px-3 text-right text-muted-foreground">{a.joinYear}</td>
                         <td className="py-2.5 text-right">

@@ -215,6 +215,7 @@ export function MyProfileContent() {
                             <input
                                 ref={fileRef}
                                 type="file"
+                                aria-label="Change profile photo"
                                 accept="image/jpeg,image/png,image/webp,image/gif"
                                 className="hidden"
                                 onChange={ev => { const f = ev.target.files?.[0]; if (f) handleFile(f) }}
