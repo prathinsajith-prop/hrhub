@@ -1068,44 +1068,47 @@ function DocumentsStep() {
             ) : (
                 <ul className="flex flex-col gap-2">
                     {data.map(d => (
-                        <li
-                            key={d.id}
-                            role="button"
-                            tabIndex={0}
-                            className="group flex items-start gap-3 rounded-lg border bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                            onClick={() => setEditing(d)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault()
-                                    setEditing(d)
-                                }
-                            }}
-                        >
-                            <div className="size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                                <FileText className="size-5" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium truncate">{d.name}</span>
-                                    {d.required && (
-                                        <Badge variant="secondary" className="text-[10px] shrink-0">
-                                            <Check className="size-2.5 me-0.5" />
-                                            {t('orgSettings.offboardingFlow.documents.required')}
-                                        </Badge>
+                        // Use a semantic <li> for list membership and a real
+                        // <button> for the click target — keyboard, screen-
+                        // reader, and "open in new tab" semantics all work
+                        // properly without role/tabIndex hacks. The Delete
+                        // button is a sibling so it can `stopPropagation` and
+                        // not accidentally fire the card's click.
+                        <li key={d.id} className="group relative">
+                            <button
+                                type="button"
+                                onClick={() => setEditing(d)}
+                                className="flex w-full items-start gap-3 rounded-lg border bg-card p-4 text-start hover:border-primary/40 hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            >
+                                <div className="size-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                    <FileText className="size-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium truncate">{d.name}</span>
+                                        {d.required && (
+                                            <Badge variant="secondary" className="text-[10px] shrink-0">
+                                                <Check className="size-2.5 me-0.5" />
+                                                {t('orgSettings.offboardingFlow.documents.required')}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    {d.bodyTemplate && (
+                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                            {d.bodyTemplate.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)}
+                                        </p>
                                     )}
                                 </div>
-                                {d.bodyTemplate && (
-                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                        {d.bodyTemplate.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)}
-                                    </p>
-                                )}
-                            </div>
+                                {/* Spacer so the delete button has its absolute
+                                    slot without overlapping the content. */}
+                                <span className="size-9 shrink-0" aria-hidden="true" />
+                            </button>
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={(e) => { e.stopPropagation(); setConfirmId(d.id) }}
+                                onClick={() => setConfirmId(d.id)}
                                 aria-label="Delete"
-                                className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                className="absolute end-3 top-3 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                             >
                                 <Trash2 className="size-3.5 text-rose-500" />
                             </Button>

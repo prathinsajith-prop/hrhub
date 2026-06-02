@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next'
 import {
     Award, Trophy, Sparkles, Heart, ThumbsUp, PartyPopper, HandHeart, Crown,
     Users, MessageSquare, Send, Pin, Loader2, Plus, Filter, Search, Share2,
-    TrendingUp, Star, ChevronRight, X, Check,
+    TrendingUp, Star, ChevronRight, X,
 } from 'lucide-react'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MultiSelect } from '@/components/ui/multi-select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -672,25 +673,8 @@ function GiveRecognitionDialog({ open, onOpenChange }: { open: boolean; onOpenCh
 
     const employees: Employee[] = employeesQuery.data?.data ?? []
     const recipientIds = recipients.map(r => r.id)
+    // Hide already-selected employees from the search options (they show as chips).
     const filteredEmployees = employees.filter(e => !recipientIds.includes(e.id))
-
-    const toggleRecipient = (e: Employee) => {
-        setRecipients(prev => {
-            const exists = prev.some(r => r.id === e.id)
-            if (exists) return prev.filter(r => r.id !== e.id)
-            return [...prev, { id: e.id, name: e.fullName ?? `${e.firstName} ${e.lastName}` }]
-        })
-    }
-
-    const removeRecipient = (id: string) => setRecipients(prev => prev.filter(r => r.id !== id))
-
-    const toggleTeam = (id: string) => {
-        setTeamIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
-    }
-
-    const toggleOrgUnit = (id: string) => {
-        setOrgUnitIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
-    }
 
     // When a badge is picked, prefill points with the badge's defaultPoints.
     const onBadgeChange = (key: string) => {
@@ -752,80 +736,38 @@ function GiveRecognitionDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 </DialogHeader>
                 <DialogBody className="space-y-4">
                     {/* Recipients */}
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                         <Label className="text-xs font-semibold uppercase tracking-wide">Recipients *</Label>
-                        {recipients.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5">
-                                {recipients.map(r => (
-                                    <span key={r.id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/20">
-                                        {r.name}
-                                        <button type="button" onClick={() => removeRecipient(r.id)} className="opacity-60 hover:opacity-100">
-                                            <X className="size-3" />
-                                        </button>
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        <div className="relative">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={employeeSearch}
-                                onChange={e => setEmployeeSearch(e.target.value)}
-                                placeholder="Search employees…"
-                                className="pl-9"
-                            />
-                        </div>
-                        {employeeSearch.trim().length > 0 && (
-                            <div className="max-h-48 overflow-y-auto rounded-lg border bg-card">
-                                {employeesQuery.isLoading ? (
-                                    <p className="p-3 text-xs text-muted-foreground">Searching…</p>
-                                ) : filteredEmployees.length === 0 ? (
-                                    <p className="p-3 text-xs text-muted-foreground">No matches.</p>
-                                ) : (
-                                    filteredEmployees.slice(0, 12).map(e => (
-                                        <button
-                                            key={e.id}
-                                            type="button"
-                                            onClick={() => toggleRecipient(e)}
-                                            className="flex w-full items-center gap-2.5 border-b border-border/60 px-3 py-2 text-left text-xs last:border-0 hover:bg-muted"
-                                        >
-                                            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-[10px] font-semibold text-white">
-                                                {initials(e.fullName ?? `${e.firstName} ${e.lastName}`)}
-                                            </span>
-                                            <span className="min-w-0 flex-1">
-                                                <p className="truncate font-medium">{e.fullName ?? `${e.firstName} ${e.lastName}`}</p>
-                                                <p className="truncate text-[10px] text-muted-foreground">{e.designation ?? e.department ?? '—'}</p>
-                                            </span>
-                                            <Plus className="size-3.5 text-muted-foreground" />
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        )}
+                        <MultiSelect
+                            placeholder="Search and select employees…"
+                            searchPlaceholder="Search employees…"
+                            emptyMessage="No matching employees."
+                            filter={false}
+                            loading={employeesQuery.isLoading}
+                            search={employeeSearch}
+                            onSearchChange={setEmployeeSearch}
+                            options={filteredEmployees.map(e => ({
+                                value: e.id,
+                                label: e.fullName ?? `${e.firstName} ${e.lastName}`,
+                                secondary: e.designation ?? e.department ?? undefined,
+                            }))}
+                            selected={recipients.map(r => ({ value: r.id, label: r.name }))}
+                            onChange={sel => setRecipients(sel.map(s => ({ id: s.value, name: s.label })))}
+                        />
                     </div>
 
                     {/* Teams (optional) */}
                     {(teamsQuery.data ?? []).length > 0 && (
                         <div className="space-y-1.5">
                             <Label className="text-xs font-semibold uppercase tracking-wide">Teams (optional)</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {(teamsQuery.data ?? []).map(team => (
-                                    <button
-                                        key={team.id}
-                                        type="button"
-                                        onClick={() => toggleTeam(team.id)}
-                                        className={cn(
-                                            'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
-                                            teamIds.includes(team.id)
-                                                ? 'border-primary bg-primary/10 text-primary'
-                                                : 'border-input text-muted-foreground hover:bg-muted',
-                                        )}
-                                    >
-                                        {teamIds.includes(team.id) && <Check className="mr-1 inline size-3" />}
-                                        {team.name}
-                                    </button>
-                                ))}
-                            </div>
+                            <MultiSelect
+                                placeholder="Select teams…"
+                                searchPlaceholder="Search teams…"
+                                emptyMessage="No teams."
+                                options={(teamsQuery.data ?? []).map(team => ({ value: team.id, label: team.name }))}
+                                selected={(teamsQuery.data ?? []).filter(team => teamIds.includes(team.id)).map(team => ({ value: team.id, label: team.name }))}
+                                onChange={sel => setTeamIds(sel.map(s => s.value))}
+                            />
                         </div>
                     )}
 
@@ -833,24 +775,14 @@ function GiveRecognitionDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                     {departments.length > 0 && (
                         <div className="space-y-1.5">
                             <Label className="text-xs font-semibold uppercase tracking-wide">Departments (optional)</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {departments.map(d => (
-                                    <button
-                                        key={d.id}
-                                        type="button"
-                                        onClick={() => toggleOrgUnit(d.id)}
-                                        className={cn(
-                                            'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors',
-                                            orgUnitIds.includes(d.id)
-                                                ? 'border-primary bg-primary/10 text-primary'
-                                                : 'border-input text-muted-foreground hover:bg-muted',
-                                        )}
-                                    >
-                                        {orgUnitIds.includes(d.id) && <Check className="mr-1 inline size-3" />}
-                                        {d.name}
-                                    </button>
-                                ))}
-                            </div>
+                            <MultiSelect
+                                placeholder="Select departments…"
+                                searchPlaceholder="Search departments…"
+                                emptyMessage="No departments."
+                                options={departments.map(d => ({ value: d.id, label: d.name }))}
+                                selected={departments.filter(d => orgUnitIds.includes(d.id)).map(d => ({ value: d.id, label: d.name }))}
+                                onChange={sel => setOrgUnitIds(sel.map(s => s.value))}
+                            />
                         </div>
                     )}
 

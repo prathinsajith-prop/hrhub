@@ -93,6 +93,7 @@
     "notifications": "Notifications",
     "training": "Training & Development",
     "loans": "Loans & Advances",
+    "engage": "Engage",
     "announcements": "Announcements",
     "recognition": "Recognition",
     "leaveAdjustments": "Adjustments"
@@ -1787,6 +1788,10 @@
       "completed": "Completed",
       "totalCost": "Total Cost"
     }
+  },
+  "engage": {
+    "title": "Engage",
+    "subtitle": "Company announcements and employee recognition in one place."
   },
   "announcements": {
     "title": "Announcements"

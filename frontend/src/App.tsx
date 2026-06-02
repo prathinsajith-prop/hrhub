@@ -241,11 +241,15 @@ export default function App() {
               <Route path="loans" element={<RoleRoute routeKey="loans"><LoansPage /></RoleRoute>} />
               <Route path="my/loans" element={<RoleRoute routeKey="my/loans"><MyLoansPage /></RoleRoute>} />
               <Route path="leave-adjustments" element={<RoleRoute routeKey="leave-adjustments"><LeaveAdjustmentsPage /></RoleRoute>} />
-              <Route path="announcements" element={<RoleRoute routeKey="announcements"><AnnouncementsPage /></RoleRoute>} />
-              <Route path="recognition" element={<RoleRoute routeKey="recognition"><RecognitionFeedPage /></RoleRoute>} />
-              <Route path="recognition/leaderboard" element={<RoleRoute routeKey="recognition/leaderboard"><RecognitionLeaderboardPage /></RoleRoute>} />
-              <Route path="recognition/admin" element={<RoleRoute routeKey="recognition/admin"><RecognitionAdminPage /></RoleRoute>} />
-              <Route path="recognition/:id" element={<RoleRoute routeKey="recognition/:id"><RecognitionDetailPage /></RoleRoute>} />
+              {/* Engage hub — Announcements + Recognition share a tab bar (EngageLayout); URLs unchanged. */}
+              <Route path="engage" element={<EngageIndexRedirect />} />
+              <Route element={<EngageLayout />}>
+                <Route path="announcements" element={<RoleRoute routeKey="announcements"><AnnouncementsPage /></RoleRoute>} />
+                <Route path="recognition" element={<RoleRoute routeKey="recognition"><RecognitionFeedPage /></RoleRoute>} />
+                <Route path="recognition/leaderboard" element={<RoleRoute routeKey="recognition/leaderboard"><RecognitionLeaderboardPage /></RoleRoute>} />
+                <Route path="recognition/admin" element={<RoleRoute routeKey="recognition/admin"><RecognitionAdminPage /></RoleRoute>} />
+                <Route path="recognition/:id" element={<RoleRoute routeKey="recognition/:id"><RecognitionDetailPage /></RoleRoute>} />
+              </Route>
             </Route>
             {/* Public onboarding upload - no auth, no AppLayout */}
             <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />

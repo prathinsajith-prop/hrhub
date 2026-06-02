@@ -20,7 +20,6 @@ import {
   UserMinusIcon,
   MessageSquareWarningIcon,
   Megaphone as MegaphoneIcon,
-  Trophy as TrophyIcon,
   GraduationCapIcon,
   HandCoinsIcon,
   CalendarPlusIcon,
@@ -102,8 +101,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     {
       label: t('nav.insights'),
       items: [
-        { title: t('nav.recognition', { defaultValue: 'Recognition' }), url: "/recognition", icon: TrophyIcon },
-        { title: t('nav.announcements', { defaultValue: 'Announcements' }), url: "/announcements", icon: MegaphoneIcon },
+        { title: t('nav.engage', { defaultValue: 'Engage' }), url: "/engage", icon: MegaphoneIcon, match: ["/announcements", "/recognition"] },
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
         { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },
@@ -183,7 +181,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroupLabel>
             <SidebarMenu>
               {group.items.map((item) => {
-                const isActive = location.pathname.startsWith(item.url)
+                // Some entries (e.g. Engage) front a hub whose tabs keep their
+                // own URLs; `match` lets the item stay highlighted on them.
+                const matchPaths = (item as { match?: string[] }).match
+                const isActive =
+                  location.pathname.startsWith(item.url) ||
+                  (matchPaths?.some((m) => location.pathname === m || location.pathname.startsWith(m + '/')) ?? false)
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton

@@ -136,6 +136,7 @@ export type RouteKey =
   | 'my/training'
   | 'loans'
   | 'my/loans'
+  | 'engage'
   | 'announcements'
   | 'recognition'
   | 'recognition/:id'
@@ -348,6 +349,7 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   complaints: ['super_admin', 'hr_manager'],
   training: ['super_admin', 'hr_manager'],
   loans: ['super_admin', 'hr_manager'],
+  engage: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   announcements: ['super_admin', 'hr_manager'],
   recognition: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'recognition/:id': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
@@ -489,6 +491,7 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/my/training': 'my/training',
     '/loans': 'loans',
     '/my/loans': 'my/loans',
+    '/engage': 'engage',
     '/announcements': 'announcements',
     '/recognition': 'recognition',
     '/leave-adjustments': 'leave-adjustments',

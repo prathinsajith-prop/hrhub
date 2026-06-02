@@ -39,6 +39,7 @@ export const ROUTES = {
     // Insights
     reports: '/reports',
     audit: '/audit',
+    engage: '/engage',
     announcements: '/announcements',
     recognition: '/recognition',
     loginHistory: '/my/login-history',
@@ -97,6 +98,7 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     travel: 'nav.travel',
     reports: 'nav.reports',
     audit: 'nav.auditLog',
+    engage: 'nav.engage',
     recognition: 'nav.recognition',
     'login-history': 'loginHistory.title',
     notifications: 'profile.notifications',

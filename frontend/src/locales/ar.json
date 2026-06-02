@@ -93,6 +93,7 @@
     "notifications": "الإشعارات",
     "training": "التدريب والتطوير",
     "loans": "القروض والسلف",
+    "engage": "التفاعل",
     "announcements": "الإعلانات",
     "recognition": "التقدير",
     "leaveAdjustments": "التعديلات"
@@ -1787,6 +1788,10 @@
       "completed": "المكتملة",
       "totalCost": "إجمالي التكلفة"
     }
+  },
+  "engage": {
+    "title": "التفاعل",
+    "subtitle": "إعلانات الشركة وتقدير الموظفين في مكان واحد."
   },
   "announcements": {
     "title": "الإعلانات"
