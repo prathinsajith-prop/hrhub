@@ -485,8 +485,10 @@ export function JobDetailPage() {
                   <span className="text-[11px] font-medium text-muted-foreground/70 mr-0.5">{t('recruitment.jobDetail.source', { defaultValue: 'Source' })}</span>
                   {SOURCE_FILTERS.map(sf => {
                     const count = sf.key === 'all' ? allCandidates.length : sourceCounts[sf.key]
-                    if (sf.key !== 'all' && count === 0) return null
                     const isActive = sourceFilter === sf.key
+                    // Hide a zero-count source pill — unless it's the active filter,
+                    // so the user can always toggle the current source back off.
+                    if (sf.key !== 'all' && count === 0 && !isActive) return null
                     return (
                       <button
                         key={sf.key}
@@ -523,7 +525,7 @@ export function JobDetailPage() {
                     action={(
                       <button
                         type="button"
-                        onClick={() => setStageFilter('all')}
+                        onClick={() => { setStageFilter('all'); setSourceFilter('all') }}
                         className="text-xs text-primary hover:underline"
                       >
                         {t('recruitment.jobDetail.showAll')}

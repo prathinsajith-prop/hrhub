@@ -60,6 +60,16 @@ export default async function announcementsRoutes(fastify: any): Promise<void> {
         const saveAsDraft = b.status === 'draft'
         const publishNow = !saveAsDraft && effectivePublishAt.getTime() <= Date.now()
 
+        // Reject a nonsensical expiry: it must be a valid date, after the publish
+        // time, and in the future — otherwise we'd publish + notify an announcement
+        // that's instantly expired and never viewable.
+        if (b.expireAt) {
+            const exp = new Date(b.expireAt)
+            if (Number.isNaN(exp.getTime()) || exp.getTime() <= effectivePublishAt.getTime() || exp.getTime() <= Date.now()) {
+                return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Expiry must be a valid date after the publish date and in the future' })
+            }
+        }
+
         let row = await createAnnouncement(request.user.tenantId, request.user.id, request.user.name, {
             title: String(b.title).trim(), body: b.body, category: b.category, priority: b.priority,
             pinned: b.pinned, requireAck: b.requireAck, attachments: b.attachments,

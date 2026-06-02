@@ -1,4 +1,4 @@
-import { and, desc, eq, sql, inArray, isNull, or, getTableColumns } from 'drizzle-orm'
+import { and, desc, eq, ne, sql, inArray, isNull, or, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import {
     recognitions,
@@ -771,14 +771,11 @@ export async function archiveCategory(tenantId: string, id: string) {
 }
 
 export async function seedDefaultCategories(tenantId: string) {
-    let created = 0
-    for (const def of DEFAULT_CATEGORIES) {
-        const [existing] = await db.select({ id: recognitionCategories.id })
-            .from(recognitionCategories)
-            .where(and(eq(recognitionCategories.tenantId, tenantId), eq(recognitionCategories.key, def.key)))
-            .limit(1)
-        if (existing) continue
-        await db.insert(recognitionCategories).values({
+    // Single conflict-tolerant bulk insert: race-safe against concurrent first
+    // reads (two lazy seeders no longer 23505 each other — the unique
+    // (tenantId, key) index just skips already-seeded rows).
+    const result = await db.insert(recognitionCategories)
+        .values(DEFAULT_CATEGORIES.map((def) => ({
             tenantId,
             key: def.key,
             label: def.label,
@@ -787,10 +784,10 @@ export async function seedDefaultCategories(tenantId: string) {
             color: def.color,
             isDefault: true,
             sortOrder: def.sortOrder,
-        })
-        created++
-    }
-    return { created, total: DEFAULT_CATEGORIES.length }
+        })))
+        .onConflictDoNothing({ target: [recognitionCategories.tenantId, recognitionCategories.key] })
+        .returning({ id: recognitionCategories.id })
+    return { created: result.length, total: DEFAULT_CATEGORIES.length }
 }
 
 // ── Badges ───────────────────────────────────────────────────────────────────
@@ -851,14 +848,9 @@ export async function archiveBadge(tenantId: string, id: string) {
 }
 
 export async function seedDefaultBadges(tenantId: string) {
-    let created = 0
-    for (const def of DEFAULT_BADGES) {
-        const [existing] = await db.select({ id: recognitionBadges.id })
-            .from(recognitionBadges)
-            .where(and(eq(recognitionBadges.tenantId, tenantId), eq(recognitionBadges.key, def.key)))
-            .limit(1)
-        if (existing) continue
-        await db.insert(recognitionBadges).values({
+    // Conflict-tolerant bulk insert — race-safe (see seedDefaultCategories).
+    const result = await db.insert(recognitionBadges)
+        .values(DEFAULT_BADGES.map((def) => ({
             tenantId,
             key: def.key,
             label: def.label,
@@ -869,10 +861,10 @@ export async function seedDefaultBadges(tenantId: string) {
             categoryKey: def.categoryKey,
             defaultPoints: def.defaultPoints,
             sortOrder: def.sortOrder,
-        })
-        created++
-    }
-    return { created, total: DEFAULT_BADGES.length }
+        })))
+        .onConflictDoNothing({ target: [recognitionBadges.tenantId, recognitionBadges.key] })
+        .returning({ id: recognitionBadges.id })
+    return { created: result.length, total: DEFAULT_BADGES.length }
 }
 
 // ── Points ───────────────────────────────────────────────────────────────────
@@ -1156,12 +1148,18 @@ export async function approveRecognition(
             approvedAt: new Date(),
         }
         if (step === 'hr') patch.publishedAt = new Date()
+        // Status guard prevents re-approving an already-published recognition
+        // (which would double-award points + re-notify). A manager step only
+        // applies to a pending row; an HR step to a pending or manager-approved row.
         const [row] = await tx.update(recognitions)
             .set(patch)
             .where(and(
                 eq(recognitions.id, id),
                 eq(recognitions.tenantId, tenantId),
                 isNull(recognitions.deletedAt),
+                step === 'manager'
+                    ? eq(recognitions.status, 'pending' as any)
+                    : inArray(recognitions.status, ['pending', 'approved'] as any),
             ))
             .returning()
         return row ?? null
@@ -1197,6 +1195,9 @@ export async function rejectRecognition(
                 eq(recognitions.id, id),
                 eq(recognitions.tenantId, tenantId),
                 isNull(recognitions.deletedAt),
+                // Never reject an already-published recognition — its points are
+                // already on recipients' ledgers and rejecting wouldn't reverse them.
+                ne(recognitions.status, 'published' as any),
             ))
             .returning()
         return row ?? null
@@ -1226,6 +1227,9 @@ export async function holdRecognition(
                 eq(recognitions.id, id),
                 eq(recognitions.tenantId, tenantId),
                 isNull(recognitions.deletedAt),
+                // Only an in-flight (pending) recognition can be put on hold;
+                // avoids an inconsistent (published, manager_review) pair.
+                eq(recognitions.status, 'pending' as any),
             ))
             .returning()
         return row ?? null

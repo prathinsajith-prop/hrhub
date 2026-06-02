@@ -110,7 +110,9 @@ export default async function recognitionRoutes(fastify: any): Promise<void> {
             })
             // Also notify the recipients' direct managers (excluding the giver).
             const managerIds = (await resolveManagersOfRecipients(request.user.tenantId, recipientEmployeeIds))
-                .filter((id) => id !== recognition.giverEmployeeId)
+                // Exclude the giver and anyone already notified as a recipient,
+                // so a manager who is also a recipient isn't double-notified.
+                .filter((id) => id !== recognition.giverEmployeeId && !recipientEmployeeIds.includes(id))
             if (managerIds.length) {
                 await notifyEmployeesBulk(request.user.tenantId, managerIds, {
                     type: 'info',
@@ -356,6 +358,11 @@ export default async function recognitionRoutes(fastify: any): Promise<void> {
         if (!isMod && existing.status !== 'draft') {
             return forbidden(reply, 'Only drafts can be published by the author')
         }
+        // Idempotency: never re-publish an already-published recognition — doing
+        // so would re-award points and re-fire notifications. Applies to everyone.
+        if (existing.status === 'published') {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Recognition is already published' })
+        }
         const row = await setStatus(request.user.tenantId, id, 'published', { workflowState: 'completed' })
         if (!row) return notFound(reply, 'Recognition not found')
         audit(request, 'publish', row.id, row.title)
@@ -374,6 +381,11 @@ export default async function recognitionRoutes(fastify: any): Promise<void> {
         const step: 'manager' | 'hr' = b.step === 'hr' ? 'hr' : (b.step === 'manager' ? 'manager' : (isHrRole(request.user.role) ? 'hr' : 'manager'))
         const existing = await getRecognition(request.user.tenantId, id, request.user.id)
         if (!existing) return notFound(reply, 'Recognition not found')
+        // Only an in-flight recognition can be approved — block re-approving a
+        // published/rejected one (which would double-award points + re-notify).
+        if (existing.status !== 'pending' && existing.status !== 'approved') {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Recognition is not awaiting approval' })
+        }
         // HR step requires HR role
         if (step === 'hr' && !isHrRole(request.user.role)) return forbidden(reply, 'HR step requires HR role')
         // Manager step requires the approver to actually be the direct manager

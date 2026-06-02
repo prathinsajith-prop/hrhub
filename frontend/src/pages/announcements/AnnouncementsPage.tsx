@@ -165,6 +165,20 @@ function AnnouncementRow({ a, onEdit }: { a: Announcement; onEdit: () => void })
     )
 }
 
+/**
+ * Convert a stored UTC ISO timestamp to a LOCAL `yyyy-MM-ddTHH:mm` string for the
+ * DateTimePicker (which interprets its value as local). Slicing the raw ISO would
+ * feed UTC wall-clock to a local-time picker, shifting the time by the UTC offset
+ * on every edit.
+ */
+function toLocalDateTimeInput(iso?: string | null): string {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function AnnouncementDialog({ announcement, open, onOpenChange }: { announcement: Announcement | null; open: boolean; onOpenChange: (o: boolean) => void }) {
     const isEdit = !!announcement
     const create = useCreateAnnouncement()
@@ -180,8 +194,8 @@ function AnnouncementDialog({ announcement, open, onOpenChange }: { announcement
         priority: (announcement?.priority ?? 'normal') as AnnouncementPriority,
         pinned: announcement?.pinned ?? false,
         requireAck: announcement?.requireAck ?? false,
-        publishAt: announcement?.publishAt?.slice(0, 16) ?? '',
-        expireAt: announcement?.expireAt?.slice(0, 16) ?? '',
+        publishAt: toLocalDateTimeInput(announcement?.publishAt),
+        expireAt: toLocalDateTimeInput(announcement?.expireAt),
     })
     const [everyone, setEveryone] = useState(initAud.some(a => a.kind === 'all'))
     const [rules, setRules] = useState<AudienceRule[]>(initAud.filter(a => a.kind !== 'all'))

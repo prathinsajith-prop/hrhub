@@ -232,6 +232,21 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                     referredByEmployeeId: employeeId,
                 }).returning()
 
+                // The pipeline pre-check permits re-referring a candidate whose
+                // prior application was rejected, but the partial-unique index on
+                // referrals(tenant, job, email) WHERE deleted_at IS NULL would block
+                // it (a rejection never soft-deletes the old referral). Soft-delete
+                // any stale live referral for this (tenant, job, email) first so the
+                // slot is free; same-tx so it stays race-safe.
+                await tx.update(referrals)
+                    .set({ deletedAt: new Date() })
+                    .where(and(
+                        eq(referrals.tenantId, request.user.tenantId),
+                        eq(referrals.jobId, jobId),
+                        eq(referrals.candidateEmail, candidateEmail),
+                        isNull(referrals.deletedAt),
+                    ))
+
                 const [referral] = await tx.insert(referrals).values({
                     tenantId: request.user.tenantId,
                     jobId,

@@ -40,6 +40,9 @@ export function ResumeUpload({
 }) {
     const inputRef = useRef<HTMLInputElement>(null)
     const inputId = useId()
+    // Bumped on every pick/replace/remove; an in-flight parse whose token is stale
+    // (file was replaced or removed before it resolved) skips all its side effects.
+    const reqRef = useRef(0)
     const [dragging, setDragging] = useState(false)
     const [parsing, setParsing] = useState(false)
     const [parsedNote, setParsedNote] = useState<string | null>(null)
@@ -48,15 +51,17 @@ export function ResumeUpload({
         if (!picked) return
         if (!ACCEPT_RE.test(picked.name)) return toast.error('Unsupported file', 'Upload a PDF, DOC, DOCX, TXT or RTF résumé.')
         if (picked.size > maxBytes) return toast.error('File too large', `Résumé must be under ${formatFileSize(maxBytes)}.`)
+        const token = ++reqRef.current
         onFile(picked)
         setParsedNote(null)
         if (!onParsed && !onPhoto) return
         setParsing(true)
         // Photo extraction runs alongside text parsing; it never blocks the form.
-        if (onPhoto) extractResumeImage(picked).then(onPhoto).catch(() => onPhoto(null))
-        if (!onParsed) { setParsing(false); return }
+        if (onPhoto) extractResumeImage(picked).then(p => { if (token === reqRef.current) onPhoto(p) }).catch(() => { if (token === reqRef.current) onPhoto(null) })
+        if (!onParsed) { if (token === reqRef.current) setParsing(false); return }
         try {
             const parsed = await parseResumeFile(picked)
+            if (token !== reqRef.current) return   // stale — file was replaced/removed
             onParsed(parsed, picked)
             const filled = ['name', 'email', 'phone'].filter(k => parsed[k as keyof ParsedResume])
             if (parsed.textLength === 0) {
@@ -68,9 +73,9 @@ export function ResumeUpload({
                 setParsedNote('Résumé attached. We couldn’t auto-detect fields — please fill them in.')
             }
         } catch {
-            setParsedNote('Résumé attached (couldn’t auto-read it — fill the form manually).')
+            if (token === reqRef.current) setParsedNote('Résumé attached (couldn’t auto-read it — fill the form manually).')
         } finally {
-            setParsing(false)
+            if (token === reqRef.current) setParsing(false)
         }
     }
 
@@ -98,7 +103,7 @@ export function ResumeUpload({
                         </span>
                         <span className="flex shrink-0 items-center gap-1">
                             <button type="button" onClick={() => inputRef.current?.click()} className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">Replace</button>
-                            <button type="button" onClick={() => { onFile(null); setParsedNote(null); onPhoto?.(null) }} aria-label="Remove résumé" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                            <button type="button" onClick={() => { reqRef.current++; onFile(null); setParsedNote(null); setParsing(false); onPhoto?.(null) }} aria-label="Remove résumé" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
                                 <X className="size-4" />
                             </button>
                         </span>

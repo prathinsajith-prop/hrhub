@@ -84,6 +84,30 @@ export async function updateAnnouncement(
         if (input.expireAt !== undefined) patch.expireAt = input.expireAt ? new Date(input.expireAt) : null
         if (audiences) patch.audienceType = audiences.some((a) => a.kind === 'all') || audiences.length === 0 ? 'all' : 'targeted'
 
+        // When publishAt is edited, re-derive status so the lifecycle stays consistent:
+        //  - a live/scheduled item pushed to a FUTURE time reverts to 'scheduled'
+        //    (and clears publishedAt) so the scheduler re-publishes it when due —
+        //    otherwise it would stay visible in the feed before its new time;
+        //  - moved to now/past it stays/returns to 'published';
+        //  - clearing the date on a scheduled item drops it back to 'draft' so it
+        //    isn't stranded forever (the sweep never matches a NULL publishAt).
+        if (input.publishAt !== undefined) {
+            const [current] = await tx.select({ status: announcements.status }).from(announcements)
+                .where(and(eq(announcements.id, id), eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt))).limit(1)
+            const cur = current?.status
+            const newAt = patch.publishAt as Date | null
+            if (cur === 'published' || cur === 'scheduled') {
+                if (!newAt) {
+                    patch.status = 'draft'
+                } else if (newAt.getTime() > Date.now()) {
+                    patch.status = 'scheduled'
+                    patch.publishedAt = null
+                } else {
+                    patch.status = 'published'
+                }
+            }
+        }
+
         const [row] = await tx.update(announcements)
             .set(patch)
             .where(and(eq(announcements.id, id), eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt)))
@@ -319,13 +343,24 @@ export async function acknowledge(tenantId: string, announcementId: string, empl
 
 /** Read/ack analytics for one announcement: targeted total + engagement counts. */
 export async function getReceiptStats(tenantId: string, announcementId: string) {
-    const targeted = (await resolveRecipientEmployeeIds(tenantId, announcementId)).length
-    const [agg] = await db.select({
-        viewed: sql<number>`COUNT(*) FILTER (WHERE ${announcementReceipts.viewedAt} IS NOT NULL)`,
-        read: sql<number>`COUNT(*) FILTER (WHERE ${announcementReceipts.readAt} IS NOT NULL)`,
-        acknowledged: sql<number>`COUNT(*) FILTER (WHERE ${announcementReceipts.acknowledgedAt} IS NOT NULL)`,
-    }).from(announcementReceipts)
-        .where(and(eq(announcementReceipts.tenantId, tenantId), eq(announcementReceipts.announcementId, announcementId)))
+    // Engagement counts must be drawn from the SAME population as `targeted`
+    // (the currently-resolved recipients). Counting all receipts would let
+    // read/ack exceed targeted (read% > 100%) once a reader is later archived
+    // or moves out of the audience.
+    const recipientIds = await resolveRecipientEmployeeIds(tenantId, announcementId)
+    const targeted = recipientIds.length
+    const [agg] = recipientIds.length === 0
+        ? [{ viewed: 0, read: 0, acknowledged: 0 }]
+        : await db.select({
+            viewed: sql<number>`COUNT(*) FILTER (WHERE ${announcementReceipts.viewedAt} IS NOT NULL)`,
+            read: sql<number>`COUNT(*) FILTER (WHERE ${announcementReceipts.readAt} IS NOT NULL)`,
+            acknowledged: sql<number>`COUNT(*) FILTER (WHERE ${announcementReceipts.acknowledgedAt} IS NOT NULL)`,
+        }).from(announcementReceipts)
+            .where(and(
+                eq(announcementReceipts.tenantId, tenantId),
+                eq(announcementReceipts.announcementId, announcementId),
+                inArray(announcementReceipts.employeeId, recipientIds),
+            ))
     const read = Number(agg?.read ?? 0)
     const acknowledged = Number(agg?.acknowledged ?? 0)
     const pct = (n: number) => (targeted > 0 ? Math.round((n / targeted) * 1000) / 10 : 0)

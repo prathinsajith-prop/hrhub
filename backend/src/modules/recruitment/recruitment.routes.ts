@@ -1261,14 +1261,20 @@ export default async function (fastify: any): Promise<void> {
         if (!allowedMime[mime]) return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: 'Only PDF or Word documents are accepted' })
 
         let application: Awaited<ReturnType<typeof createApplication>>
+        // Parse numeric fields explicitly so a genuine 0 (fresh graduate) is kept
+        // and non-numeric free text (e.g. "negotiable") becomes null rather than 0.
+        const expRaw = fields.experience?.trim()
+        const expNum = expRaw ? Number(expRaw) : NaN
+        const salRaw = fields.expectedSalary?.trim()
+        const salNum = salRaw ? Number(salRaw) : NaN
         try {
             application = await createApplication(tenant.id, jobId, {
                 name,
                 email,
                 phone: fields.phone?.trim() || null,
                 nationality: fields.nationality?.trim() || null,
-                experience: fields.experience ? Number(fields.experience) || null : null,
-                expectedSalary: fields.expectedSalary ? String(Number(fields.expectedSalary) || 0) : null,
+                experience: Number.isFinite(expNum) && Number.isInteger(expNum) && expNum >= 0 ? expNum : null,
+                expectedSalary: Number.isFinite(salNum) && salNum >= 0 ? salNum.toFixed(2) : null,
                 notes: fields.coverNote?.trim() || null,
                 source: 'careers',
                 stage: 'received',

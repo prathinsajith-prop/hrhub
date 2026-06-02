@@ -44,7 +44,7 @@ const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/
 const LINKEDIN_RE = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9_%-]+\/?/i
 const GITHUB_RE = /(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9_-]+\/?/i
 const URL_RE = /\bhttps?:\/\/[^\s)]+/i
-const EXPERIENCE_RE = /(\d{1,2})(?:\.\d)?\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)?/i
+const EXPERIENCE_RE = /(\d{1,2}(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)?/i
 
 /** Extract plain text from a résumé file. Returns '' if it can't (e.g. scanned image PDF). */
 export async function extractResumeText(file: File): Promise<string> {
@@ -223,7 +223,11 @@ export async function extractResumeImage(file: File): Promise<Blob | null> {
             const media = Object.keys(zip.files).filter(f => /^word\/media\/.+\.(png|jpe?g)$/i.test(f))
             const found: FoundImage[] = []
             for (const path of media.slice(0, 12)) {
-                const blob = await zip.files[path].async('blob')
+                // JSZip blobs have an empty MIME type, which would make the
+                // multipart upload arrive as application/octet-stream and get
+                // rejected server-side. Stamp the type from the file extension.
+                const type = /\.png$/i.test(path) ? 'image/png' : 'image/jpeg'
+                const blob = new Blob([await zip.files[path].async('arraybuffer')], { type })
                 const dims = await imageDimensions(blob)
                 if (dims) found.push({ blob, ...dims })
             }
