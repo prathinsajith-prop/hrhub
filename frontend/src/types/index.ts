@@ -192,7 +192,14 @@ export interface Job {
   status: JobStatus
   openings: number
   applications: number
-  postedDate: string
+  /**
+   * Backend returns the DB column name (`createdAt`). `postedDate` is kept as
+   * a legacy alias used in a few older components and tests — both refer to
+   * the same value; prefer `createdAt` going forward.
+   */
+  createdAt: string
+  updatedAt: string
+  postedDate?: string
   closingDate: string
   minSalary: number
   maxSalary: number

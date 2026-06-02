@@ -6,7 +6,7 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, MapPin, Building2, CalendarDays, Banknote, Users, CheckCircle2, Check, Sparkles, GraduationCap, Clock, Hash, Briefcase, Info } from 'lucide-react'
+import { ArrowLeft, MapPin, Building2, CalendarDays, Banknote, Users, CheckCircle2, Sparkles, GraduationCap, Clock, Hash, Briefcase, Info } from 'lucide-react'
 import { usePublicJob, useApplyToJob, type ApplyInput } from '@/hooks/usePublicCareers'
 import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -110,48 +110,57 @@ export function CareersJobPage() {
                         {job.requirements?.length > 0 && (
                             <section className="mt-7">
                                 <SectionTitle>{t('careers.requirements')}</SectionTitle>
-                                <ul className="mt-3 space-y-2.5">
+                                {/* Line design (matches the section-title accent bar) —
+                                    cleaner than a checkmark list for free-form requirements. */}
+                                <ul className="mt-3 space-y-3">
                                     {job.requirements.map((r, i) => (
-                                        <li key={`${i}-${r}`} className="flex gap-2.5 text-[15px] leading-relaxed text-foreground/80">
-                                            <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                                                <Check className="size-3" strokeWidth={3} />
-                                            </span>
-                                            {r}
+                                        <li key={`${i}-${r}`} className="flex gap-3 text-[15px] leading-relaxed text-foreground/80">
+                                            <span aria-hidden className="mt-[7px] h-4 w-1 shrink-0 rounded-full bg-primary/50" />
+                                            <span>{r}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </section>
                         )}
 
-                        {/* Skills — tag chips */}
-                        {job.skills?.length > 0 && (
-                            <section className="mt-7">
-                                <SectionTitle>
-                                    <Sparkles className="inline size-3.5 text-sky-500 ltr:mr-1.5 rtl:ml-1.5 align-[-1px]" />
-                                    {t('careers.skills', { defaultValue: 'Skills' })}
-                                </SectionTitle>
+                        {/* Skills — always rendered so the field is visible
+                            even when the job hasn't listed any yet. */}
+                        <section className="mt-7">
+                            <SectionTitle>
+                                <Sparkles className="inline size-3.5 text-sky-500 ltr:mr-1.5 rtl:ml-1.5 align-[-1px]" />
+                                {t('careers.skills', { defaultValue: 'Skills' })}
+                            </SectionTitle>
+                            {(job.skills?.length ?? 0) > 0 ? (
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                     {job.skills.map((s: string, i: number) => (
                                         <TagChip key={`${i}-${s}`} tone="sky" className="text-[13px] px-3 py-1">{s}</TagChip>
                                     ))}
                                 </div>
-                            </section>
-                        )}
+                            ) : (
+                                <p className="mt-3 text-sm text-muted-foreground italic">
+                                    {t('careers.noSkillsListed', { defaultValue: 'Specific skills not listed — share yours when you apply.' })}
+                                </p>
+                            )}
+                        </section>
 
-                        {/* Qualifications — tag chips */}
-                        {job.qualifications?.length > 0 && (
-                            <section className="mt-7">
-                                <SectionTitle>
-                                    <GraduationCap className="inline size-3.5 text-emerald-500 ltr:mr-1.5 rtl:ml-1.5 align-[-1px]" />
-                                    {t('careers.qualifications', { defaultValue: 'Qualifications' })}
-                                </SectionTitle>
+                        {/* Qualifications — always rendered too */}
+                        <section className="mt-7">
+                            <SectionTitle>
+                                <GraduationCap className="inline size-3.5 text-emerald-500 ltr:mr-1.5 rtl:ml-1.5 align-[-1px]" />
+                                {t('careers.qualifications', { defaultValue: 'Qualifications' })}
+                            </SectionTitle>
+                            {(job.qualifications?.length ?? 0) > 0 ? (
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                     {job.qualifications.map((q: string, i: number) => (
                                         <TagChip key={`${i}-${q}`} tone="emerald" className="text-[13px] px-3 py-1">{q}</TagChip>
                                     ))}
                                 </div>
-                            </section>
-                        )}
+                            ) : (
+                                <p className="mt-3 text-sm text-muted-foreground italic">
+                                    {t('careers.noQualificationsListed', { defaultValue: 'Specific qualifications not listed — apply and we\'ll discuss requirements.' })}
+                                </p>
+                            )}
+                        </section>
 
                         {/* Friendly fallback so the article never looks empty */}
                         {!hasBodyContent && (
@@ -168,11 +177,13 @@ export function CareersJobPage() {
                     <aside className="animate-fade-in space-y-3" style={{ animationDelay: '60ms' }}>
                         <JobSummaryCard
                             salary={salary}
+                            type={job.type}
                             openings={job.openings}
                             closingDate={job.closingDate}
                             workplaceType={job.workplaceType}
                             department={job.department}
                             location={job.location}
+                            industry={job.industry}
                             jobNo={job.jobNo}
                             t={t}
                         />
@@ -193,14 +204,16 @@ export function CareersJobPage() {
  * apply form.
  */
 function JobSummaryCard({
-    salary, openings, closingDate, workplaceType, department, location, jobNo, t,
+    salary, type, openings, closingDate, workplaceType, department, location, industry, jobNo, t,
 }: {
     salary: string
+    type: string
     openings: number
     closingDate: string | null
     workplaceType: string | null
     department: string | null
     location: string | null
+    industry: string | null
     jobNo: string | null
     t: ReturnType<typeof useTranslation>['t']
 }) {
@@ -215,6 +228,10 @@ function JobSummaryCard({
                 </div>
             )}
             <dl className={`grid grid-cols-1 gap-2.5 text-sm ${salary ? 'pt-3' : ''}`}>
+                {/* Employment type — labeled row so it's not just the headline badge */}
+                <SummaryRow icon={<Briefcase className="size-3.5" />} label={t('careers.typeLabel', { defaultValue: 'Employment type' })}>
+                    {t(`careers.type.${type}`, { defaultValue: type })}
+                </SummaryRow>
                 {workplaceType && (
                     <SummaryRow icon={<Building2 className="size-3.5" />} label={t('careers.workplaceLabel', { defaultValue: 'Workplace' })}>
                         {t(`careers.workplace.${workplaceType}`, { defaultValue: workplaceType })}
@@ -223,6 +240,11 @@ function JobSummaryCard({
                 {department && (
                     <SummaryRow icon={<Briefcase className="size-3.5" />} label={t('careers.departmentLabel', { defaultValue: 'Department' })}>
                         {department}
+                    </SummaryRow>
+                )}
+                {industry && (
+                    <SummaryRow icon={<Building2 className="size-3.5" />} label={t('careers.industryLabel', { defaultValue: 'Industry' })}>
+                        {industry}
                     </SummaryRow>
                 )}
                 {location && (

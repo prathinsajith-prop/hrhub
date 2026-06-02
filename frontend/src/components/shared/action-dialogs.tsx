@@ -187,6 +187,68 @@ export function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { bran
     }, [])
 }
 
+// ─── Job status pill toggle (shared by New + Edit Job dialogs) ──────────────
+// Each status gets its own colour — light tinted background while idle, the
+// stronger version of the same hue when selected, with a faint ring around
+// the active pill so the choice is unambiguous on either theme.
+const JOB_STATUS_PILL: Record<string, { idle: string; active: string; ring: string }> = {
+    draft: {
+        idle: 'text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-slate-800/60',
+        active: 'bg-slate-700 text-white shadow-sm dark:bg-slate-200 dark:text-slate-900',
+        ring: 'ring-slate-700/20 dark:ring-slate-200/20',
+    },
+    open: {
+        idle: 'text-emerald-700 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-950/60',
+        active: 'bg-emerald-600 text-white shadow-sm dark:bg-emerald-500 dark:text-white',
+        ring: 'ring-emerald-600/30 dark:ring-emerald-500/30',
+    },
+    closed: {
+        idle: 'text-rose-700 hover:bg-rose-100/70 dark:text-rose-300 dark:hover:bg-rose-950/60',
+        active: 'bg-rose-600 text-white shadow-sm dark:bg-rose-500 dark:text-white',
+        ring: 'ring-rose-600/30 dark:ring-rose-500/30',
+    },
+    on_hold: {
+        idle: 'text-amber-700 hover:bg-amber-100/70 dark:text-amber-300 dark:hover:bg-amber-950/60',
+        active: 'bg-amber-500 text-white shadow-sm dark:bg-amber-400 dark:text-amber-950',
+        ring: 'ring-amber-500/30 dark:ring-amber-400/30',
+    },
+}
+
+function StatusPills({
+    value,
+    onChange,
+    options,
+}: {
+    value: string
+    onChange: (v: string) => void
+    options: Array<{ value: string; label: string }>
+}) {
+    return (
+        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/30 p-0.5 mr-8">
+            {options.map((o) => {
+                const palette = JOB_STATUS_PILL[o.value] ?? JOB_STATUS_PILL.draft
+                const isActive = value === o.value
+                return (
+                    <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => onChange(o.value)}
+                        aria-pressed={isActive}
+                        className={cn(
+                            'px-3 py-1 rounded-full text-xs font-medium transition-all',
+                            isActive
+                                ? cn(palette.active, 'ring-2', palette.ring)
+                                : palette.idle,
+                        )}
+                    >
+                        {o.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
 export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
     const [title, setTitle] = useState('')
@@ -282,22 +344,19 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             {/* `full` = max-w-6xl (~1152px). The form is dense (left meta column +
                 rich-text editor + chip lists) so the extra width keeps the rich
                 text editor readable without crowding the metadata column. */}
-            <DialogContent size="full">
+            {/* Custom width — `full` (max-w-6xl, 1152px) + override to max-w-7xl
+                (1280px) so the metadata column + rich-text editor + chip lists
+                all sit comfortably without feeling cramped. Full-screen would
+                lose the "edit in context" feel — wider is better here. */}
+            <DialogContent size="full" className="lg:max-w-7xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Post New Job</DialogTitle>
-                        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5 mr-8">
-                            <button
-                                type="button"
-                                onClick={() => setStatus('open')}
-                                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === 'open' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                            >Open</button>
-                            <button
-                                type="button"
-                                onClick={() => setStatus('draft')}
-                                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === 'draft' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                            >Draft</button>
-                        </div>
+                        <StatusPills
+                            value={status}
+                            onChange={(v) => setStatus(v as 'open' | 'draft')}
+                            options={[{ value: 'open', label: 'Open' }, { value: 'draft', label: 'Draft' }]}
+                        />
                     </div>
                 </DialogHeader>
 
@@ -2239,20 +2298,19 @@ export function EditJobDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             {/* `full` = max-w-6xl (~1152px). Matches NewJobDialog so the layout
                 feels identical when editing vs creating. */}
-            <DialogContent size="full">
+            {/* Custom width — `full` (max-w-6xl, 1152px) + override to max-w-7xl
+                (1280px) so the metadata column + rich-text editor + chip lists
+                all sit comfortably without feeling cramped. Full-screen would
+                lose the "edit in context" feel — wider is better here. */}
+            <DialogContent size="full" className="lg:max-w-7xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Edit Job</DialogTitle>
-                        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5 mr-8">
-                            {JOB_STATUS_OPTIONS.map((o: SelectOption) => (
-                                <button
-                                    key={o.value}
-                                    type="button"
-                                    onClick={() => setStatus(o.value)}
-                                    className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === o.value ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                                >{o.label}</button>
-                            ))}
-                        </div>
+                        <StatusPills
+                            value={status}
+                            onChange={setStatus}
+                            options={JOB_STATUS_OPTIONS}
+                        />
                     </div>
                 </DialogHeader>
 

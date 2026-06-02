@@ -1,13 +1,13 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { RichTextDisplay } from '@/components/ui/rich-text-display'
 import {
   ArrowLeft, Edit2, MapPin, Briefcase, Users,
-  Download, Eye, FileText, Star, CheckCircle2, XCircle, AlertCircle,
-  ChevronRight, Loader2, GraduationCap, Sparkles,
+  Download, Eye, Star, CheckCircle2, XCircle, AlertCircle,
+  GraduationCap, Sparkles, Hash, Building2, Clock,
 } from 'lucide-react'
-import { JobTypeBadge, WorkplaceBadge, TagChip } from '@/components/shared/JobBadges'
+import { JobTypeBadge, WorkplaceBadge, TagChip, formatPostedAgo } from '@/components/shared/JobBadges'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,7 +17,8 @@ import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useJob, useApplications, useRecruitmentStages } from '@/hooks/useRecruitment'
-import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
+import { DataTable } from '@/components/ui/data-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { EditJobDialog } from '@/components/shared/action-dialogs'
 import { formatCurrency, formatDate, getInitials, cn } from '@/lib/utils'
 import { labelFor } from '@/lib/enums'
@@ -38,75 +39,16 @@ const JOB_STATUS_STYLE: Record<string, string> = {
   draft:   'bg-muted text-muted-foreground border-border',
 }
 
-function CandidateRow({ c, stage, onView }: { c: Candidate; stage: RecruitmentStage | undefined; onView: (id: string) => void }) {
-  const { t } = useTranslation()
-  const color = resolveStageColor(stage?.colorKey)
-
+/**
+ * Label + value row used by the "Job overview" card on the detail page.
+ * Keeps employment-type / workplace / industry / ref visually consistent
+ * regardless of which fields are populated.
+ */
+function OverviewRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4 rounded-lg hover:bg-muted/40 transition-colors group">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Avatar className="size-9 shrink-0 border border-border/60">
-          {c.avatar && <img src={c.avatar} alt={c.name} className="object-cover" />}
-          <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-            {getInitials(c.name)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
-            <CandidateSourceBadge source={c.source} referredByName={c.referredByName} className="shrink-0" />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap mt-0.5">
-            <span className="text-[11px] text-muted-foreground">{c.nationality}</span>
-            {c.experience > 0 && (
-              <span className="text-[11px] text-muted-foreground">{t('recruitment.jobDetail.experienceYears', { count: c.experience })}</span>
-            )}
-            {c.expectedSalary != null && (
-              <span className="text-[11px] text-muted-foreground">
-                {t('recruitment.jobDetail.expectedSalary', { salary: formatCurrency(c.expectedSalary) })}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-        <Badge variant="outline" className={cn('text-[10px] px-2 py-0.5 shrink-0', color.badgeClass)}>
-          {stage?.label ?? c.stage}
-        </Badge>
-        {c.score > 0 && (
-          <div className="flex items-center gap-0.5 text-[11px] text-amber-600 shrink-0">
-            <Star className="size-3 fill-amber-400 text-amber-400" />
-            <span className="font-medium">{c.score}</span>
-          </div>
-        )}
-        <span className="text-[11px] text-muted-foreground shrink-0">{formatDate(c.appliedDate)}</span>
-      </div>
-
-      <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-        {c.resumeUrl && (
-          <a
-            href={c.resumeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            download
-            onClick={e => e.stopPropagation()}
-          >
-            <Button size="icon-sm" variant="ghost" aria-label={t('recruitment.jobDetail.downloadResume')}>
-              <Download className="size-3.5" />
-            </Button>
-          </a>
-        )}
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label={t('recruitment.jobDetail.viewCandidate')}
-          onClick={() => onView(c.id)}
-        >
-          <Eye className="size-3.5" />
-        </Button>
-        <ChevronRight className="size-4 text-muted-foreground/40" />
-      </div>
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-right">{children}</dd>
     </div>
   )
 }
@@ -157,8 +99,73 @@ export function JobDetailPage() {
     [allCandidates, stageFilter, sourceFilter],
   )
 
-  const { visibleCount, setVisibleCount, sentinelRef } = useInfiniteScroll(candidates.length)
-  useEffect(() => { setVisibleCount(20) }, [stageFilter, sourceFilter, setVisibleCount])
+  const columns = useMemo<ColumnDef<Candidate>[]>(() => [
+    {
+      id: 'candidate',
+      header: t('recruitment.jobDetail.candidates'),
+      cell: ({ row }) => {
+        const c = row.original
+        return (
+          <div className="flex items-center gap-3 min-w-0">
+            <Avatar className="size-9 shrink-0 border border-border/60">
+              {c.avatar && <img src={c.avatar} alt={c.name} className="object-cover" />}
+              <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">{getInitials(c.name)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{c.name}</p>
+                <CandidateSourceBadge source={c.source} referredByName={c.referredByName} className="shrink-0" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                <span className="text-[11px] text-muted-foreground">{c.nationality}</span>
+                {c.experience > 0 && <span className="text-[11px] text-muted-foreground">{t('recruitment.jobDetail.experienceYears', { count: c.experience })}</span>}
+                {c.expectedSalary != null && <span className="text-[11px] text-muted-foreground">{t('recruitment.jobDetail.expectedSalary', { salary: formatCurrency(c.expectedSalary) })}</span>}
+              </div>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'stage',
+      header: t('common.status', { defaultValue: 'Status' }),
+      cell: ({ row }) => {
+        const c = row.original
+        const stage = stageByKey(allStages, c.stage)
+        const color = resolveStageColor(stage?.colorKey)
+        return <Badge variant="outline" className={cn('text-[10px] px-2 py-0.5', color.badgeClass)}>{stage?.label ?? c.stage}</Badge>
+      },
+    },
+    {
+      id: 'score',
+      header: t('recruitment.jobDetail.score', { defaultValue: 'Score' }),
+      cell: ({ row }) => row.original.score > 0
+        ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span className="font-medium">{row.original.score}</span></div>
+        : <span className="text-[11px] text-muted-foreground">—</span>,
+    },
+    {
+      id: 'applied',
+      header: t('recruitment.jobDetail.applied', { defaultValue: 'Applied' }),
+      cell: ({ row }) => <span className="text-[11px] text-muted-foreground whitespace-nowrap">{formatDate(row.original.appliedDate)}</span>,
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => {
+        const c = row.original
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {c.resumeUrl && (
+              <a href={c.resumeUrl} target="_blank" rel="noopener noreferrer" download onClick={e => e.stopPropagation()}>
+                <Button size="icon-sm" variant="ghost" aria-label={t('recruitment.jobDetail.downloadResume')}><Download className="size-3.5" /></Button>
+              </a>
+            )}
+            <Button size="icon-sm" variant="ghost" aria-label={t('recruitment.jobDetail.viewCandidate')} onClick={e => { e.stopPropagation(); navigate(`/recruitment/candidates/${c.id}`) }}><Eye className="size-3.5" /></Button>
+          </div>
+        )
+      },
+    },
+  ], [t, allStages, navigate])
 
   if (jobLoading) {
     return (
@@ -207,6 +214,12 @@ export function JobDetailPage() {
           <CardContent className="p-5">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1 min-w-0">
+                {/* Ref number above the title — HR scans by JOB-#### a lot. */}
+                {job.jobNo && (
+                  <div className="mb-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    <Hash className="size-3 opacity-70" />{job.jobNo}
+                  </div>
+                )}
                 <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
                   <h1 className="text-xl font-semibold text-foreground leading-tight">{job.title}</h1>
                   <Badge variant="outline" className={cn('text-xs capitalize', statusStyle)}>
@@ -226,9 +239,32 @@ export function JobDetailPage() {
                       {job.location}
                     </span>
                   )}
+                  {job.industry && (
+                    <span className="flex items-center gap-1.5">
+                      <Building2 className="size-3.5" />
+                      {job.industry}
+                    </span>
+                  )}
                   <JobTypeBadge type={job.type} size="xs" variant="bordered" />
                   {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="xs" variant="bordered" />}
                 </div>
+                {/* Posted / last-updated row */}
+                {(job.createdAt || job.updatedAt) && (
+                  <div className="mt-2 flex items-center gap-3 flex-wrap text-[11px] text-muted-foreground/80">
+                    {job.createdAt && (
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="size-3 opacity-70" />
+                        Posted {formatPostedAgo(job.createdAt)}
+                      </span>
+                    )}
+                    {job.updatedAt && job.updatedAt !== job.createdAt && (
+                      <span className="inline-flex items-center gap-1">
+                        <Edit2 className="size-3 opacity-70" />
+                        Updated {formatPostedAgo(job.updatedAt)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <Button
                 size="sm"
@@ -308,51 +344,87 @@ export function JobDetailPage() {
                 </CardContent>
               </Card>
             )}
-            {job.skills && job.skills.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-sky-500" />
-                    {t('recruitment.jobDetail.skills', { defaultValue: 'Skills' })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
+            {/* Job overview — always visible so HR can see employment type,
+                workplace, openings etc. even when the description is empty. */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-foreground">{t('recruitment.jobDetail.overview', { defaultValue: 'Job overview' })}</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <dl className="space-y-2.5 text-sm">
+                  <OverviewRow label={t('recruitment.jobDetail.employmentType', { defaultValue: 'Employment type' })}>
+                    <JobTypeBadge type={job.type} size="xs" variant="bordered" />
+                  </OverviewRow>
+                  <OverviewRow label={t('recruitment.jobDetail.workplaceType', { defaultValue: 'Workplace' })}>
+                    {job.workplaceType
+                      ? <WorkplaceBadge workplace={job.workplaceType} size="xs" variant="bordered" />
+                      : <span className="text-xs text-muted-foreground">—</span>}
+                  </OverviewRow>
+                  {job.industry && (
+                    <OverviewRow label={t('recruitment.jobDetail.industry', { defaultValue: 'Industry' })}>
+                      <span className="text-foreground/90">{job.industry}</span>
+                    </OverviewRow>
+                  )}
+                  {job.jobNo && (
+                    <OverviewRow label={t('recruitment.jobDetail.ref', { defaultValue: 'Ref' })}>
+                      <span className="font-mono text-xs text-muted-foreground">{job.jobNo}</span>
+                    </OverviewRow>
+                  )}
+                </dl>
+              </CardContent>
+            </Card>
+
+            {/* Skills — always visible with empty state */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-sky-500" />
+                  {t('recruitment.jobDetail.skills', { defaultValue: 'Skills' })}
+                  {(job.skills?.length ?? 0) > 0 && (
+                    <span className="text-[10px] font-normal text-muted-foreground ml-auto">
+                      {job.skills?.length}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                {(job.skills?.length ?? 0) > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {job.skills.map((s, i) => (
                       <TagChip key={`${i}-${s}`} tone="sky">{s}</TagChip>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-            {job.qualifications && job.qualifications.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                    <GraduationCap className="size-3.5 text-emerald-500" />
-                    {t('recruitment.jobDetail.qualifications', { defaultValue: 'Qualifications' })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">{t('recruitment.jobDetail.noSkills', { defaultValue: 'No skills added — use Edit Job to add.' })}</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Qualifications — always visible with empty state */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <GraduationCap className="size-3.5 text-emerald-500" />
+                  {t('recruitment.jobDetail.qualifications', { defaultValue: 'Qualifications' })}
+                  {(job.qualifications?.length ?? 0) > 0 && (
+                    <span className="text-[10px] font-normal text-muted-foreground ml-auto">
+                      {job.qualifications?.length}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                {(job.qualifications?.length ?? 0) > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {job.qualifications.map((q, i) => (
                       <TagChip key={`${i}-${q}`} tone="emerald">{q}</TagChip>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-            {!job.description && (!job.requirements || job.requirements.length === 0) && (!job.skills || job.skills.length === 0) && (!job.qualifications || job.qualifications.length === 0) && (
-              <Card>
-                <CardContent className="py-10 text-center">
-                  <FileText className="size-8 text-muted-foreground/20 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">{t('recruitment.jobDetail.noDescription')}</p>
-                  <Button size="sm" variant="outline" className="mt-3" onClick={() => setEditOpen(true)}>
-                    {t('recruitment.jobDetail.addDetails')}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">{t('recruitment.jobDetail.noQualifications', { defaultValue: 'No qualifications added — use Edit Job to add.' })}</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           <div className="lg:col-span-2">
@@ -459,23 +531,15 @@ export function JobDetailPage() {
                     )}
                   />
                 ) : (
-                  <>
-                    <div className="divide-y divide-border/40">
-                      {candidates.slice(0, visibleCount).map(c => (
-                        <CandidateRow
-                          key={c.id}
-                          c={c}
-                          stage={stageByKey(allStages, c.stage)}
-                          onView={cid => navigate(`/recruitment/candidates/${cid}`)}
-                        />
-                      ))}
-                    </div>
-                    {candidates.length > visibleCount && (
-                      <div ref={sentinelRef} className="py-3 flex justify-center">
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                      </div>
-                    )}
-                  </>
+                  <div className="p-3">
+                    <DataTable
+                      columns={columns}
+                      data={candidates}
+                      pageSize={10}
+                      getRowId={(c) => c.id}
+                      onRowClick={(c) => navigate(`/recruitment/candidates/${c.id}`)}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>

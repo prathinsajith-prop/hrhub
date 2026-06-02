@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { MapPin, Building2, Briefcase, ArrowRight, Banknote, Loader2, Search, X, CalendarClock, Users } from 'lucide-react'
+import { MapPin, Building2, Briefcase, ArrowRight, Banknote, Loader2, Search, X, CalendarClock, Users, Hash } from 'lucide-react'
 import { usePublicJobs, usePublicJobFacets, type JobFilters } from '@/hooks/usePublicCareers'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -200,17 +200,24 @@ function JobCard({
             to={href}
             className="card-hover group flex h-full flex-col rounded-2xl border border-border/70 bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-            {/* Header — badges + posted-ago */}
+            {/* Header — badges + ref/posted */}
             <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
                     <JobTypeBadge type={job.type} size="sm" />
                     {job.workplaceType && <WorkplaceBadge workplace={job.workplaceType} size="sm" />}
                 </div>
-                {postedAgo && (
-                    <span className="text-[11px] font-medium text-muted-foreground/80 tabular-figures whitespace-nowrap pt-0.5">
-                        {postedAgo}
-                    </span>
-                )}
+                <div className="flex flex-col items-end gap-0.5 pt-0.5 shrink-0">
+                    {postedAgo && (
+                        <span className="text-[11px] font-medium text-muted-foreground/80 tabular-figures whitespace-nowrap">
+                            {postedAgo}
+                        </span>
+                    )}
+                    {job.jobNo && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/60 tabular-figures whitespace-nowrap">
+                            <Hash className="size-2.5 opacity-70" />{job.jobNo}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Title */}
@@ -230,6 +237,12 @@ function JobCard({
                     <span className="flex items-center gap-1.5">
                         <MapPin className="size-3.5 shrink-0 opacity-70" />
                         <span className="truncate">{job.location}</span>
+                    </span>
+                )}
+                {job.industry && (
+                    <span className="flex items-center gap-1.5">
+                        <Briefcase className="size-3.5 shrink-0 opacity-70" />
+                        <span className="truncate">{job.industry}</span>
                     </span>
                 )}
                 {salary && (
