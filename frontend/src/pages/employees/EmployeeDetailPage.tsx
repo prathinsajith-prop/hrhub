@@ -110,6 +110,11 @@ interface AttendanceRecord {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Visa types selectable in the inline visa-edit form. Hoisted to a module-scope
+// Set so the Object.entries loop over VISA_TYPE_LABELS does an O(1) membership
+// check instead of rebuilding + scanning an array on every iteration.
+const VISA_FORM_TYPES = new Set(['employment', 'investor', 'dependent', 'mission'])
+
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
   active: 'success', onboarding: 'info',
   suspended: 'destructive', terminated: 'secondary', visa_expired: 'destructive',

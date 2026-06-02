@@ -187,6 +187,7 @@ function ExpiryUrgencyCard({ rows, loading }: { rows: DocExpiryRow[]; loading: b
             .map((k) => ({ key: k, name: URGENCY_TONE[k].label, value: buckets[k], color: URGENCY_TONE[k].color }))
     }, [rows])
     const total = data.reduce((s, d) => s + d.value, 0)
+    const positiveData = data.filter((d) => d.value > 0)
     if (loading) return <ChartSkeleton height={200} />
     if (total === 0) {
         return (
@@ -200,8 +201,8 @@ function ExpiryUrgencyCard({ rows, loading }: { rows: DocExpiryRow[]; loading: b
         <div className="space-y-4">
             <ResponsiveContainer width="100%" height={140}>
                 <PieChart>
-                    <Pie data={data.filter((d) => d.value > 0)} cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value">
-                        {data.filter((d) => d.value > 0).map((d, i) => <Cell key={i} fill={d.color} />)}
+                    <Pie data={positiveData} cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value">
+                        {positiveData.map((d, i) => <Cell key={i} fill={d.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: unknown, name: unknown) => [Number(v ?? 0), String(name ?? '')]} />
                 </PieChart>

@@ -143,6 +143,11 @@ function ApiDocsTab({
     const authSnippet = `curl "${appUrl}" \\
   -H "X-API-Secret: <your-secret>"`
 
+    // Scopes the app does NOT have — computed once (with a Set for O(1) membership)
+    // instead of re-filtering Object.keys(SCOPE_ENDPOINTS) for both the guard and the map.
+    const grantedScopes = new Set(app.scopes)
+    const ungrantedScopes = Object.keys(SCOPE_ENDPOINTS).filter(s => !grantedScopes.has(s))
+
     return (
         <div className="space-y-5">
             {/* Quick start */}
@@ -256,11 +261,11 @@ function ApiDocsTab({
                         )
                     })}
                     {/* Scopes the app does NOT have */}
-                    {Object.keys(SCOPE_ENDPOINTS).filter(s => !app.scopes.includes(s)).length > 0 && (
+                    {ungrantedScopes.length > 0 && (
                         <div className="pt-2 border-t border-border">
                             <p className="text-xs text-muted-foreground mb-2 font-medium">Not granted (returning 403)</p>
                             <div className="flex flex-wrap gap-1.5">
-                                {Object.keys(SCOPE_ENDPOINTS).filter(s => !app.scopes.includes(s)).map(s => (
+                                {ungrantedScopes.map(s => (
                                     <Badge key={s} variant="outline" className="text-[10px] font-mono text-muted-foreground opacity-60 line-through">{s}</Badge>
                                 ))}
                             </div>

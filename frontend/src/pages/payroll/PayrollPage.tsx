@@ -392,8 +392,11 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   // Order mirrors Add/Edit Employee Step 3 + Payroll Summary so HR sees the
   // same shape everywhere.
   const breakdown = (ps.earningsBreakdown ?? [])
-    .map((b) => ({ ...b, amount: Number(b.amount) }))
-    .filter((b) => b.amount > 0)
+    .reduce<Array<{ componentId: string; category: string; name: string; amount: number }>>((acc, b) => {
+      const amount = Number(b.amount)
+      if (amount > 0) acc.push({ ...b, amount })
+      return acc
+    }, [])
     .sort((a, b) => {
       const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
       const ra = rank[a.category] ?? 99

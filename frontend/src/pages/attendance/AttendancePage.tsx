@@ -51,6 +51,11 @@ import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
 import { exportAttendance } from '@/lib/export'
 import { cn } from '@/lib/utils'
 
+// Leave-type codes that roll up into the "leave" KPI bucket. Hoisted to a
+// module-scope Set so the per-cell loop does an O(1) lookup instead of
+// rebuilding + linearly scanning an array on every iteration.
+const LEAVE_CODES = new Set(['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'])
+
 const ATTENDANCE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
     { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: ATTENDANCE_STATUS_OPTIONS },
@@ -1180,7 +1185,7 @@ function EmployeeMonthAttendanceDialog({
             if (c.code === 'P' || c.code === 'IP') acc.present++
             else if (c.code === 'P-late' || c.code === 'P-short') acc.late++
             else if (c.code === 'A' || c.code === 'INC') acc.absent++
-            else if (['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'].includes(c.code)) acc.leave++
+            else if (LEAVE_CODES.has(c.code)) acc.leave++
             else if (c.code === 'WFH') acc.wfh++
             else if (c.code === 'H') acc.holiday++
             else if (c.code === 'WO') acc.weekOff++

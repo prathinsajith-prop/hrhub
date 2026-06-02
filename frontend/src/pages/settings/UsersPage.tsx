@@ -1288,7 +1288,7 @@ function ManageUserAccessModal({
 
     if (!user) return null
 
-    const rolesDirty = JSON.stringify([...draftRoles].sort()) !== JSON.stringify([...initialRoles].sort())
+    const rolesDirty = JSON.stringify(draftRoles.toSorted()) !== JSON.stringify(initialRoles.toSorted())
     const punchDirty = draftPunchEnabled !== initialPunchEnabled
     const manualDirty = draftManualEnabled !== initialManualEnabled
     const isDirty = rolesDirty || punchDirty || manualDirty
