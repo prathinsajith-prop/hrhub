@@ -1,10 +1,10 @@
-import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, aliasedTable } from 'drizzle-orm'
+import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, ne, count, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
-import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits, users, shifts } from '../../db/schema/index.js'
+import { employees, entities, tenants, gradeLevels, sponsoringEntities, employeeNoSequences, orgUnits, users, shifts, teamMembers, employeeLoans, assetAssignments, visaApplications } from '../../db/schema/index.js'
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm'
-import { removeEmployeeFromMismatchedTeams } from '../teams/teams.service.js'
+import { removeEmployeeFromMismatchedTeams, removeEmployeeFromAllTeams } from '../teams/teams.service.js'
 import { resolveAvatarUrl, resolveAvatarUrls } from '../../plugins/s3.js'
 import { buildDrizzleFilters, parseFilterString } from '../../lib/filters.js'
 
@@ -33,6 +33,9 @@ export interface ListEmployeesParams {
     search?: string
     status?: Employee['status']
     department?: string
+    /** Lifecycle scope: 'active' (default) hides archived, 'archived' shows only
+     *  archived, 'all' shows both. Drives the Active/Archived/All status filter. */
+    archived?: 'active' | 'archived' | 'all'
     /** When set, restricts results to the subtree rooted at this employee (dept_head scoping). */
     managerEmployeeId?: string
     /** Compact filter string: "field:OP(value);..." (designation, nationality, salary, joinDate, visaExpiry). */
@@ -88,9 +91,12 @@ export async function getSubtreeEmployeeIds(tenantId: string, rootId: string): P
 }
 
 export async function listEmployees(params: ListEmployeesParams) {
-    const { tenantId, search, status, department, managerEmployeeId, filter, limit, offset, after, directoryPrivacy } = params
+    const { tenantId, search, status, department, archived = 'active', managerEmployeeId, filter, limit, offset, after, directoryPrivacy } = params
 
-    const conditions = [eq(employees.tenantId, tenantId), eq(employees.isArchived, false)]
+    const conditions = [eq(employees.tenantId, tenantId)]
+    // Lifecycle scope. 'all' adds no archived predicate.
+    if (archived === 'active') conditions.push(eq(employees.isArchived, false))
+    else if (archived === 'archived') conditions.push(eq(employees.isArchived, true))
 
     // Apply the Organization Policy "searchable in directory" filter for peer
     // viewers. Pushed into SQL so the row count / pagination cursor reflect
@@ -396,8 +402,80 @@ export async function archiveEmployee(tenantId: string, id: string) {
         .set(withTimestamp({ isArchived: true, status: 'terminated' as const }))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
+    // Clean up team memberships so archived staff don't linger on teams.
+    if (row) await removeEmployeeFromAllTeams(tenantId, id).catch(() => { })
     await cacheDel(`dashboard:kpis:${tenantId}`)
     return row ?? null
+}
+
+/** Restore an archived employee back to active. Returns null if not found/not archived. */
+export async function unarchiveEmployee(tenantId: string, id: string) {
+    const [row] = await db
+        .update(employees)
+        .set(withTimestamp({ isArchived: false, status: 'active' as const }))
+        .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId), eq(employees.isArchived, true)))
+        .returning()
+    await cacheDel(`dashboard:kpis:${tenantId}`)
+    return row ?? null
+}
+
+/**
+ * Guard against archiving protected accounts. Throws a 409 ServiceError-shaped
+ * error (statusCode + code) the route surfaces verbatim. Rules:
+ *  - cannot archive yourself (the currently logged-in user)
+ *  - cannot archive the last active super_admin (owner-equivalent)
+ */
+export async function assertEmployeeArchivable(
+    tenantId: string,
+    employeeId: string,
+    actor: { userId: string; employeeId?: string | null },
+): Promise<void> {
+    if (actor.employeeId && actor.employeeId === employeeId) {
+        throw Object.assign(new Error('You cannot archive your own account.'), { statusCode: 409, code: 'PROTECTED_SELF' })
+    }
+    // Linked login account (every user has an employeeId; an employee may have none).
+    const [linked] = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, employeeId)))
+        .limit(1)
+    if (linked?.role === 'super_admin') {
+        const [{ n }] = await db
+            .select({ n: count() })
+            .from(users)
+            .where(and(eq(users.tenantId, tenantId), eq(users.role, 'super_admin'), eq(users.isActive, true), ne(users.id, linked.id)))
+        if (Number(n) === 0) {
+            throw Object.assign(new Error('You cannot archive the last active Super Admin / account owner.'), { statusCode: 409, code: 'PROTECTED_LAST_ADMIN' })
+        }
+    }
+}
+
+export interface ArchiveDependency { type: string; count: number; message: string; blocking: boolean }
+
+/**
+ * Surface records that depend on an employee, so HR can decide before archiving.
+ * Returns `blocking` (org-structure roles that would break) and `warnings`
+ * (open items that simply need awareness). The route maps `block` vs
+ * `warn-and-continue` from the `force` flag.
+ */
+export async function getEmployeeArchiveDependencies(tenantId: string, employeeId: string): Promise<ArchiveDependency[]> {
+    const [reports, headOf, teams, loans, assets, visas] = await Promise.all([
+        db.select({ n: count() }).from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.reportingTo, employeeId), eq(employees.isArchived, false))),
+        db.select({ n: count() }).from(orgUnits).where(and(eq(orgUnits.tenantId, tenantId), eq(orgUnits.headEmployeeId, employeeId), eq(orgUnits.isActive, true))),
+        db.select({ n: count() }).from(teamMembers).where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.employeeId, employeeId))),
+        db.select({ n: count() }).from(employeeLoans).where(and(eq(employeeLoans.tenantId, tenantId), eq(employeeLoans.employeeId, employeeId), eq(employeeLoans.status, 'active'))),
+        db.select({ n: count() }).from(assetAssignments).where(and(eq(assetAssignments.tenantId, tenantId), eq(assetAssignments.employeeId, employeeId), eq(assetAssignments.status, 'assigned'))),
+        db.select({ n: count() }).from(visaApplications).where(and(eq(visaApplications.tenantId, tenantId), eq(visaApplications.employeeId, employeeId), notInArray(visaApplications.status, ['active', 'cancelled', 'expired'] as never[]))),
+    ])
+    const out: ArchiveDependency[] = []
+    const n = (r: { n: unknown }[]) => Number(r[0]?.n ?? 0)
+    if (n(reports) > 0) out.push({ type: 'direct_reports', count: n(reports), blocking: true, message: `${n(reports)} employee(s) report to this person — reassign their manager first.` })
+    if (n(headOf) > 0) out.push({ type: 'org_unit_head', count: n(headOf), blocking: true, message: `Head of ${n(headOf)} branch/division/department — reassign the head first.` })
+    if (n(teams) > 0) out.push({ type: 'team_memberships', count: n(teams), blocking: false, message: `Member of ${n(teams)} team(s) — memberships will be removed on archive.` })
+    if (n(loans) > 0) out.push({ type: 'active_loans', count: n(loans), blocking: false, message: `${n(loans)} active loan(s) still repaying.` })
+    if (n(assets) > 0) out.push({ type: 'assigned_assets', count: n(assets), blocking: false, message: `${n(assets)} asset(s) still assigned — collect/return them.` })
+    if (n(visas) > 0) out.push({ type: 'open_visa', count: n(visas), blocking: false, message: `${n(visas)} visa application(s) in progress.` })
+    return out
 }
 
 export async function getExpiringVisas(tenantId: string, daysAhead = 90) {

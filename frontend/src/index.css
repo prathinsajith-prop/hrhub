@@ -280,6 +280,26 @@ input:-webkit-autofill:active {
   animation: fadeIn 0.25s ease forwards;
 }
 
+/* Respect users who prefer reduced motion — neutralise entrance + hover motion. */
+@media (prefers-reduced-motion: reduce) {
+
+  .animate-fade-in,
+  .animate-fade-fast,
+  .page-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .card-hover {
+    transition: none !important;
+  }
+
+  .card-hover:hover {
+    transform: none !important;
+  }
+}
+
 /* ─── Card hover utility ──────────────────────────────────────────────────── */
 .card-hover {
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;

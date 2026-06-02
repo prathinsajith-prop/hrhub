@@ -116,15 +116,6 @@ function EmptyChart({ message = 'No data available' }: { message?: string }) {
  * expiring in that bucket. Selected pill picks up the tone defined in
  * `DOC_TYPE_TONE` so the active filter is colour-coded to its category.
  */
-const EXPIRY_FILTER_TYPES: Array<{ key: DocType | 'all'; label: string; tone?: string }> = [
-    { key: 'all',         label: 'All Documents' },
-    { key: 'visa',        label: DOC_TYPE_LABEL.visa,        tone: DOC_TYPE_TONE.visa },
-    { key: 'passport',    label: DOC_TYPE_LABEL.passport,    tone: DOC_TYPE_TONE.passport },
-    { key: 'emirates_id', label: DOC_TYPE_LABEL.emirates_id, tone: DOC_TYPE_TONE.emirates_id },
-    { key: 'labour_card', label: DOC_TYPE_LABEL.labour_card, tone: DOC_TYPE_TONE.labour_card },
-    { key: 'contract',    label: DOC_TYPE_LABEL.contract,    tone: DOC_TYPE_TONE.contract },
-]
-
 function ExpiryTypeFilter({
     docTypeFilter,
     setDocTypeFilter,
@@ -143,9 +134,17 @@ function ExpiryTypeFilter({
             </div>
         )
     }
+    const types: Array<{ key: DocType | 'all'; label: string; tone?: string }> = [
+        { key: 'all',         label: 'All Documents' },
+        { key: 'visa',        label: DOC_TYPE_LABEL.visa,        tone: DOC_TYPE_TONE.visa },
+        { key: 'passport',    label: DOC_TYPE_LABEL.passport,    tone: DOC_TYPE_TONE.passport },
+        { key: 'emirates_id', label: DOC_TYPE_LABEL.emirates_id, tone: DOC_TYPE_TONE.emirates_id },
+        { key: 'labour_card', label: DOC_TYPE_LABEL.labour_card, tone: DOC_TYPE_TONE.labour_card },
+        { key: 'contract',    label: DOC_TYPE_LABEL.contract,    tone: DOC_TYPE_TONE.contract },
+    ]
     return (
         <div className="flex flex-wrap gap-1.5">
-            {EXPIRY_FILTER_TYPES.map((t) => {
+            {types.map((t) => {
                 const count = t.key === 'all' ? byType?.total.total ?? 0 : byType?.[t.key].total ?? 0
                 const active = docTypeFilter === t.key
                 return (
@@ -187,7 +186,6 @@ function ExpiryUrgencyCard({ rows, loading }: { rows: DocExpiryRow[]; loading: b
             .map((k) => ({ key: k, name: URGENCY_TONE[k].label, value: buckets[k], color: URGENCY_TONE[k].color }))
     }, [rows])
     const total = data.reduce((s, d) => s + d.value, 0)
-    const positiveData = data.filter((d) => d.value > 0)
     if (loading) return <ChartSkeleton height={200} />
     if (total === 0) {
         return (
@@ -201,8 +199,8 @@ function ExpiryUrgencyCard({ rows, loading }: { rows: DocExpiryRow[]; loading: b
         <div className="space-y-4">
             <ResponsiveContainer width="100%" height={140}>
                 <PieChart>
-                    <Pie data={positiveData} cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value">
-                        {positiveData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    <Pie data={data.filter((d) => d.value > 0)} cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value">
+                        {data.filter((d) => d.value > 0).map((d) => <Cell key={d.key} fill={d.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(v: unknown, name: unknown) => [Number(v ?? 0), String(name ?? '')]} />
                 </PieChart>
@@ -533,8 +531,8 @@ export function ReportsPage() {
                                         <PieChart>
                                             <Pie data={statusPieData} cx="50%" cy="50%" innerRadius={44} outerRadius={68}
                                                 paddingAngle={3} dataKey="value">
-                                                {statusPieData.map((d, i) => (
-                                                    <Cell key={i} fill={d.color} />
+                                                {statusPieData.map((d) => (
+                                                    <Cell key={d.name} fill={d.color} />
                                                 ))}
                                             </Pie>
                                             <Tooltip formatter={(v: unknown, name: unknown) => [Number(v ?? 0), String(name ?? '')]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />
@@ -638,8 +636,8 @@ export function ReportsPage() {
                                         <ResponsiveContainer width="100%" height={140}>
                                             <PieChart>
                                                 <Pie data={(turnover?.byExitType ?? []).map((d, i) => ({ name: labelFor(d.label), value: d.count, color: ['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4] }))} cx="50%" cy="50%" innerRadius={36} outerRadius={56} paddingAngle={3} dataKey="value">
-                                                    {(turnover?.byExitType ?? []).map((_, i) => (
-                                                        <Cell key={i} fill={['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4]} />
+                                                    {(turnover?.byExitType ?? []).map((d, i) => (
+                                                        <Cell key={d.label} fill={['#ef4444', '#f59e0b', '#8b5cf6', '#6b7280'][i % 4]} />
                                                     ))}
                                                 </Pie>
                                                 <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} />
@@ -972,8 +970,8 @@ export function ReportsPage() {
                                         <ResponsiveContainer width="100%" height={160}>
                                             <PieChart>
                                                 <Pie data={(leaveSummary?.byType ?? []).map((tp, i) => ({ name: labelFor(tp.leaveType), value: tp.days, color: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8] }))} cx="50%" cy="50%" innerRadius={44} outerRadius={68} paddingAngle={3} dataKey="value">
-                                                    {(leaveSummary?.byType ?? []).map((_, i) => (
-                                                        <Cell key={i} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8]} />
+                                                    {(leaveSummary?.byType ?? []).map((tp, i) => (
+                                                        <Cell key={tp.leaveType} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#6b7280'][i % 8]} />
                                                     ))}
                                                 </Pie>
                                                 <Tooltip formatter={(v: unknown, name: unknown) => [`${Number(v ?? 0)} d`, String(name ?? '')]} contentStyle={{ fontSize: 11, borderRadius: 8 }} />

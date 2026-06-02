@@ -9,7 +9,10 @@ import {
   CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark, DollarSign,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
   MoreHorizontal, CheckCircle2, Ban, UserX, Search, FolderOpen, Scale, AlertCircle,
+  Trophy, Award,
 } from 'lucide-react'
+import { useEmployeeRecognitionProfile } from '@/hooks/useRecognition'
+import { Link as RLink } from 'react-router-dom'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -913,7 +916,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5 truncate">
             <Building2 className="size-2.5 shrink-0" />
             {orgPath.map((p, i) => (
-              <span key={i} className="flex items-center gap-1">
+              <span key={`${i}-${p}`} className="flex items-center gap-1">
                 {i > 0 && <span className="opacity-40">›</span>}
                 <span className={i === orgPath.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
               </span>
@@ -1192,7 +1195,7 @@ export function EmployeeDetailPage() {
 
   function handleArchive() {
     if (!e) return
-    archiveEmployee.mutate(e.id, {
+    archiveEmployee.mutate({ id: e.id }, {
       onSuccess: () => {
         toast.success('Record archived', `${e.fullName}'s record has been archived.`)
         navigate('/employees')
@@ -1323,7 +1326,7 @@ export function EmployeeDetailPage() {
                       <Building2 className="size-3.5 shrink-0" />
                       <span className="flex items-center gap-1 min-w-0 truncate">
                         {parts.map((p, i) => (
-                          <span key={i} className="flex items-center gap-1">
+                          <span key={`${i}-${p}`} className="flex items-center gap-1">
                             {i > 0 && <span className="opacity-40">›</span>}
                             <span className={i === parts.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
                           </span>
@@ -1587,6 +1590,7 @@ export function EmployeeDetailPage() {
           { value: 'documents', icon: FileText, label: 'Documents & ID' },
           { value: 'payroll', icon: CreditCard, label: 'Payroll' },
           { value: 'performance', icon: Star, label: 'Performance' },
+          { value: 'recognition', icon: Trophy, label: 'Recognition' },
           { value: 'assets', icon: Package, label: 'Assets' },
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
@@ -2170,7 +2174,7 @@ export function EmployeeDetailPage() {
                       className="w-full pl-9 pr-8 h-9 text-sm rounded-md border border-input bg-background outline-none focus:ring-2 focus:ring-ring/50 placeholder:text-muted-foreground"
                     />
                     {docSearch && (
-                      <button onClick={() => setDocSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      <button type="button" onClick={() => setDocSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                         <XIcon className="size-3.5" />
                       </button>
                     )}
@@ -2213,7 +2217,7 @@ export function EmployeeDetailPage() {
                     title={`No results for "${docSearch}"`}
                     description="Try a different name or category"
                     action={(
-                      <button onClick={() => setDocSearch('')} className="text-xs text-primary hover:underline font-medium">Clear search</button>
+                      <button type="button" onClick={() => setDocSearch('')} className="text-xs text-primary hover:underline font-medium">Clear search</button>
                     )}
                   />
 
@@ -2742,6 +2746,7 @@ export function EmployeeDetailPage() {
                               </p>
                               {w.documentFileName && (
                                 <button
+                                  type="button"
                                   className="text-primary hover:underline inline-flex items-center gap-1 text-xs mt-1"
                                   onClick={() => downloadWarningDoc.mutate(w.id, {
                                     onSuccess: (res) => window.open(res.url, '_blank'),
@@ -2827,6 +2832,11 @@ export function EmployeeDetailPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* ── Recognition ── */}
+          <TabsContent value="recognition" className="mt-4 space-y-4">
+            <RecognitionTab employeeId={id!} />
           </TabsContent>
 
           {/* ── Assets ── */}
@@ -3275,8 +3285,12 @@ function TerminateDialog({
     setStep('form')
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  React.useEffect(() => { if (!open) reset() }, [open, reset])
+  // Reset the wizard when the dialog closes — state-during-render (no effect).
+  const [prevOpen, setPrevOpen] = React.useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (!open) reset()
+  }
 
   const handleClose = () => {
     if (!initiateExit.isPending) {
@@ -3670,5 +3684,109 @@ function AddWarningDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Recognition tab — surfaces the employee's recognition activity:
+ *   - KPI strip (received, given, badges earned, top category)
+ *   - Recent recognitions received (links to detail page)
+ *   - Recent recognitions given
+ */
+function RecognitionTab({ employeeId }: { employeeId: string }) {
+  const { data, isLoading } = useEmployeeRecognitionProfile(employeeId)
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <Trophy className="size-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-medium">No recognition activity yet</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const { received, given, stats } = data
+  const topCat = stats.topCategories[0]
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiTile icon={<Trophy className="size-4 text-amber-500" />} label="Received" value={stats.receivedCount} />
+        <KpiTile icon={<Heart className="size-4 text-rose-500" />} label="Given" value={stats.givenCount} />
+        <KpiTile icon={<Award className="size-4 text-indigo-500" />} label="Badges Earned" value={stats.badgesEarned} />
+        <KpiTile icon={<Star className="size-4 text-violet-500" />} label="Top Category" value={topCat ? topCat.label || topCat.key : '—'} small />
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Recognitions received</CardTitle></CardHeader>
+        <CardContent>
+          {received.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Trophy className="size-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No recognitions received yet</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {received.slice(0, 10).map((r) => (
+                <RecognitionRow key={r.id} r={r} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Recognitions given</CardTitle></CardHeader>
+        <CardContent>
+          {given.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Heart className="size-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Hasn't appreciated anyone yet</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {given.slice(0, 10).map((r) => (
+                <RecognitionRow key={r.id} r={r} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+
+function KpiTile({ icon, label, value, small }: { icon: React.ReactNode; label: string; value: number | string; small?: boolean }) {
+  return (
+    <div className="border rounded-lg p-3 bg-card">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}<span>{label}</span></div>
+      <div className={small ? "mt-1 text-sm font-semibold truncate" : "mt-1 text-2xl font-semibold"}>{value}</div>
+    </div>
+  )
+}
+
+function RecognitionRow({ r }: { r: { id: string; title: string; categoryKey: string; publishedAt?: string | null; createdAt: string; giverName?: string | null } }) {
+  return (
+    <RLink to={`/recognition/${r.id}`} className="flex items-center justify-between py-3 hover:bg-muted/40 -mx-2 px-2 rounded transition-colors">
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">{r.title}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {r.giverName ? `${r.giverName} · ` : ''}{r.categoryKey.replace(/_/g, ' ')} · {formatDate(r.publishedAt ?? r.createdAt)}
+        </p>
+      </div>
+      <Trophy className="size-4 text-amber-500 shrink-0 ml-3" />
+    </RLink>
   )
 }

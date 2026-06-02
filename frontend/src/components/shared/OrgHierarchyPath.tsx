@@ -25,7 +25,7 @@ export function OrgHierarchyPath({ parts, className, showEmpty = false }: OrgHie
     return (
         <div className={cn('flex items-center gap-1 min-w-0 flex-wrap', className)}>
             {resolved.map((part, i) => (
-                <span key={i} className="flex items-center gap-1 min-w-0">
+                <span key={`${i}-${part}`} className="flex items-center gap-1 min-w-0">
                     {i > 0 && <span className="text-muted-foreground/40 text-[10px] shrink-0">›</span>}
                     <span className={cn(
                         'truncate text-xs',

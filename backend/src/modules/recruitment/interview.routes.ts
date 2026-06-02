@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { scheduleInterview, getInterviewsForApplication, getInterviewsByTenant, updateInterviewStatus, deleteInterview } from './interview.service.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { createNotification } from '../notifications/notifications.service.js'
+import { sendEmail, interviewInvitationEmail } from '../../plugins/email.js'
+import { db } from '../../db/index.js'
+import { jobApplications, recruitmentJobs, users } from '../../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
+import { loadEnv } from '../../config/env.js'
 
 // A short human label for an interview activity entry. The interview row
 // itself doesn't carry the candidate name, so fall back to the type +
@@ -57,6 +63,32 @@ export async function interviewRoutes(fastify: any) {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+
+        // Invite candidate + interviewer (best-effort). Resolve candidate + job + interviewer.
+        ;(async () => {
+            const tenantId = request.user.tenantId
+            const appUrl = (loadEnv() as any).APP_URL ?? ''
+            const [app] = await db.select({ name: jobApplications.name, email: jobApplications.email, jobTitle: recruitmentJobs.title })
+                .from(jobApplications)
+                .leftJoin(recruitmentJobs, eq(jobApplications.jobId, recruitmentJobs.id))
+                .where(and(eq(jobApplications.tenantId, tenantId), eq(jobApplications.id, data.applicationId)))
+                .limit(1)
+            if (!app) return
+            const jobTitle = app.jobTitle ?? 'the role'
+            const when = data.scheduledAt ? new Date(data.scheduledAt).toISOString().replace('T', ' ').slice(0, 16) : 'TBD'
+            const type = (data.type ?? 'video').replace(/_/g, ' ')
+            if (app.email) {
+                sendEmail({ ...interviewInvitationEmail({ recipientName: app.name ?? 'there', candidateName: app.name ?? '', jobTitle, interviewType: type, scheduledAt: when, forCandidate: true }), to: app.email, tenantId }).catch(() => { })
+            }
+            if (data.interviewerUserId) {
+                const [iv] = await db.select({ name: users.name, email: users.email }).from(users).where(and(eq(users.tenantId, tenantId), eq(users.id, data.interviewerUserId))).limit(1)
+                if (iv?.email) {
+                    sendEmail({ ...interviewInvitationEmail({ recipientName: iv.name ?? 'there', candidateName: app.name ?? '', jobTitle, interviewType: type, scheduledAt: when }), to: iv.email, tenantId }).catch(() => { })
+                }
+                createNotification({ tenantId, userId: data.interviewerUserId, type: 'info', title: 'Interview scheduled', message: `${app.name ?? 'A candidate'} — ${jobTitle} (${when})`, actionUrl: '/recruitment' }).catch(() => { })
+            }
+        })().catch(() => { })
+
         return reply.code(201).send({ data })
     })
 

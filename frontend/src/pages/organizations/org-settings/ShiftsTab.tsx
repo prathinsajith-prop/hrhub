@@ -416,8 +416,9 @@ export function ShiftsTab() {
 
                             {/* Shift margin */}
                             <div className="space-y-2">
-                                <label className="flex items-start gap-2 cursor-pointer">
+                                <label htmlFor="shift-enable-margin" className="flex items-start gap-2 cursor-pointer">
                                     <Checkbox
+                                        id="shift-enable-margin"
                                         checked={form.enableMargin}
                                         onCheckedChange={(v) => setForm(f => ({ ...f, enableMargin: v === true }))}
                                         className="mt-0.5"
@@ -468,8 +469,9 @@ export function ShiftsTab() {
 
                             {/* Core working hours */}
                             <div className="space-y-2">
-                                <label className="flex items-start gap-2 cursor-pointer">
+                                <label htmlFor="shift-enable-core-hours" className="flex items-start gap-2 cursor-pointer">
                                     <Checkbox
+                                        id="shift-enable-core-hours"
                                         checked={form.enableCoreHours}
                                         onCheckedChange={(v) => setForm(f => ({ ...f, enableCoreHours: v === true }))}
                                         className="mt-0.5"
@@ -515,8 +517,9 @@ export function ShiftsTab() {
                                         >
                                             <Plus className="size-3.5" /> Add
                                         </Button>
-                                        <label className="flex items-start gap-2 cursor-pointer pt-1">
+                                        <label htmlFor="shift-restrict-breaks" className="flex items-start gap-2 cursor-pointer pt-1">
                                             <Checkbox
+                                                id="shift-restrict-breaks"
                                                 checked={form.restrictBreaks}
                                                 onCheckedChange={(v) => setForm(f => ({ ...f, restrictBreaks: v === true }))}
                                                 className="mt-0.5"

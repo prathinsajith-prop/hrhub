@@ -32,6 +32,9 @@ function addOneYear(dateStr: string): string {
     return d.toISOString().split('T')[0]!
 }
 
+// Build ordered combobox options: identity, visa, insurance first, then rest
+const CAT_ORDER = ['identity', 'visa', 'insurance', 'employment', 'qualification', 'compliance', 'financial', 'company'] as const
+
 export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmployeeId, stepId, contextNote, onUploaded }: Props) {
     const { mutateAsync, isPending } = useUploadDocument()
 
@@ -53,7 +56,6 @@ export function AddDocumentDialog({ open, onOpenChange, employeeId: fixedEmploye
     const selectedDef = allDocTypes.find(d => d.docType === docType)
 
     // Build ordered combobox options: identity, visa, insurance first, then rest
-    const CAT_ORDER = ['identity', 'visa', 'insurance', 'employment', 'qualification', 'compliance', 'financial', 'company'] as const
     const docTypeOptions: ComboboxOption[] = [
         ...CAT_ORDER.flatMap(cat =>
             (DOC_TYPE_CATALOG[cat] ?? []).map(d => ({

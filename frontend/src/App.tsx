@@ -51,6 +51,8 @@ const UsersPage = lazy(() => import('@/pages/settings/UsersPage').then(m => ({ d
 const ConnectedAppsPage = lazy(() => import('@/pages/organizations/ConnectedAppsPage').then(m => ({ default: m.ConnectedAppsPage })))
 const AppDetailPage = lazy(() => import('@/pages/organizations/AppDetailPage').then(m => ({ default: m.AppDetailPage })))
 const OnboardingUploadPage = lazy(() => import('@/pages/onboarding/OnboardingUploadPage').then(m => ({ default: m.OnboardingUploadPage })))
+const CareersListPage = lazy(() => import('@/pages/careers/CareersListPage').then(m => ({ default: m.CareersListPage })))
+const CareersJobPage = lazy(() => import('@/pages/careers/CareersJobPage').then(m => ({ default: m.CareersJobPage })))
 const OrganizationSettingsPage = lazy(() => import('@/pages/organizations/OrganizationSettingsPage').then(m => ({ default: m.OrganizationSettingsPage })))
 const OrgStructurePage = lazy(() => import('@/pages/organizations/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })))
 const SubscriptionPage = lazy(() => import('@/pages/organizations/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })))
@@ -67,6 +69,11 @@ const MyTrainingPage = lazy(() => import('@/pages/my/MyTrainingPage').then(m => 
 const LoansPage = lazy(() => import('@/pages/misc/LoansPage').then(m => ({ default: m.LoansPage })))
 const MyLoansPage = lazy(() => import('@/pages/my/MyLoansPage').then(m => ({ default: m.MyLoansPage })))
 const LeaveAdjustmentsPage = lazy(() => import('@/pages/leave/LeaveAdjustmentsPage').then(m => ({ default: m.LeaveAdjustmentsPage })))
+const AnnouncementsPage = lazy(() => import('@/pages/announcements/AnnouncementsPage').then(m => ({ default: m.AnnouncementsPage })))
+const RecognitionFeedPage = lazy(() => import('@/pages/recognition/RecognitionFeedPage').then(m => ({ default: m.RecognitionFeedPage })))
+const RecognitionDetailPage = lazy(() => import('@/pages/recognition/RecognitionDetailPage').then(m => ({ default: m.RecognitionDetailPage })))
+const RecognitionLeaderboardPage = lazy(() => import('@/pages/recognition/RecognitionLeaderboardPage').then(m => ({ default: m.RecognitionLeaderboardPage })))
+const RecognitionAdminPage = lazy(() => import('@/pages/recognition/RecognitionAdminPage').then(m => ({ default: m.RecognitionAdminPage })))
 
 function PageLoader() {
   return (
@@ -114,6 +121,8 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/loans': 'loans.pageTitle',
   '/my/loans': 'loans.myPageTitle',
   '/leave-adjustments': 'leaveAdjustments.title',
+  '/announcements': 'announcements.title',
+  '/recognition': 'recognition.title',
   '/assets': 'assets.title',
   '/travel': 'travel.title',
   '/calendar': 'calendar.title',
@@ -232,9 +241,18 @@ export default function App() {
               <Route path="loans" element={<RoleRoute routeKey="loans"><LoansPage /></RoleRoute>} />
               <Route path="my/loans" element={<RoleRoute routeKey="my/loans"><MyLoansPage /></RoleRoute>} />
               <Route path="leave-adjustments" element={<RoleRoute routeKey="leave-adjustments"><LeaveAdjustmentsPage /></RoleRoute>} />
+              <Route path="announcements" element={<RoleRoute routeKey="announcements"><AnnouncementsPage /></RoleRoute>} />
+              <Route path="recognition" element={<RoleRoute routeKey="recognition"><RecognitionFeedPage /></RoleRoute>} />
+              <Route path="recognition/leaderboard" element={<RoleRoute routeKey="recognition/leaderboard"><RecognitionLeaderboardPage /></RoleRoute>} />
+              <Route path="recognition/admin" element={<RoleRoute routeKey="recognition/admin"><RecognitionAdminPage /></RoleRoute>} />
+              <Route path="recognition/:id" element={<RoleRoute routeKey="recognition/:id"><RecognitionDetailPage /></RoleRoute>} />
             </Route>
             {/* Public onboarding upload - no auth, no AppLayout */}
             <Route path="onboarding/upload/:token" element={<OnboardingUploadPage />} />
+            {/* Public careers portal - no auth, no AppLayout */}
+            <Route path="careers/:companyCode/jobs" element={<CareersListPage />} />
+            <Route path="careers/:companyCode/jobs/:jobId" element={<CareersJobPage />} />
+            <Route path="careers/:companyCode" element={<Navigate to="jobs" replace />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>

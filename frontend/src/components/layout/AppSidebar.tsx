@@ -19,6 +19,8 @@ import {
   PlaneIcon,
   UserMinusIcon,
   MessageSquareWarningIcon,
+  Megaphone as MegaphoneIcon,
+  Trophy as TrophyIcon,
   GraduationCapIcon,
   HandCoinsIcon,
   CalendarPlusIcon,
@@ -100,6 +102,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     {
       label: t('nav.insights'),
       items: [
+        { title: t('nav.recognition', { defaultValue: 'Recognition' }), url: "/recognition", icon: TrophyIcon },
+        { title: t('nav.announcements', { defaultValue: 'Announcements' }), url: "/announcements", icon: MegaphoneIcon },
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
         { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },

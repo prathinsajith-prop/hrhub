@@ -176,7 +176,7 @@ export function HRDashboard() {
               </span>
             )}
           </p>
-          <button onClick={() => navigate('/visa')} className="ms-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
+          <button type="button" onClick={() => navigate('/visa')} className="ms-auto text-xs font-medium text-warning-foreground hover:underline shrink-0">
             {t('common.viewAll', { defaultValue: 'View all' })}
           </button>
         </div>

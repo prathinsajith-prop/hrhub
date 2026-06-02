@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
+import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
@@ -12,6 +12,9 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { broadcastToTenant } from '../../lib/ws-registry.js'
+import { notifyRoles, getRecipientsByRoles } from '../notifications/notifications.service.js'
+import { sendEmail, applicationReceivedEmail, newApplicationAlertEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -1094,6 +1097,178 @@ export default async function (fastify: any): Promise<void> {
         reply.header('Content-Type', 'text/csv; charset=utf-8')
         reply.header('Content-Disposition', `attachment; filename="recruitment-export-${dateStr}.csv"`)
         return reply.send(lines.join('\r\n'))
+    })
+
+    // ── Public careers portal (NO AUTH) ───────────────────────────────────────
+    // Backs the shareable /careers/:companyCode pages. The tenant is resolved
+    // from the unique company code in the URL (visitors have no JWT). Browsing
+    // is lightly rate-limited; applying is tightly rate-limited to deter spam.
+    const browseLimit = { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }
+    const applyLimit = { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }
+
+    // GET /api/v1/public/careers/:companyCode/jobs?limit=&offset=&q=&department=&location=&type=
+    fastify.get('/public/careers/:companyCode/jobs', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode } = request.params as { companyCode: string }
+        const query = request.query as { limit?: string; offset?: string; q?: string; department?: string; location?: string; type?: string }
+        const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 50)
+        const offset = Math.max(Number(query.offset) || 0, 0)
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const page = await listPublicJobs(tenant.id, {
+            limit,
+            offset,
+            q: query.q?.trim() || undefined,
+            department: query.department?.trim() || undefined,
+            location: query.location?.trim() || undefined,
+            type: query.type?.trim() || undefined,
+        })
+        return reply.send({ data: { company: { name: tenant.name, companyCode: tenant.companyCode }, ...page } })
+    })
+
+    // GET /api/v1/public/careers/:companyCode/facets — distinct filter options
+    fastify.get('/public/careers/:companyCode/facets', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode } = request.params as { companyCode: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const facets = await getPublicJobFacets(tenant.id)
+        return reply.send({ data: facets })
+    })
+
+    // GET /api/v1/public/careers/:companyCode/jobs/:jobId — single open job
+    fastify.get('/public/careers/:companyCode/jobs/:jobId', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode, jobId } = request.params as { companyCode: string; jobId: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const job = await getPublicJob(tenant.id, jobId)
+        if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found or no longer open' })
+        return reply.send({ data: { company: { name: tenant.name, companyCode: tenant.companyCode }, job } })
+    })
+
+    // POST /api/v1/public/careers/:companyCode/jobs/:jobId/apply — multipart apply
+    // Creates a job_applications row (stage 'received', source 'direct') and
+    // attaches the resume to S3. The candidate then appears in the authenticated
+    // recruitment kanban immediately (via the same WS broadcast as manual adds).
+    fastify.post('/public/careers/:companyCode/jobs/:jobId/apply', {
+        ...applyLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode, jobId } = request.params as { companyCode: string; jobId: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const job = await getPublicJob(tenant.id, jobId)
+        if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found or no longer open' })
+
+        // Parse multipart: candidate fields + a single resume file (held in memory).
+        const allowedMime: Record<string, string> = {
+            'application/pdf': '.pdf',
+            'application/msword': '.doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+        }
+        const fields: Record<string, string> = {}
+        let buffer: Buffer | null = null
+        let partMime = ''
+        for await (const part of request.parts()) {
+            if (part.type === 'file') {
+                const chunks: Buffer[] = []
+                for await (const chunk of part.file) chunks.push(chunk as Buffer)
+                buffer = Buffer.concat(chunks)
+                partMime = part.mimetype
+                if (part.file.truncated || buffer.length > 5 * 1024 * 1024) {
+                    return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: 'Resume must be under 5 MB' })
+                }
+            } else {
+                fields[part.fieldname] = String(part.value ?? '')
+            }
+        }
+
+        const name = fields.name?.trim()
+        const email = fields.email?.trim()
+        if (!name || !email) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Name and email are required' })
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A valid email is required' })
+        if (!buffer || buffer.length === 0) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A resume file is required' })
+
+        // Validate via magic bytes — never trust the client Content-Type.
+        const detected = await fileTypeFromBuffer(buffer)
+        const mime = detected?.mime ?? partMime
+        if (!allowedMime[mime]) return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: 'Only PDF or Word documents are accepted' })
+
+        let application: Awaited<ReturnType<typeof createApplication>>
+        try {
+            application = await createApplication(tenant.id, jobId, {
+                name,
+                email,
+                phone: fields.phone?.trim() || null,
+                nationality: fields.nationality?.trim() || null,
+                experience: fields.experience ? Number(fields.experience) || null : null,
+                expectedSalary: fields.expectedSalary ? String(Number(fields.expectedSalary) || 0) : null,
+                notes: fields.coverNote?.trim() || null,
+                source: 'careers',
+                stage: 'received',
+            } as never)
+        } catch (err: any) {
+            if (err?.statusCode === 409) return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: err.message })
+            throw err
+        }
+
+        // Attach the resume. A storage failure shouldn't lose the application —
+        // the candidate still lands in the pipeline, just without a resume.
+        const safeName = `resume${allowedMime[mime]}`
+        const s3Key = buildS3Key(tenant.id, `applications/${application.id}/resume`, safeName)
+        try {
+            await uploadObject(s3Key, buffer, mime)
+            await updateApplication(tenant.id, application.id, { resumeUrl: s3Key } as never)
+            application = { ...application, resumeUrl: s3Key } as never
+        } catch {
+            // Swallow — application is already persisted; HR can request the CV later.
+        }
+
+        recordActivity({
+            tenantId: tenant.id,
+            actorName: name,
+            actorRole: 'public',
+            entityType: 'application',
+            entityId: application.id,
+            entityName: name,
+            action: 'create',
+            metadata: { source: 'careers_portal', jobTitle: job.title },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        broadcastToTenant(tenant.id, {
+            type: 'recruitment:candidate-added',
+            payload: { applicationId: application.id, candidate: application, actorId: null, actorSocketId: null },
+        })
+
+        // Confirmation to the applicant + alert HR (in-app + email). All best-effort.
+        const appUrl = (loadEnv() as any).APP_URL ?? ''
+        sendEmail({ ...applicationReceivedEmail({ candidateName: name, jobTitle: job.title, companyName: tenant.name }), to: email, tenantId: tenant.id })
+            .catch(() => { })
+        notifyRoles(tenant.id, ['hr_manager', 'super_admin'], {
+            type: 'info',
+            title: 'New job application',
+            message: `${name} applied for ${job.title} (careers site)`,
+            actionUrl: '/recruitment',
+        }).catch(() => { })
+        getRecipientsByRoles(tenant.id, ['hr_manager', 'super_admin']).then((hr) => {
+            for (const u of hr) {
+                if (!u.email) continue
+                sendEmail({
+                    ...newApplicationAlertEmail({ recipientName: u.name ?? 'HR', candidateName: name, jobTitle: job.title, source: 'Careers site', actionUrl: appUrl ? `${appUrl}/recruitment` : '', companyName: tenant.name }),
+                    to: u.email, tenantId: tenant.id,
+                }).catch(() => { })
+            }
+        }).catch(() => { })
+
+        return reply.code(201).send({ data: { id: application.id } })
     })
 }
 

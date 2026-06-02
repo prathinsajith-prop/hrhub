@@ -280,15 +280,16 @@ export function BulkImportDialog({ open, onOpenChange, config }: Props) {
     )
 }
 
+const STEP_ORDER: Step[] = ['upload', 'preview', 'committing', 'done']
+const STEP_LABELS: Record<Step, string> = {
+    upload: 'Upload',
+    preview: 'Preview',
+    committing: 'Commit',
+    done: 'Done',
+}
+
 function StepIndicator({ step }: { step: Step }) {
-    const order: Step[] = ['upload', 'preview', 'committing', 'done']
-    const idx = order.indexOf(step)
-    const labels: Record<Step, string> = {
-        upload: 'Upload',
-        preview: 'Preview',
-        committing: 'Commit',
-        done: 'Done',
-    }
+    const idx = STEP_ORDER.indexOf(step)
     return (
         <div className="mt-3 flex items-center gap-1.5">
             {(['upload', 'preview', 'committing', 'done'] as const).map((s, i) => {
@@ -302,7 +303,7 @@ function StepIndicator({ step }: { step: Step }) {
                             current && 'ring-2 ring-primary/30',
                         )}>{i + 1}</span>
                         <span className={cn('text-[11px] font-medium', active ? 'text-foreground' : 'text-muted-foreground')}>
-                            {labels[s]}
+                            {STEP_LABELS[s]}
                         </span>
                         {i < 3 && <span className={cn('w-6 h-px', i < idx ? 'bg-primary' : 'bg-border')} />}
                     </div>
@@ -440,7 +441,7 @@ function PreviewStep({ config, validation }: { config: BulkImportConfig; validat
                                             </span>
                                             {r.errors.length > 0 && c.key === config.columns[0]!.key && (
                                                 <ul className="mt-0.5 text-[10px] text-rose-600 space-y-0.5">
-                                                    {r.errors.map((e, i) => <li key={i}>· {e}</li>)}
+                                                    {r.errors.map((e, i) => <li key={`${i}-${e}`}>· {e}</li>)}
                                                 </ul>
                                             )}
                                         </td>

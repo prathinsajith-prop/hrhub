@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { parseUuidParam } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
+import { sendEmail, trainingAssignedEmail } from '../../plugins/email.js'
+import { db } from '../../db/index.js'
+import { employees } from '../../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
+import { loadEnv } from '../../config/env.js'
 import {
     listTraining,
     getTrainingRecord,
@@ -122,6 +128,22 @@ export default async function trainingRoutes(fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        // Notify + email the enrolled employee (best-effort).
+        notifyEmployee(request.user.tenantId, row.employeeId, {
+            type: 'info', title: 'Training assigned',
+            message: `You've been enrolled in "${row.title}".`, actionUrl: '/my/training',
+        }).catch(() => { })
+        db.select({ email: employees.email, first: employees.firstName }).from(employees)
+            .where(and(eq(employees.tenantId, request.user.tenantId), eq(employees.id, row.employeeId))).limit(1)
+            .then(([emp]) => {
+                if (emp?.email) {
+                    const appUrl = (loadEnv() as any).APP_URL ?? ''
+                    sendEmail({
+                        ...trainingAssignedEmail({ employeeName: emp.first ?? 'there', title: row.title, startDate: row.startDate ?? '', actionUrl: appUrl ? `${appUrl}/my/training` : '' }),
+                        to: emp.email, tenantId: request.user.tenantId,
+                    }).catch(() => { })
+                }
+            }).catch(() => { })
         return reply.code(201).send({ data: row })
     })
 

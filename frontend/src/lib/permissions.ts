@@ -73,6 +73,13 @@ export type Permission =
   // Loans / Salary Advances
   | 'manage_loans'
   | 'view_own_loans'
+  // Company Announcements
+  | 'manage_announcements'
+  | 'view_announcements'
+  // Employee Recognition
+  | 'manage_recognition'
+  | 'view_recognition'
+  | 'give_recognition'
   // Travel — requests + expenses with full HR approval lifecycle
   | 'manage_travel'
   | 'view_own_travel'
@@ -129,6 +136,11 @@ export type RouteKey =
   | 'my/training'
   | 'loans'
   | 'my/loans'
+  | 'announcements'
+  | 'recognition'
+  | 'recognition/:id'
+  | 'recognition/leaderboard'
+  | 'recognition/admin'
   | 'travel'
   | 'my/travel'
   | 'leave-adjustments'
@@ -171,6 +183,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_training', 'view_own_training',
     // Loans
     'manage_loans', 'view_own_loans',
+    // Announcements
+    'manage_announcements', 'view_announcements',
+    // Recognition
+    'manage_recognition', 'view_recognition', 'give_recognition',
     // Travel
     'manage_travel', 'view_own_travel',
     // Workspace management
@@ -212,6 +228,10 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_training', 'view_own_training',
     // Loans
     'manage_loans', 'view_own_loans',
+    // Announcements
+    'manage_announcements', 'view_announcements',
+    // Recognition
+    'manage_recognition', 'view_recognition', 'give_recognition',
     // Travel
     'manage_travel', 'view_own_travel',
     // Workspace management
@@ -235,6 +255,9 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_own_training',
     'view_own_loans',
     'view_own_travel',
+    'view_announcements',
+    // Recognition
+    'view_recognition', 'give_recognition',
     // Misc
     'view_org_chart',
   ],
@@ -263,6 +286,9 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_own_training',
     'view_own_loans',
     'view_own_travel',
+    'view_announcements',
+    // Recognition
+    'view_recognition', 'give_recognition',
   ],
   employee: [
     'view_own_leave',
@@ -272,6 +298,9 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_own_training',
     'view_own_loans',
     'view_own_travel',
+    'view_announcements',
+    // Recognition
+    'view_recognition', 'give_recognition',
   ],
 }
 
@@ -319,6 +348,11 @@ const ROUTE_ACCESS: Record<RouteKey, UserRole[]> = {
   complaints: ['super_admin', 'hr_manager'],
   training: ['super_admin', 'hr_manager'],
   loans: ['super_admin', 'hr_manager'],
+  announcements: ['super_admin', 'hr_manager'],
+  recognition: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'recognition/:id': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'recognition/leaderboard': ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
+  'recognition/admin': ['super_admin', 'hr_manager'],
   travel: ['super_admin', 'hr_manager', 'pro_officer', 'dept_head', 'employee'],
   'leave-adjustments': ['super_admin', 'hr_manager'],
 
@@ -374,6 +408,10 @@ export const ALL_PERMISSIONS: Permission[] = [
   'manage_training', 'view_own_training',
   // Loans
   'manage_loans', 'view_own_loans',
+  // Announcements
+  'manage_announcements', 'view_announcements',
+  // Recognition
+  'manage_recognition', 'view_recognition', 'give_recognition',
   // Travel
   'manage_travel', 'view_own_travel',
   // Workspace management
@@ -451,6 +489,8 @@ export function getNavRouteKey(url: string): RouteKey | null {
     '/my/training': 'my/training',
     '/loans': 'loans',
     '/my/loans': 'my/loans',
+    '/announcements': 'announcements',
+    '/recognition': 'recognition',
     '/leave-adjustments': 'leave-adjustments',
   }
   return map[url] ?? null

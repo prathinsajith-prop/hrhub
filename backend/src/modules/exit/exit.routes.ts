@@ -7,6 +7,7 @@ import { db } from '../../db/index.js'
 import { tenants } from '../../db/schema/index.js'
 import { eq } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
 
 const initiateExitSchema = z.object({
     employeeId: z.string().uuid(),
@@ -147,6 +148,11 @@ export async function exitRoutes(fastify: any) {
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
+            notifyEmployee(request.user.tenantId, (data as any).employeeId, {
+                type: 'info',
+                title: 'Exit request approved',
+                message: 'Your exit request has been approved. HR will be in touch about your offboarding and final settlement.',
+            }).catch(() => { })
         }
         return reply.send({ data })
     })
@@ -172,6 +178,11 @@ export async function exitRoutes(fastify: any) {
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
+            notifyEmployee(request.user.tenantId, (data as any).employeeId, {
+                type: 'warning',
+                title: 'Exit request declined',
+                message: `Your exit request was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+            }).catch(() => { })
         }
         return reply.send({ data })
     })
@@ -195,6 +206,11 @@ export async function exitRoutes(fastify: any) {
                 metadata: { kind: 'exit', subKind: 'settlement-paid', exitRequestId: id },
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            notifyEmployee(request.user.tenantId, (data as any).employeeId, {
+                type: 'success',
+                title: 'Final settlement paid',
+                message: 'Your final settlement has been marked as paid. Thank you for your service.',
             }).catch(() => { })
         }
         return reply.send({ data })

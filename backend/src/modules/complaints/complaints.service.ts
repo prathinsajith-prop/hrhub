@@ -3,6 +3,7 @@ import { complaints, employees, users } from '../../db/schema/index.js'
 import { eq, and, desc, isNull, sql, ilike, or, inArray, aliasedTable } from 'drizzle-orm'
 import { sendEmail } from '../../plugins/email.js'
 import { Conditions } from '../../lib/filters.js'
+import { encryptField, decryptField } from '../../lib/crypto.js'
 
 // SLA calendar days per severity (approximate working-day equivalent)
 const SLA_DAYS: Record<string, number> = {
@@ -95,7 +96,7 @@ function mapRow(row: {
         category: row.category,
         severity: row.severity,
         confidentiality: row.confidentiality,
-        description: isAnon ? '[Redacted]' : row.description,
+        description: isAnon ? '[Redacted]' : (decryptField(row.description) ?? ''),
         status: row.status,
         assignedToId: row.assignedToId,
         resolutionNotes: row.resolutionNotes,
@@ -131,7 +132,9 @@ export async function listComplaints(tenantId: string, params: {
 
     if (params.search?.trim()) {
         const q = `%${params.search.trim()}%`
-        conds.add(or(ilike(complaints.title, q), ilike(complaints.description, q)))
+        // Title only — descriptions are encrypted at rest (see lib/crypto), so an
+        // ILIKE on the ciphertext can't match plaintext queries.
+        conds.add(or(ilike(complaints.title, q)))
     }
 
     const [rows, countRows] = await Promise.all([
@@ -186,7 +189,7 @@ export async function createComplaint(tenantId: string, input: CreateComplaintIn
         category: input.category,
         severity: input.severity,
         confidentiality: input.confidentiality,
-        description: input.description.trim(),
+        description: encryptField(input.description.trim()),
         status: 'draft',
     }).returning()
     return row
@@ -202,7 +205,7 @@ export async function updateComplaint(tenantId: string, id: string, input: Updat
         ...(input.category !== undefined && { category: input.category }),
         ...(input.severity !== undefined && { severity: input.severity }),
         ...(input.confidentiality !== undefined && { confidentiality: input.confidentiality }),
-        ...(input.description !== undefined && { description: input.description.trim() }),
+        ...(input.description !== undefined && { description: encryptField(input.description.trim()) }),
         ...(input.subjectEmployeeId !== undefined && { subjectEmployeeId: input.subjectEmployeeId }),
         updatedAt: new Date(),
     }).where(whereClause!).returning()

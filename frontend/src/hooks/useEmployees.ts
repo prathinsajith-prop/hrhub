@@ -31,6 +31,8 @@ interface ListParams {
     search?: string
     status?: string
     department?: string
+    /** Lifecycle scope for the Active/Archived/All status filter. */
+    archived?: 'active' | 'archived' | 'all'
     /** Additional filters sent as compact query string to the backend. */
     filters?: AppliedFiltersMap
     limit?: number
@@ -48,11 +50,12 @@ interface PaginatedResult<T> {
 
 export function useEmployees(params: ListParams = {}) {
     const tenantId = useAuthStore(s => s.tenant?.id)
-    const { search, status, department, filters, limit = 20, offset = 0 } = params
+    const { search, status, department, archived, filters, limit = 20, offset = 0 } = params
     const query = new URLSearchParams()
     if (search) query.set('search', search)
     if (status) query.set('status', status)
     if (department) query.set('department', department)
+    if (archived) query.set('archived', archived)
     query.set('limit', String(limit))
     query.set('offset', String(offset))
     if (filters && Object.keys(filters).length > 0) {
@@ -61,7 +64,7 @@ export function useEmployees(params: ListParams = {}) {
     }
 
     return useQuery({
-        queryKey: ['employees', tenantId, search, status, department, filters, limit, offset],
+        queryKey: ['employees', tenantId, search, status, department, archived, filters, limit, offset],
         queryFn: () => api.get<PaginatedResult<Employee>>(`/employees?${query}`),
         enabled: !!tenantId,
         staleTime: 30_000,
@@ -77,6 +80,7 @@ export function useInfiniteEmployees(params: Omit<ListParams, 'offset'> = {}) {
             if (params.search) query.set('search', params.search)
             if (params.status) query.set('status', params.status)
             if (params.department) query.set('department', params.department)
+            if (params.archived) query.set('archived', params.archived)
             query.set('limit', String(params.limit ?? 20))
             if (pageParam) query.set('after', pageParam as string)
             return api.get<PaginatedResult<Employee>>(`/employees?${query}`)
@@ -157,8 +161,36 @@ export function useUpdateEmployee(id: string) {
 export function useArchiveEmployee() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (id: string) => api.delete(`/employees/${id}`),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+        // `force` proceeds past non-blocking dependency warnings (warn-and-continue).
+        mutationFn: ({ id, force }: { id: string; force?: boolean }) =>
+            api.delete(`/employees/${id}${force ? '?force=true' : ''}`),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['employees', 'lifecycle-counts'] })
+            qc.invalidateQueries({ queryKey: ['org-chart'] })
+        },
+    })
+}
+
+export function useRestoreEmployee() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.post(`/employees/${id}/restore`),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['employees', 'lifecycle-counts'] })
+            qc.invalidateQueries({ queryKey: ['org-chart'] })
+        },
+    })
+}
+
+export function useEmployeeLifecycleCounts() {
+    const tenantId = useAuthStore(s => s.tenant?.id)
+    return useQuery<{ data: { active: number; archived: number; all: number } }>({
+        queryKey: ['employees', 'lifecycle-counts', tenantId],
+        queryFn: () => api.get('/employees/lifecycle-counts'),
+        enabled: !!tenantId,
+        staleTime: 30_000,
     })
 }
 

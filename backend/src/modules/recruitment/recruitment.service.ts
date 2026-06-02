@@ -1,7 +1,7 @@
 import { eq, and, desc, isNull, sql, getTableColumns, ne, inArray } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { recruitmentJobs, jobApplications, recruitmentStages } from '../../db/schema/index.js'
+import { recruitmentJobs, jobApplications, recruitmentStages, employees, tenants } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
 import { buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
@@ -26,6 +26,7 @@ const APP_FIELD_MAP = {
     score: jobApplications.score,
     experience: jobApplications.experience,
     expectedSalary: jobApplications.expectedSalary,
+    source: jobApplications.source,
 }
 const APP_ALLOWED = new Set(Object.keys(APP_FIELD_MAP))
 
@@ -60,6 +61,107 @@ export async function getJob(tenantId: string, id: string) {
     return row ?? null
 }
 
+/* ─── Public careers portal (unauthenticated) ─────────────────────────────────
+ * These functions back the public /careers/:companyCode pages. A visitor has no
+ * JWT, so the tenant is resolved from the unique, shareable `companyCode`. Only
+ * `open` jobs and a safe subset of columns are ever exposed — internal fields
+ * (postedBy, deletedAt, etc.) never leave the service layer.
+ */
+
+/** Resolve a tenant from its public company code. Returns null if unknown. */
+export async function getPublicTenantByCode(companyCode: string) {
+    const code = companyCode.trim()
+    if (!code) return null
+    const [row] = await db.select({ id: tenants.id, name: tenants.name, companyCode: tenants.companyCode })
+        .from(tenants)
+        .where(eq(tenants.companyCode, code))
+        .limit(1)
+    return row ?? null
+}
+
+// Public-safe column projection — never expose postedBy/deletedAt/tenantId.
+const PUBLIC_JOB_COLUMNS = {
+    id: recruitmentJobs.id,
+    jobNo: recruitmentJobs.jobNo,
+    title: recruitmentJobs.title,
+    department: recruitmentJobs.department,
+    location: recruitmentJobs.location,
+    type: recruitmentJobs.type,
+    openings: recruitmentJobs.openings,
+    minSalary: recruitmentJobs.minSalary,
+    maxSalary: recruitmentJobs.maxSalary,
+    industry: recruitmentJobs.industry,
+    description: recruitmentJobs.description,
+    requirements: recruitmentJobs.requirements,
+    closingDate: recruitmentJobs.closingDate,
+    createdAt: recruitmentJobs.createdAt,
+}
+
+/** Paginated, filterable list of a tenant's publicly visible (open) jobs. */
+export async function listPublicJobs(
+    tenantId: string,
+    params: { limit: number; offset: number; q?: string; department?: string; location?: string; type?: string },
+) {
+    const { limit, offset, q, department, location, type } = params
+
+    const conds = Conditions.create()
+        .tenant(recruitmentJobs.tenantId, tenantId)
+        .notDeleted(recruitmentJobs.deletedAt)
+        .match(recruitmentJobs.status, 'open')
+        .match(recruitmentJobs.department, department)
+        .match(recruitmentJobs.location, location)
+        .match(recruitmentJobs.type, type)
+        .search(q, recruitmentJobs.title, recruitmentJobs.department, recruitmentJobs.location)
+
+    const rows = await db.select({ ...PUBLIC_JOB_COLUMNS, totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(recruitmentJobs)
+        .where(conds.where())
+        .orderBy(desc(recruitmentJobs.createdAt))
+        .limit(limit).offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    const jobs = rows.map(({ totalCount: _totalCount, ...job }) => job)
+    return { jobs, total, limit, offset, hasMore: offset + limit < total }
+}
+
+/** Distinct filter facets (departments, locations, types) across open jobs. */
+export async function getPublicJobFacets(tenantId: string) {
+    const rows = await db.select({
+        department: recruitmentJobs.department,
+        location: recruitmentJobs.location,
+        type: recruitmentJobs.type,
+    })
+        .from(recruitmentJobs)
+        .where(and(
+            eq(recruitmentJobs.tenantId, tenantId),
+            eq(recruitmentJobs.status, 'open' as never),
+            isNull(recruitmentJobs.deletedAt),
+        ))
+
+    const uniqSorted = (vals: (string | null)[]) =>
+        [...new Set(vals.filter((v): v is string => !!v && v.trim() !== ''))].sort((a, b) => a.localeCompare(b))
+
+    return {
+        departments: uniqSorted(rows.map(r => r.department)),
+        locations: uniqSorted(rows.map(r => r.location)),
+        types: uniqSorted(rows.map(r => r.type)),
+    }
+}
+
+/** Fetch a single open job for the public detail page. Null if not open/found. */
+export async function getPublicJob(tenantId: string, id: string) {
+    const [row] = await db.select(PUBLIC_JOB_COLUMNS)
+        .from(recruitmentJobs)
+        .where(and(
+            eq(recruitmentJobs.id, id),
+            eq(recruitmentJobs.tenantId, tenantId),
+            eq(recruitmentJobs.status, 'open' as never),
+            isNull(recruitmentJobs.deletedAt),
+        ))
+        .limit(1)
+    return row ?? null
+}
+
 export async function softDeleteJob(tenantId: string, id: string) {
     const [row] = await db.update(recruitmentJobs)
         .set(withTimestamp({ deletedAt: new Date() }))
@@ -68,8 +170,24 @@ export async function softDeleteJob(tenantId: string, id: string) {
     return row ?? null
 }
 
+/**
+ * Next per-tenant requisition number, e.g. "JOB-0001". Derives the next value
+ * from the highest existing JOB-#### for the tenant. Job creation is
+ * low-frequency and the (tenant_id, job_no) partial-unique index is the
+ * backstop, so a plain max+1 is sufficient (no dedicated sequence table).
+ */
+export async function generateNextJobNo(tenantId: string, conn: typeof db = db): Promise<string> {
+    const [row] = await conn
+        .select({ max: sql<number>`COALESCE(MAX(CAST(NULLIF(regexp_replace(${recruitmentJobs.jobNo}, '\\D', '', 'g'), '') AS INTEGER)), 0)` })
+        .from(recruitmentJobs)
+        .where(eq(recruitmentJobs.tenantId, tenantId))
+    const next = Number(row?.max ?? 0) + 1
+    return `JOB-${String(next).padStart(4, '0')}`
+}
+
 export async function createJob(tenantId: string, data: Omit<NewJob, 'tenantId' | 'id'>) {
-    const [row] = await db.insert(recruitmentJobs).values({ ...data, tenantId }).returning()
+    const jobNo = await generateNextJobNo(tenantId)
+    const [row] = await db.insert(recruitmentJobs).values({ ...data, tenantId, jobNo }).returning()
     return row
 }
 
@@ -96,9 +214,12 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
         ...getTableColumns(jobApplications),
         totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
         jobTitle: recruitmentJobs.title,
+        // Referrer name for the "Referred by" badge (null for direct applications).
+        referredByName: sql<string | null>`CASE WHEN ${employees.id} IS NOT NULL THEN ${employees.firstName} || ' ' || ${employees.lastName} ELSE NULL END`,
     })
         .from(jobApplications)
         .leftJoin(recruitmentJobs, eq(jobApplications.jobId, recruitmentJobs.id))
+        .leftJoin(employees, eq(jobApplications.referredByEmployeeId, employees.id))
         .where(conds.where())
         .orderBy(desc(jobApplications.createdAt))
         .limit(limit).offset(offset)

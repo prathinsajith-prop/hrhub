@@ -111,6 +111,8 @@ export interface Employee {
   branchId?: string
   joinDate: string
   status: EmployeeStatus
+  /** Lifecycle flag — true when the employee has been archived (soft-deleted). */
+  isArchived?: boolean
   basicSalary?: number
   totalSalary?: number
   housingAllowance?: number
@@ -178,6 +180,7 @@ export type ApplicationStage = string
 
 export interface Job {
   id: string
+  jobNo?: string | null
   title: string
   department: string
   location: string
@@ -211,6 +214,11 @@ export interface Candidate {
   expectedSalary?: number
   notes?: string
   resumeUrl?: string | null
+  // Origin of the candidate. 'direct' = added by HR · 'careers' = applied via the
+  // public careers portal · 'referral' = submitted by an employee via the portal.
+  source?: 'direct' | 'referral' | 'careers'
+  referredByEmployeeId?: string | null
+  referredByName?: string | null
 }
 
 // Visa

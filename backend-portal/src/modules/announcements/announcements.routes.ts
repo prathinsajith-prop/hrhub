@@ -1,0 +1,173 @@
+import type { FastifyInstance } from 'fastify'
+import { and, desc, eq, isNull, lte, sql, getTableColumns } from 'drizzle-orm'
+import { db } from '../../db/client.js'
+import { announcements, announcementReceipts, employees, teamMembers } from '../../db/schema/index.js'
+import { recordActivity } from '../../lib/audit.js'
+
+// Employee-portal read surface for Company Announcements. HR creates/publishes
+// in the admin app; here employees only read their feed + record engagement.
+// Audience resolution mirrors backend/src/modules/announcements/announcements.service.ts.
+
+/**
+ * Opportunistic lifecycle sweep, run before each feed read. Employees read
+ * announcements here (not the admin app), so the portal must also flip due
+ * scheduled→published and published→expired rows — otherwise a scheduled
+ * announcement would stay invisible until an admin happened to load the admin
+ * list. Status flip only (no notification fan-out — that's the admin side's
+ * job, fired on manual publish and on its own sweep). Never blocks the read.
+ * Mirrors publishDueScheduled/expireDue in the admin service.
+ */
+async function flipDueTransitions(tenantId: string): Promise<void> {
+    try {
+        await db.update(announcements)
+            .set({ status: 'published' as never, publishedAt: sql`COALESCE(${announcements.publishedAt}, now())`, updatedAt: sql`now()` })
+            .where(and(
+                eq(announcements.status, 'scheduled' as never),
+                lte(announcements.publishAt, sql`now()`),
+                isNull(announcements.deletedAt),
+                eq(announcements.tenantId, tenantId),
+            ))
+        await db.update(announcements)
+            .set({ status: 'expired' as never, updatedAt: sql`now()` })
+            .where(and(
+                eq(announcements.status, 'published' as never),
+                lte(announcements.expireAt, sql`now()`),
+                isNull(announcements.deletedAt),
+                eq(announcements.tenantId, tenantId),
+            ))
+    } catch {
+        /* never block the feed on a sweep */
+    }
+}
+
+function audienceMatchSql(emp: {
+    id: string; branchId: string | null; divisionId: string | null; departmentId: string | null
+    gradeLevelId: string | null; contractType: string | null; workLocation: string | null; designation: string | null
+}, teamIds: string[]) {
+    const teamClause = teamIds.length
+        ? sql`OR (aa.audience_kind = 'team' AND aa.audience_value IN (${sql.join(teamIds.map((t) => sql`${t}`), sql`, `)}))`
+        : sql``
+    return sql`EXISTS (
+        SELECT 1 FROM announcement_audiences aa
+        WHERE aa.announcement_id = ${announcements.id} AND (
+            aa.audience_kind = 'all'
+            OR (aa.audience_kind = 'branch' AND aa.audience_value = ${emp.branchId})
+            OR (aa.audience_kind = 'division' AND aa.audience_value = ${emp.divisionId})
+            OR (aa.audience_kind = 'department' AND aa.audience_value = ${emp.departmentId})
+            OR (aa.audience_kind = 'grade' AND aa.audience_value = ${emp.gradeLevelId})
+            OR (aa.audience_kind = 'employment_type' AND aa.audience_value = ${emp.contractType})
+            OR (aa.audience_kind = 'location' AND aa.audience_value = ${emp.workLocation})
+            OR (aa.audience_kind = 'designation' AND aa.audience_value = ${emp.designation})
+            OR (aa.audience_kind = 'employee' AND aa.audience_value = ${emp.id})
+            ${teamClause}
+        )
+    )`
+}
+
+async function loadTargeting(tenantId: string, employeeId: string) {
+    const [emp] = await db.select({
+        id: employees.id, branchId: employees.branchId, divisionId: employees.divisionId,
+        departmentId: employees.departmentId, gradeLevelId: employees.gradeLevelId,
+        contractType: employees.contractType, workLocation: employees.workLocation, designation: employees.designation,
+    }).from(employees).where(and(eq(employees.id, employeeId), eq(employees.tenantId, tenantId))).limit(1)
+    if (!emp) return null
+    const teams = await db.select({ teamId: teamMembers.teamId }).from(teamMembers)
+        .where(and(eq(teamMembers.tenantId, tenantId), eq(teamMembers.employeeId, employeeId)))
+    return {
+        emp: {
+            id: emp.id, branchId: emp.branchId ?? null, divisionId: emp.divisionId ?? null,
+            departmentId: emp.departmentId ?? null, gradeLevelId: emp.gradeLevelId ?? null,
+            contractType: (emp.contractType as string | null) ?? null, workLocation: emp.workLocation ?? null, designation: emp.designation ?? null,
+        },
+        teamIds: teams.map((t) => t.teamId),
+    }
+}
+
+async function ackUpsert(tenantId: string, announcementId: string, employeeId: string, ack: boolean) {
+    const now = new Date()
+    const setObj: Record<string, unknown> = { readAt: sql`COALESCE(${announcementReceipts.readAt}, now())`, updatedAt: sql`now()` }
+    if (ack) setObj.acknowledgedAt = sql`COALESCE(${announcementReceipts.acknowledgedAt}, now())`
+    await db.insert(announcementReceipts)
+        .values({ tenantId, announcementId, employeeId, readAt: now, ...(ack ? { acknowledgedAt: now } : {}) })
+        .onConflictDoUpdate({ target: [announcementReceipts.announcementId, announcementReceipts.employeeId], set: setObj })
+}
+
+export default async function announcementsRoutes(fastify: FastifyInstance): Promise<void> {
+    const auth = { preHandler: [(fastify as any).authenticate] }
+
+    // GET /announcements/feed — published, in-window, visible-to-me (paginated).
+    fastify.get('/feed', { ...auth }, async (request: any, reply: any) => {
+        const employeeId = request.user.employeeId
+        if (!employeeId) return reply.send({ data: [], total: 0, limit: 0, offset: 0, hasMore: false })
+        await flipDueTransitions(request.user.tenantId)
+        const { category, limit = '20', offset = '0' } = (request.query ?? {}) as Record<string, string>
+        const targeting = await loadTargeting(request.user.tenantId, employeeId)
+        if (!targeting) return reply.send({ data: [], total: 0, limit: 0, offset: 0, hasMore: false })
+        const lim = Math.min(Number(limit) || 20, 50), off = Number(offset) || 0
+        const conds = [
+            eq(announcements.tenantId, request.user.tenantId),
+            isNull(announcements.deletedAt),
+            eq(announcements.status, 'published' as never),
+            sql`(${announcements.expireAt} IS NULL OR ${announcements.expireAt} > now())`,
+            audienceMatchSql(targeting.emp, targeting.teamIds),
+        ]
+        if (category) conds.push(eq(announcements.category, category))
+        const rows = await db.select({
+            ...getTableColumns(announcements),
+            totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+            readAt: announcementReceipts.readAt,
+            acknowledgedAt: announcementReceipts.acknowledgedAt,
+        })
+            .from(announcements)
+            .leftJoin(announcementReceipts, and(eq(announcementReceipts.announcementId, announcements.id), eq(announcementReceipts.employeeId, employeeId)))
+            .where(and(...conds))
+            .orderBy(desc(announcements.pinned), desc(announcements.publishedAt), desc(announcements.createdAt))
+            .limit(lim).offset(off)
+        const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+        return reply.send({ data: rows, total, limit: lim, offset: off, hasMore: off + lim < total })
+    })
+
+    async function canView(tenantId: string, employeeId: string, id: string): Promise<boolean> {
+        const targeting = await loadTargeting(tenantId, employeeId)
+        if (!targeting) return false
+        const [row] = await db.select({ id: announcements.id }).from(announcements)
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt),
+                eq(announcements.status, 'published' as never), audienceMatchSql(targeting.emp, targeting.teamIds))).limit(1)
+        return !!row
+    }
+
+    // GET /announcements/feed/:id — detail (auto-marks read).
+    fastify.get('/feed/:id', { ...auth }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const employeeId = request.user.employeeId
+        if (!employeeId || !(await canView(request.user.tenantId, employeeId, id))) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Announcement not found' })
+        }
+        const [row] = await db.select().from(announcements).where(eq(announcements.id, id)).limit(1)
+        ackUpsert(request.user.tenantId, id, employeeId, false).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    fastify.post('/:id/read', { ...auth }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        if (!request.user.employeeId) return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'No employee record linked' })
+        await ackUpsert(request.user.tenantId, id, request.user.employeeId, false)
+        return reply.send({ data: { ok: true } })
+    })
+
+    fastify.post('/:id/acknowledge', { ...auth }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const employeeId = request.user.employeeId
+        if (!employeeId || !(await canView(request.user.tenantId, employeeId, id))) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Announcement not found' })
+        }
+        await ackUpsert(request.user.tenantId, id, employeeId, true)
+        const [ann] = await db.select({ title: announcements.title }).from(announcements).where(eq(announcements.id, id)).limit(1)
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'employee', entityId: employeeId, entityName: ann?.title ?? 'Announcement', action: 'acknowledge',
+            metadata: { kind: 'announcement', subKind: 'acknowledge', announcementId: id }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: { ok: true } })
+    })
+}

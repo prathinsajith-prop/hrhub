@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { listTransfers, createTransfer } from './transfers.service.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
+import { sendEmail, transferEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
 import { employees, orgUnits } from '../../db/schema/index.js'
 import { db } from '../../db/index.js'
 import { eq, and, inArray } from 'drizzle-orm'
@@ -44,6 +47,9 @@ export default async function transfersRoutes(fastify: any): Promise<void> {
                 branchId: employees.branchId,
                 divisionId: employees.divisionId,
                 departmentId: employees.departmentId,
+                firstName: employees.firstName,
+                lastName: employees.lastName,
+                email: employees.email,
             })
             .from(employees)
             .where(and(eq(employees.id, id), eq(employees.tenantId, request.user.tenantId)))
@@ -120,6 +126,24 @@ export default async function transfersRoutes(fastify: any): Promise<void> {
             ipAddress: request.ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
+        notifyEmployee(request.user.tenantId, id, {
+            type: 'info',
+            title: 'You have been transferred',
+            message: `Your transfer has been recorded, effective ${body.transferDate}.`,
+            actionUrl: '/me/profile',
+        }).catch(() => { })
+        if (emp.email) {
+            const appUrl = (loadEnv() as any).APP_URL ?? ''
+            sendEmail({
+                ...transferEmail({
+                    employeeName: `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || 'there',
+                    toDepartment: body.toDepartmentId ? (unitNameMap.get(body.toDepartmentId) ?? undefined) : undefined,
+                    transferDate: body.transferDate,
+                    actionUrl: appUrl ? `${appUrl}/me/profile` : '',
+                }),
+                to: emp.email, tenantId: request.user.tenantId,
+            }).catch(() => { })
+        }
 
         return reply.code(201).send({ data: transfer })
     })

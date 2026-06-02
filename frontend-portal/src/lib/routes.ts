@@ -12,6 +12,8 @@ export const ROUTES = {
     employeeAttendance: '/me/attendance',
     employeeDocuments: '/me/documents',
     employeePerformance: '/me/performance',
+    employeeReferrals: '/me/referrals',
+    employeeAnnouncements: '/me/announcements',
     notifications: '/notifications',
 
     // Manager mode (dept_head only)

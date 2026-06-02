@@ -615,8 +615,10 @@ const EMPTY_FORM: EmpForm = {
     paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
 
+const STEP_INDICATOR_STEPS = ['Personal Info', 'Employment', 'Salary & Payroll']
+
 function StepIndicator({ step }: { step: Step }) {
-    const steps = ['Personal Info', 'Employment', 'Salary & Payroll']
+    const steps = STEP_INDICATOR_STEPS
     return (
         <div className="flex items-center gap-0 mb-5">
             {steps.map((label, i) => {
@@ -2314,6 +2316,8 @@ export function EditDocumentDialog({
 
 // ─── Assign Asset to Employee ─────────────────────────────────────────────────
 
+const CONDITION_LABEL: Record<string, string> = { new: 'New', good: 'Good', damaged: 'Damaged' }
+
 export function AssignAssetToEmployeeDialog({
     employee,
     open,
@@ -2374,8 +2378,6 @@ export function AssignAssetToEmployeeDialog({
             toast.error('Assignment failed', err instanceof Error ? err.message : 'Please try again.')
         }
     }
-
-    const CONDITION_LABEL: Record<string, string> = { new: 'New', good: 'Good', damaged: 'Damaged' }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

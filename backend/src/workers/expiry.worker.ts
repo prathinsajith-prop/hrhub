@@ -1,11 +1,12 @@
 import { Queue, Worker } from 'bullmq'
 import { log } from '../lib/logger.js'
 import { db } from '../db/index.js'
-import { employees, notifications, documents, users, onboardingSteps, exitRequests } from '../db/schema/index.js'
+import { employees, notifications, documents, users, onboardingSteps, exitRequests, complaints, trainingRecords } from '../db/schema/index.js'
 import { fireWorkflows } from '../modules/offboardingFlow/offboarding.service.js'
-import { and, eq, lt, lte, gte, ne, inArray } from 'drizzle-orm'
+import { notifyEmployee } from '../modules/notifications/notifications.service.js'
+import { and, eq, lt, lte, gte, ne, inArray, isNotNull } from 'drizzle-orm'
 import { loadEnv } from '../config/env.js'
-import { sendEmail, visaExpiryAlertEmail, documentExpiryAlertEmail } from '../plugins/email.js'
+import { sendEmail, visaExpiryAlertEmail, documentExpiryAlertEmail, contractExpiryAlertEmail, passportExpiryAlertEmail } from '../plugins/email.js'
 import { sendSubscriptionExpiryReminders } from '../modules/subscription/subscription.service.js'
 
 function getRedisConnection() {
@@ -32,6 +33,8 @@ export let passportExpiryQueue: Queue | null = null
 export let subscriptionExpiryQueue: Queue | null = null
 export let onboardingOverdueQueue: Queue | null = null
 export let exitRelievingDateQueue: Queue | null = null
+export let complaintSlaQueue: Queue | null = null
+export let trainingExpiryQueue: Queue | null = null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function daysFromNow(days: number): Date {
@@ -276,13 +279,29 @@ async function runContractExpiryCheck() {
             ))
 
         for (const emp of expiring) {
+            const name = `${emp.firstName} ${emp.lastName}`
             await notifyHrManagers(
                 emp.tenantId,
                 emp.id,
                 days <= 30 ? 'warning' : 'info',
                 `Contract Expiring in ${days} Days`,
-                `${emp.firstName} ${emp.lastName}'s contract (${emp.designation ?? 'Employee'}) expires on ${emp.contractEndDate}`,
+                `${name}'s contract (${emp.designation ?? 'Employee'}) expires on ${emp.contractEndDate}`,
             )
+            try {
+                const env = loadEnv()
+                const frontendUrl = (env as any).APP_URL ?? ''
+                const hrUsers = await db.select({ email: users.email, name: users.name }).from(users)
+                    .where(and(eq(users.tenantId, emp.tenantId), eq(users.isActive, true), inArray(users.role, ['hr_manager', 'super_admin'] as never[]))).limit(10)
+                for (const u of hrUsers) {
+                    if (!u.email) continue
+                    const opts = contractExpiryAlertEmail({
+                        recipientName: u.name ?? 'HR', employeeName: name,
+                        expiryDate: emp.contractEndDate ?? '', daysRemaining: days,
+                        actionUrl: frontendUrl ? `${frontendUrl}/employees/${emp.id}` : '',
+                    })
+                    sendEmail({ ...opts, to: u.email, tenantId: emp.tenantId }).catch((err: unknown) => log.warn({ err }, 'worker: contract expiry email failed'))
+                }
+            } catch (err) { log.warn({ err }, 'worker: contract expiry email setup failed') }
         }
     }
     log.info('worker: contract expiry check complete')
@@ -313,13 +332,29 @@ async function runPassportExpiryCheck() {
             ))
 
         for (const emp of expiring) {
+            const name = `${emp.firstName} ${emp.lastName}`
             await notifyHrManagers(
                 emp.tenantId,
                 emp.id,
-                'warning',
+                days <= 30 ? 'error' : days <= 90 ? 'warning' : 'info',
                 `Passport Expiring in ${days} Days`,
-                `${emp.firstName} ${emp.lastName}'s passport expires on ${emp.passportExpiry}`,
+                `${name}'s passport expires on ${emp.passportExpiry}`,
             )
+            try {
+                const env = loadEnv()
+                const frontendUrl = (env as any).APP_URL ?? ''
+                const hrUsers = await db.select({ email: users.email, name: users.name }).from(users)
+                    .where(and(eq(users.tenantId, emp.tenantId), eq(users.isActive, true), inArray(users.role, ['hr_manager', 'pro_officer', 'super_admin'] as never[]))).limit(10)
+                for (const u of hrUsers) {
+                    if (!u.email) continue
+                    const opts = passportExpiryAlertEmail({
+                        recipientName: u.name ?? 'HR', employeeName: name,
+                        expiryDate: emp.passportExpiry ?? '', daysRemaining: days,
+                        actionUrl: frontendUrl ? `${frontendUrl}/employees/${emp.id}` : '',
+                    })
+                    sendEmail({ ...opts, to: u.email, tenantId: emp.tenantId }).catch((err: unknown) => log.warn({ err }, 'worker: passport expiry email failed'))
+                }
+            } catch (err) { log.warn({ err }, 'worker: passport expiry email setup failed') }
         }
     }
     log.info('worker: passport expiry check complete')
@@ -386,6 +421,75 @@ async function runExitRelievingDateCheck() {
     log.info({ fired: due.length }, 'worker: on_relieving_date workflows fired')
 }
 
+// ─── Complaint SLA Breach Worker ──────────────────────────────────────────────
+// Daily sweep for complaints whose SLA deadline has passed but are still open.
+// Notifies HR so breaches don't sit unseen. Deduplicated per day via
+// notifyHrManagers' title+message check.
+async function runComplaintSlaCheck() {
+    log.info('worker: running complaint SLA breach check')
+    const now = new Date()
+    const breached = await db.select({
+        id: complaints.id,
+        tenantId: complaints.tenantId,
+        title: complaints.title,
+        severity: complaints.severity,
+        slaDueAt: complaints.slaDueAt,
+    }).from(complaints)
+        .where(and(
+            isNotNull(complaints.slaDueAt),
+            lt(complaints.slaDueAt, now),
+            inArray(complaints.status, ['submitted', 'under_review', 'escalated'] as never[]),
+        ))
+    for (const c of breached) {
+        await notifyHrManagers(
+            c.tenantId,
+            c.id,
+            'error',
+            'Complaint SLA breached',
+            `A ${c.severity} complaint has passed its resolution deadline.`,
+        )
+    }
+    log.info({ breached: breached.length }, 'worker: complaint SLA check complete')
+}
+
+// ─── Training Certificate Expiry Worker ───────────────────────────────────────
+// Alerts HR + the employee when a training certificate is approaching expiry
+// (90/60/30 days), mirroring the visa/document expiry workers.
+async function runTrainingCertExpiryCheck() {
+    log.info('worker: running training certificate expiry check')
+    const thresholds = [90, 60, 30]
+    for (const days of thresholds) {
+        const target = daysFromNow(days)
+        const startOfDay = new Date(target); startOfDay.setHours(0, 0, 0, 0)
+        const endOfDay = new Date(target); endOfDay.setHours(23, 59, 59, 999)
+        const expiring = await db.select({
+            id: trainingRecords.id,
+            tenantId: trainingRecords.tenantId,
+            employeeId: trainingRecords.employeeId,
+            title: trainingRecords.title,
+            certificateExpiry: trainingRecords.certificateExpiry,
+        }).from(trainingRecords)
+            .where(and(
+                gte(trainingRecords.certificateExpiry, startOfDay.toISOString().split('T')[0]),
+                lte(trainingRecords.certificateExpiry, endOfDay.toISOString().split('T')[0]),
+            ))
+        for (const t of expiring) {
+            await notifyHrManagers(
+                t.tenantId, t.id, days <= 30 ? 'warning' : 'info',
+                `Training certificate expiring in ${days} days`,
+                `"${t.title}" certificate expires on ${t.certificateExpiry}`,
+            )
+            notifyEmployee(t.tenantId, t.employeeId, {
+                type: days <= 30 ? 'warning' : 'info',
+                title: 'Your training certificate is expiring',
+                message: `"${t.title}" expires on ${t.certificateExpiry}.`,
+                actionUrl: '/my/training',
+            }).catch(() => { })
+        }
+    }
+    log.info('worker: training certificate expiry check complete')
+}
+
 // ─── Scheduler: Register all daily workers ────────────────────────────────────
 export async function startExpiryWorkers() {
     const env = loadEnv()
@@ -419,6 +523,8 @@ export async function startExpiryWorkers() {
         subscriptionExpiryQueue = new Queue('subscription-expiry', { connection })
         onboardingOverdueQueue = new Queue('onboarding-overdue', { connection })
         exitRelievingDateQueue = new Queue('exit-relieving-date', { connection })
+        complaintSlaQueue = new Queue('complaint-sla', { connection })
+        trainingExpiryQueue = new Queue('training-expiry', { connection })
 
         // Enqueue recurring daily jobs at 06:00 UAE time (UTC+4 = 02:00 UTC)
         await visaExpiryQueue.upsertJobScheduler('daily-visa-check', { pattern: '0 2 * * *' }, { name: 'visa-expiry' })
@@ -428,6 +534,8 @@ export async function startExpiryWorkers() {
         await subscriptionExpiryQueue.upsertJobScheduler('daily-subscription-check', { pattern: '0 2 * * *' }, { name: 'subscription-expiry' })
         await onboardingOverdueQueue.upsertJobScheduler('daily-onboarding-overdue', { pattern: '0 2 * * *' }, { name: 'onboarding-overdue' })
         await exitRelievingDateQueue.upsertJobScheduler('daily-exit-relieving-date', { pattern: '0 2 * * *' }, { name: 'exit-relieving-date' })
+        await complaintSlaQueue.upsertJobScheduler('daily-complaint-sla', { pattern: '0 2 * * *' }, { name: 'complaint-sla' })
+        await trainingExpiryQueue.upsertJobScheduler('daily-training-expiry', { pattern: '0 2 * * *' }, { name: 'training-expiry' })
 
         // Process workers
         new Worker('visa-expiry', runVisaExpiryCheck, { connection })
@@ -437,6 +545,8 @@ export async function startExpiryWorkers() {
         new Worker('subscription-expiry', runSubscriptionExpiryCheck, { connection })
         new Worker('onboarding-overdue', runOnboardingOverdueCheck, { connection })
         new Worker('exit-relieving-date', runExitRelievingDateCheck, { connection })
+        new Worker('complaint-sla', runComplaintSlaCheck, { connection })
+        new Worker('training-expiry', runTrainingCertExpiryCheck, { connection })
 
         log.info('expiry alert workers started (daily 06:00 UAE)')
     } catch (err) {

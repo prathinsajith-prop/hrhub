@@ -15,6 +15,12 @@
  */
 import { z } from 'zod'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee, notifyRoles, getRecipientsByRoles } from '../notifications/notifications.service.js'
+import { sendEmail, travelStatusEmail } from '../../plugins/email.js'
+import { db } from '../../db/index.js'
+import { employees } from '../../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
+import { loadEnv } from '../../config/env.js'
 import {
     createTravelExpense,
     createTravelRequest,
@@ -112,6 +118,30 @@ function parseBody<T extends z.ZodTypeAny>(
     const message = first ? `${first.path.join('.')}: ${first.message}` : 'Invalid payload'
     reply.code(400).send({ statusCode: 400, error: 'Bad Request', message })
     return null
+}
+
+// Notify + email the travel-request owner of an approve/reject decision (best-effort).
+async function notifyTravelRequester(
+    tenantId: string,
+    existing: { employeeId: string; travelNo: string; placeOfVisit?: string | null },
+    status: 'approved' | 'rejected',
+    reason?: string,
+): Promise<void> {
+    notifyEmployee(tenantId, existing.employeeId, {
+        type: status === 'approved' ? 'success' : 'warning',
+        title: `Travel request ${status}`,
+        message: `${existing.travelNo} (${existing.placeOfVisit ?? 'travel'}) was ${status}.`,
+        actionUrl: '/travel',
+    }).catch(() => { })
+    const [emp] = await db.select({ email: employees.email, first: employees.firstName })
+        .from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.id, existing.employeeId))).limit(1)
+    if (emp?.email) {
+        const appUrl = (loadEnv() as any).APP_URL ?? ''
+        sendEmail({
+            ...travelStatusEmail({ recipientName: emp.first ?? 'there', travelNo: existing.travelNo, destination: existing.placeOfVisit ?? '—', status, reason, actionUrl: appUrl ? `${appUrl}/travel` : '' }),
+            to: emp.email, tenantId,
+        }).catch(() => { })
+    }
 }
 
 export default async function travelRoutes(fastify: any): Promise<void> {
@@ -277,6 +307,17 @@ export default async function travelRoutes(fastify: any): Promise<void> {
                     ipAddress: request.ip,
                     userAgent: request.headers['user-agent'],
                 }).catch(() => { })
+                if (verb === 'submit') {
+                    const tenantId = request.user.tenantId
+                    const appUrl = (loadEnv() as any).APP_URL ?? ''
+                    notifyRoles(tenantId, ['hr_manager', 'super_admin'], { type: 'info', title: 'Travel request submitted', message: `${existing.travelNo} — ${existing.placeOfVisit ?? 'travel'} awaits approval`, actionUrl: '/travel' }).catch(() => { })
+                    getRecipientsByRoles(tenantId, ['hr_manager', 'super_admin']).then((hr) => {
+                        for (const u of hr) {
+                            if (!u.email) continue
+                            sendEmail({ ...travelStatusEmail({ recipientName: u.name ?? 'HR', travelNo: existing.travelNo, destination: existing.placeOfVisit ?? '—', status: 'submitted', actionUrl: appUrl ? `${appUrl}/travel` : '', forApprover: true }), to: u.email, tenantId }).catch(() => { })
+                        }
+                    }).catch(() => { })
+                }
                 return reply.send({ data: row })
             } catch (err: any) {
                 const code = err?.statusCode ?? 500
@@ -304,6 +345,7 @@ export default async function travelRoutes(fastify: any): Promise<void> {
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
+            notifyTravelRequester(request.user.tenantId, existing, 'approved').catch(() => { })
             return reply.send({ data: row })
         } catch (err: any) {
             const code = err?.statusCode ?? 500
@@ -335,6 +377,7 @@ export default async function travelRoutes(fastify: any): Promise<void> {
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
+            notifyTravelRequester(request.user.tenantId, existing, 'rejected', body.rejectionReason ?? undefined).catch(() => { })
             return reply.send({ data: row })
         } catch (err: any) {
             const code = err?.statusCode ?? 500

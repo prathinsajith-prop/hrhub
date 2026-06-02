@@ -40,6 +40,7 @@ import { Label } from '@/components/ui/primitives'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog, AddEmployeeDialog, type EmpForm } from '@/components/shared/action-dialogs'
+import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
@@ -63,7 +64,14 @@ const JOB_FILTERS: FilterConfig[] = [
   { name: 'closingDate', label: 'Closing date', type: 'date_range', field: 'closingDate' },
 ]
 
+const CANDIDATE_SOURCE_OPTIONS = [
+  { value: 'careers', label: 'Careers site' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'direct', label: 'Added by HR' },
+]
+
 const CANDIDATE_FILTERS: FilterConfig[] = [
+  { name: 'source', label: 'Source', type: 'multi_select', field: 'source', options: CANDIDATE_SOURCE_OPTIONS },
   { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
   { name: 'experience', label: 'Experience (yrs)', type: 'number_range', field: 'experience', min: 0 },
   { name: 'expectedSalary', label: 'Expected salary (AED)', type: 'number_range', field: 'expectedSalary', min: 0, prefix: 'AED' },
@@ -167,6 +175,10 @@ const CandidateCard = memo(function CandidateCard({
           )}
         </div>
       )}
+
+      <div className="mb-2">
+        <CandidateSourceBadge source={candidate.source} referredByName={candidate.referredByName} />
+      </div>
 
       <div className="space-y-1 mb-3 bg-muted/40 rounded-lg p-2">
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-0">
@@ -335,7 +347,10 @@ const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
     header: 'Position',
     cell: ({ row: { original: j } }) => (
       <div>
-        <p className="font-medium text-sm text-foreground">{j.title}</p>
+        <div className="flex items-center gap-2">
+          {j.jobNo && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">{j.jobNo}</span>}
+          <p className="font-medium text-sm text-foreground">{j.title}</p>
+        </div>
         <p className="text-[11px] text-muted-foreground">{j.department} &middot; {j.location}</p>
       </div>
     ),
@@ -625,6 +640,7 @@ const CandidateListRow = memo(function CandidateListRow({
                 <Briefcase className="size-3 shrink-0" />{candidate.jobTitle}
               </span>
             )}
+            <CandidateSourceBadge source={candidate.source} referredByName={candidate.referredByName} />
           </div>
         </div>
       </div>

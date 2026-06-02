@@ -512,6 +512,41 @@
       "when": 1781107200000,
       "tag": "0072_default_general_shift_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1781193600000,
+      "tag": "0073_employee_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1781280000000,
+      "tag": "0074_job_no",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1781366400000,
+      "tag": "0075_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1781452800000,
+      "tag": "0076_recognitions",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1781539200000,
+      "tag": "0077_soft_delete_employee_subrecords",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { RichTextDisplay } from '@/components/ui/rich-text-editor'
+import { RichTextDisplay } from '@/components/ui/rich-text-display'
 import {
   ArrowLeft, Edit2, MapPin, Briefcase, Users,
   Download, Eye, FileText, Star, Clock, CheckCircle2, XCircle, AlertCircle,

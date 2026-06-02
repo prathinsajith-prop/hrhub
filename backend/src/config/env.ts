@@ -47,6 +47,11 @@ const envSchema = z.object({
     // Stripe — leave empty to disable self-service checkout (falls back to email request flow)
     STRIPE_SECRET_KEY: z.string().default(''),
     STRIPE_WEBHOOK_SECRET: z.string().default(''),
+    // Optional dedicated key for at-rest field encryption (e.g. confidential
+    // complaint descriptions). When empty, a key is derived from JWT_SECRET so
+    // encryption still works out-of-the-box; set a dedicated value in prod so
+    // rotating the JWT secret doesn't make encrypted fields unreadable.
+    FIELD_ENCRYPTION_KEY: z.string().default(''),
     // Observability (optional). If SENTRY_DSN is set, the error handler
     // will forward 5xx errors — requires `@sentry/node` package.
     SENTRY_DSN: z.string().default(''),

@@ -275,7 +275,7 @@ export function AddMembersDialog({ teamId, open, onClose }: { teamId: string; op
                             onChange={e => setSearch(e.target.value)}
                         />
                         {search && (
-                            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                            <button type="button" onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
                                 <X className="size-3.5 text-muted-foreground hover:text-foreground" />
                             </button>
                         )}
@@ -492,6 +492,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
 
                 {/* ── Expand / collapse toggle ── */}
                 <button
+                    type="button"
                     onClick={toggleExpand}
                     className={cn(
                         'w-full flex items-center justify-center gap-1.5 py-2 border-t text-xs font-medium transition-colors',
@@ -520,6 +521,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                 />
                                 {search && (
                                     <button
+                                        type="button"
                                         onClick={e => { e.stopPropagation(); setSearch('') }}
                                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                     >
@@ -601,7 +603,7 @@ const TeamCard = memo(function TeamCard({ team, canManage, orgMap, onEdit, onDel
                                                 {canManage ? (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                                                            <button className="flex items-center gap-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0">
+                                                            <button type="button" className="flex items-center gap-0.5 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring shrink-0">
                                                                 <RoleBadge role={m.role ?? 'member'} />
                                                                 <ChevronDown className="size-2.5 text-muted-foreground opacity-0 group-hover/row:opacity-100 transition-opacity" />
                                                             </button>
@@ -719,8 +721,12 @@ function TeamGrid({ teams, showControls, canManage, canViewAll, userId, orgMap, 
     const [visibleCount, setVisibleCount] = useState(TEAMS_PAGE_SIZE)
     const sentinelRef = useRef<HTMLDivElement>(null)
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { setVisibleCount(TEAMS_PAGE_SIZE) }, [teams.length])
+    // Reset paging when the team set changes — state-during-render (no effect).
+    const [prevLen, setPrevLen] = useState(teams.length)
+    if (teams.length !== prevLen) {
+        setPrevLen(teams.length)
+        setVisibleCount(TEAMS_PAGE_SIZE)
+    }
 
     useEffect(() => {
         const el = sentinelRef.current

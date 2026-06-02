@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
@@ -294,6 +295,7 @@ export function CandidateProfilePage() {
                             <Badge variant="outline" className={cn('text-[11px]', stageColor.badgeClass)}>
                                 {currentStage?.label ?? candidate.stage}
                             </Badge>
+                            <CandidateSourceBadge source={candidate.source} referredByName={candidate.referredByName} />
                         </div>
                     </div>
                 </div>
