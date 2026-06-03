@@ -63,7 +63,7 @@ const STATUS_TONE: Record<LeaveStatus, string> = {
     cancelled: 'bg-muted text-foreground',
 }
 
-export function EmployeeLeavePage() {
+export function EmployeeLeavePage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
     const user = useAuthStore((s) => s.user)
     const employeeId = user?.employeeId ?? undefined
@@ -79,14 +79,22 @@ export function EmployeeLeavePage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader
-                title={t('leave.title')}
-                action={
+            {embedded ? (
+                <div className="flex justify-end">
                     <Button onClick={() => setOpen(true)}>
                         <Plus className="size-4" /> {t('leave.newRequest')}
                     </Button>
-                }
-            />
+                </div>
+            ) : (
+                <PageHeader
+                    title={t('leave.title')}
+                    action={
+                        <Button onClick={() => setOpen(true)}>
+                            <Plus className="size-4" /> {t('leave.newRequest')}
+                        </Button>
+                    }
+                />
+            )}
 
             <GlassCard tone="primary" className="p-5">
                 <div className="flex items-center justify-between">
@@ -309,8 +317,11 @@ function NewLeaveDialog({
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{t('leave.newRequest')}</DialogTitle>
+                    <p className="text-sm text-muted-foreground">
+                        {t('leave.newRequestSubtitle', { defaultValue: 'Submit a new leave request for approval.' })}
+                    </p>
                 </DialogHeader>
-                <form className="space-y-4" onSubmit={onSubmit}>
+                <form className="space-y-4 pt-1" onSubmit={onSubmit}>
                     <div className="space-y-1.5">
                         <Label>{t('leave.type')}</Label>
                         <Select value={type} onValueChange={(v) => setType(v as LeaveType)}>

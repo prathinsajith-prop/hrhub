@@ -283,7 +283,11 @@ export async function inviteUser(
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
 
-    const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
+    // Employees live in the self-service portal; HR / admin / PRO use the admin
+    // app. Point the invite link at the surface the invitee will actually use so
+    // an employee isn't dropped into the admin console they can't access.
+    const inviteBase = data.role === 'employee' ? env.PORTAL_URL : env.APP_URL
+    const inviteUrl = `${inviteBase}/reset-password?token=${rawToken}`
     const emailOpts = inviteUserEmail({ inviteeName: name, workspaceName: 'HRHub', role: data.role, inviteUrl })
     const result = await sendEmail({ ...emailOpts, to: email })
 
@@ -342,7 +346,7 @@ export async function resendInvite(tenantId: string, employeeId: string) {
     const env = loadEnv()
 
     const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
+        .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive, role: users.role })
         .from(users)
         .where(and(eq(users.employeeId, employeeId), eq(users.tenantId, tenantId)))
         .limit(1)
@@ -359,8 +363,9 @@ export async function resendInvite(tenantId: string, employeeId: string) {
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
 
-    const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
-    const emailOpts = inviteUserEmail({ inviteeName: user.name, workspaceName: 'HRHub', role: 'employee', inviteUrl })
+    const inviteBase = user.role === 'employee' ? env.PORTAL_URL : env.APP_URL
+    const inviteUrl = `${inviteBase}/reset-password?token=${rawToken}`
+    const emailOpts = inviteUserEmail({ inviteeName: user.name, workspaceName: 'HRHub', role: user.role, inviteUrl })
     const result = await sendEmail({ ...emailOpts, to: user.email })
 
     // sendEmail resolves with { ok: false, error } on SMTP/transport failure — previously

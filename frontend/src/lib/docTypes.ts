@@ -193,8 +193,7 @@ export interface DocNumberMeta {
 
 export function docNumberMeta(docType: string): DocNumberMeta {
     const label = DOC_NUMBER_LABELS[docType] ?? 'Document Number'
-    const placeholder = docType === 'Emirates ID'
-        ? '784-XXXX-XXXXXXX-X'
-        : `Enter ${label.toLowerCase()}`
+    // Placeholder describes the field rather than showing a sample value.
+    const placeholder = label
     return { label, placeholder, linksToEmployee: EMPLOYEE_LINKED_DOC_TYPES.has(docType) }
 }

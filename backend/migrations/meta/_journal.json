@@ -603,6 +603,13 @@
       "when": 1782144000000,
       "tag": "0085_employee_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1782230400000,
+      "tag": "0086_application_skills",
+      "breakpoints": true
     }
   ]
 }

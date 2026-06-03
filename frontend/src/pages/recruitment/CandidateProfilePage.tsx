@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
     ArrowLeft, Mail, Phone, Globe, Briefcase, DollarSign, Star,
     XCircle, UserPlus, Save, Edit2, FileText, Upload, CheckCircle2,
-    Clock, ChevronRight, User, MapPin, GraduationCap,
+    Clock, ChevronRight, User, MapPin, GraduationCap, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -438,6 +438,26 @@ export function CandidateProfilePage() {
                             </Label>
                         </CardContent>
                     </Card>
+
+                    {/* Skills — candidate's own skill tags (from the form or résumé) */}
+                    {candidate.skills && candidate.skills.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-1.5">
+                                    <Sparkles className="size-3.5 text-amber-500" />
+                                    {t('recruitment.candidateProfile.skills', { defaultValue: 'Skills' })}
+                                    <span className="ml-auto text-[10px] font-normal text-muted-foreground">{candidate.skills.length}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {candidate.skills.map((s, i) => (
+                                        <Badge key={`skill-${i}`} variant="secondary" className="text-[11px] font-normal">{s}</Badge>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Experience timeline — past roles captured at apply time */}
                     {candidate.experienceHistory && candidate.experienceHistory.length > 0 && (

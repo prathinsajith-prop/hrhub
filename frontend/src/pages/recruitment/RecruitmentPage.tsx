@@ -42,6 +42,7 @@ import { Label } from '@/components/ui/primitives'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog, AddEmployeeDialog, type EmpForm } from '@/components/shared/action-dialogs'
+import { ChipsField } from '@/components/shared/ChipsField'
 import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
 import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
@@ -421,8 +422,15 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [notes, setNotes] = useState('')
   const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
   const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
+  const [skills, setSkills] = useState<string[]>([])
+  const [skillInput, setSkillInput] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [photo, setPhoto] = useState<Blob | null>(null)
+  const addSkill = () => {
+    const v = skillInput.trim()
+    if (v && !skills.includes(v)) setSkills(s => [...s, v])
+    setSkillInput('')
+  }
   const createApp = useCreateApplication()
   const uploadResume = useUploadResume()
   const uploadPhoto = useUploadCandidatePhoto()
@@ -431,7 +439,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
     setAddress(''); setGender('')
     setExperience(''); setExpectedSalary(''); setCurrentSalary(''); setNotes(''); setResumeFile(null); setPhoto(null)
-    setEducationHistory([]); setExperienceHistory([])
+    setEducationHistory([]); setExperienceHistory([]); setSkills([]); setSkillInput('')
   }
 
   // Pre-fill empty fields from the parsed résumé; never overwrite what's typed.
@@ -446,6 +454,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
     if (p.experienceYears != null) setExperience(prev => prev || String(p.experienceYears))
     if (p.education.length) setEducationHistory(prev => prev.length ? prev : p.education)
     if (p.experience.length) setExperienceHistory(prev => prev.length ? prev : p.experience)
+    if (p.skills.length) setSkills(prev => prev.length ? prev : p.skills)
     const parsedBlock = buildCandidateParsedNote(p)
     if (parsedBlock) setNotes(prev => prev || parsedBlock)
   }
@@ -468,6 +477,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           expectedSalary: expectedSalary ? Number(expectedSalary) : undefined,
           currentSalary: currentSalary ? Number(currentSalary) : undefined,
           notes: notes.trim() || undefined,
+          skills: skills.length > 0 ? skills : undefined,
           educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
           experienceHistory: experienceHistory.length > 0 ? experienceHistory : undefined,
         },
@@ -587,6 +597,20 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               compact
               showGender={false}
             />
+            <div className="pt-4">
+              <ChipsField
+                label="Skills"
+                optional
+                chips={skills}
+                onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                inputValue={skillInput}
+                onInputChange={setSkillInput}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
+                onAdd={addSkill}
+                placeholder="Add a skill · Press Enter"
+                chipClassName="bg-sky-100 text-sky-700"
+              />
+            </div>
           </div>
         </DialogBody>
         <DialogFooter>
@@ -602,12 +626,12 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
 
 /**
  * Lossless capture of résumé-parsed fields the candidate dialog doesn't expose
- * (skills + social/portfolio links). Returns a single "Parsed:" block we can
+ * as structured inputs (social/portfolio links). Skills now have a dedicated
+ * field, so they're no longer dumped here. Returns a single "Parsed:" block we
  * pre-fill into the free-text notes; empty string when nothing useful was found.
  */
 function buildCandidateParsedNote(p: ParsedResume): string {
   const lines: string[] = []
-  if (p.skills.length > 0) lines.push(`Skills: ${p.skills.join(', ')}`)
   if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
   if (p.github) lines.push(`GitHub: ${p.github}`)
   if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)

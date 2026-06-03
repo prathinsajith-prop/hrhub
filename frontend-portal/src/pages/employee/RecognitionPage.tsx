@@ -59,7 +59,7 @@ function fmtDate(iso: string | null) {
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export function RecognitionPage() {
+export function RecognitionPage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
     const { id: routeId } = useParams()
     const navigate = useNavigate()
@@ -87,15 +87,23 @@ export function RecognitionPage() {
 
     return (
         <div className="space-y-5">
-            <PageHeader
-                title={t('recognition.title', { defaultValue: 'Recognition' })}
-                subtitle={t('recognition.subtitle', { defaultValue: 'Celebrate great work across the company.' })}
-                action={
+            {embedded ? (
+                <div className="flex justify-end">
                     <Button onClick={() => setGiving(true)} className="gap-2">
                         <Plus className="size-4" /> {t('recognition.give', { defaultValue: 'Give recognition' })}
                     </Button>
-                }
-            />
+                </div>
+            ) : (
+                <PageHeader
+                    title={t('recognition.title', { defaultValue: 'Recognition' })}
+                    subtitle={t('recognition.subtitle', { defaultValue: 'Celebrate great work across the company.' })}
+                    action={
+                        <Button onClick={() => setGiving(true)} className="gap-2">
+                            <Plus className="size-4" /> {t('recognition.give', { defaultValue: 'Give recognition' })}
+                        </Button>
+                    }
+                />
+            )}
 
             {isLoading ? (
                 <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>

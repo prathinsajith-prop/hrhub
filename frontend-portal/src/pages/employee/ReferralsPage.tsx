@@ -25,6 +25,7 @@ import { cn, initialsOf, formatDate } from '@/lib/utils'
 import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
 import { parseResumeFile, extractResumeImage, type ParsedResume } from '@/lib/resume-parser'
 import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
+import { ChipsField } from '@/components/shared/ChipsField'
 import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 
 // Pipeline stage → badge tone. Keys are the seeded recruitment stage keys; we
@@ -291,12 +292,19 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
     const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
     const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
+    const [skills, setSkills] = useState<string[]>([])
+    const [skillInput, setSkillInput] = useState('')
+    const addSkill = () => {
+        const v = skillInput.trim()
+        if (v && !skills.includes(v)) setSkills(s => [...s, v])
+        setSkillInput('')
+    }
 
     const reset = () => {
         setForm({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
         setJob(null); setResume(null); setPhoto(null); setParsedNote(null)
         setNationality(''); setExperience(''); setExpectedSalary(''); setCurrentSalary('')
-        setAddress(''); setGender(''); setEducationHistory([]); setExperienceHistory([])
+        setAddress(''); setGender(''); setEducationHistory([]); setExperienceHistory([]); setSkills([]); setSkillInput('')
         if (fileRef.current) fileRef.current.value = ''
     }
     const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -336,6 +344,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 if (p.address) setAddress((prev) => prev || p.address!)
                 if (p.education.length) setEducationHistory((prev) => prev.length ? prev : p.education)
                 if (p.experience.length) setExperienceHistory((prev) => prev.length ? prev : p.experience)
+                if (p.skills.length) setSkills((prev) => prev.length ? prev : p.skills)
                 const filled = (['name', 'email', 'phone'] as const).filter((k) => p[k])
                 if (p.textLength === 0) {
                     setParsedNote(t('referrals.resumeUnreadable', { defaultValue: 'Couldn’t read text (scanned résumé?) — please fill the fields manually.' }))
@@ -364,6 +373,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 currentSalary: currentSalary.trim() || undefined,
                 address: address.trim() || undefined,
                 gender: gender || undefined,
+                skills: skills.length > 0 ? skills : undefined,
                 educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
                 experienceHistory: experienceHistory.length > 0 ? experienceHistory : undefined,
                 resume,
@@ -548,6 +558,20 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                             compact
                             showGender={false}
                         />
+                        <div className="pt-4">
+                            <ChipsField
+                                label={t('referrals.skills', { defaultValue: 'Skills' })}
+                                optional
+                                chips={skills}
+                                onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                                inputValue={skillInput}
+                                onInputChange={setSkillInput}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
+                                onAdd={addSkill}
+                                placeholder={t('referrals.skillPlaceholder', { defaultValue: 'Add a skill · Press Enter' })}
+                                chipClassName="bg-sky-100 text-sky-700"
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -571,7 +595,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
  */
 function buildReferralParsedNote(p: ParsedResume, t: TFunction): string {
     const lines: string[] = []
-    if (p.skills.length > 0) lines.push(`${t('referrals.parsedSkills', { defaultValue: 'Skills' })}: ${p.skills.join(', ')}`)
+    // Skills now have a dedicated structured field, so they're no longer dumped here.
     if (p.linkedin) lines.push(`${t('referrals.parsedLinkedin', { defaultValue: 'LinkedIn' })}: ${p.linkedin}`)
     if (p.github) lines.push(`${t('referrals.parsedGithub', { defaultValue: 'GitHub' })}: ${p.github}`)
     if (p.portfolio) lines.push(`${t('referrals.parsedPortfolio', { defaultValue: 'Portfolio' })}: ${p.portfolio}`)

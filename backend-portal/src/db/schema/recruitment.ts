@@ -73,6 +73,8 @@ export const jobApplications = pgTable('job_applications', {
     experienceHistory: jsonb('experience_history')
         .$type<Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>>()
         .notNull().default([]),
+    /** Candidate skill tags (jsonb string[]) — migration 0086. */
+    skills: jsonb('skills').$type<string[]>().notNull().default([]),
     resumeUrl: text('resume_url'),
     // Candidate photo (S3 key) — auto-extracted from the résumé on referral/apply.
     avatarUrl: text('avatar_url'),

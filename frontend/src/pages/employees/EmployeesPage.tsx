@@ -297,7 +297,7 @@ export function EmployeesPage() {
           setForceArchive(true)
           return
         }
-        toast.error(code === 'ARCHIVE_BLOCKED' ? 'Cannot archive' : 'Failed', detail || 'Could not archive employee.')
+        toast.error(code === 'ARCHIVE_BLOCKED' || (typeof code === 'string' && code.startsWith('PROTECTED')) ? 'Cannot archive' : 'Failed', detail || 'Could not archive employee.')
         setDeleteTarget(null)
         setForceArchive(false)
       },

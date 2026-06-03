@@ -10,6 +10,7 @@ export const ROUTES = {
     employeeLeave: '/me/leave',
     employeePayslips: '/me/payslips',
     employeeAttendance: '/me/attendance',
+    employeeWork: '/me/work',
     employeeDocuments: '/me/documents',
     employeePerformance: '/me/performance',
     employeeReferrals: '/me/referrals',

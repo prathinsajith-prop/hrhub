@@ -234,6 +234,8 @@ export interface Candidate {
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
   educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
   experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
+  // Candidate's own skill tags (migration 0086) — distinct from the job's required skills.
+  skills?: string[]
   // Origin of the candidate. 'direct' = added by HR · 'careers' = applied via the
   // public careers portal · 'referral' = submitted by an employee via the portal.
   source?: 'direct' | 'referral' | 'careers'

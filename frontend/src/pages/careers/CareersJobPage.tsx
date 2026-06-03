@@ -26,6 +26,7 @@ import { PublicShell, CareersError } from './careersShared'
 import { formatSalaryRange } from './careersHelpers'
 import { JobTypeBadge, WorkplaceBadge, TagChip, formatPostedAgo } from '@/components/shared/JobBadges'
 import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
+import { ChipsField } from '@/components/shared/ChipsField'
 import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 
 export function CareersJobPage() {
@@ -294,6 +295,13 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
     const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
     const [education, setEducation] = useState<EducationEntry[]>([])
     const [experience, setExperience] = useState<ExperienceEntry[]>([])
+    const [skills, setSkills] = useState<string[]>([])
+    const [skillInput, setSkillInput] = useState('')
+    const addSkill = () => {
+        const v = skillInput.trim()
+        if (v && !skills.includes(v)) setSkills(s => [...s, v])
+        setSkillInput('')
+    }
     const [file, setFile] = useState<File | null>(null)
     const [photo, setPhoto] = useState<Blob | null>(null)
     const [done, setDone] = useState(false)
@@ -325,6 +333,7 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
         // Pre-fill the multi-entry history blocks only when the user hasn't added any.
         if (p.education.length) setEducation(prev => prev.length ? prev : p.education)
         if (p.experience.length) setExperience(prev => prev.length ? prev : p.experience)
+        if (p.skills.length) setSkills(prev => prev.length ? prev : p.skills)
     }
 
     const submit = (e: FormEvent) => {
@@ -334,6 +343,7 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
             ...form,
             address: address.trim() || undefined,
             gender: gender || undefined,
+            skills: skills.length > 0 ? skills : undefined,
             educationHistory: education.length > 0 ? education : undefined,
             experienceHistory: experience.length > 0 ? experience : undefined,
             resume: file,
@@ -430,6 +440,20 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
                         experience={experience}
                         onExperienceChange={setExperience}
                     />
+                    <div className="pt-4">
+                        <ChipsField
+                            label={t('careers.skills', { defaultValue: 'Skills' })}
+                            optional
+                            chips={skills}
+                            onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                            inputValue={skillInput}
+                            onInputChange={setSkillInput}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
+                            onAdd={addSkill}
+                            placeholder={t('careers.apply.skillPlaceholder', { defaultValue: 'Add a skill · Press Enter' })}
+                            chipClassName="bg-sky-100 text-sky-700"
+                        />
+                    </div>
                 </div>
 
                 <Field label={t('careers.apply.coverNote')}>
@@ -445,13 +469,13 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
 }
 
 /**
- * Lossless capture of résumé-parsed fields the form doesn't surface (skills,
- * LinkedIn, GitHub, portfolio). Returns a single "Parsed:" line block ready to
- * prefix into a free-text notes field; empty string when nothing was parsed.
+ * Lossless capture of résumé-parsed fields the form doesn't surface as
+ * structured inputs (LinkedIn, GitHub, portfolio). Skills now have a dedicated
+ * field, so they're no longer dumped here. Returns a single "Parsed:" line block
+ * ready to prefix into a free-text notes field; empty string when nothing parsed.
  */
 function buildParsedNoteBlock(p: ParsedResume): string {
     const lines: string[] = []
-    if (p.skills.length > 0) lines.push(`Skills: ${p.skills.join(', ')}`)
     if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
     if (p.github) lines.push(`GitHub: ${p.github}`)
     if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)

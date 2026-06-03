@@ -47,6 +47,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EmployeeReportsPage } from './ReportsPage'
+import { AnnouncementsPage } from './AnnouncementsPage'
+import { RecognitionPage } from './RecognitionPage'
 import { ROUTES } from '@/lib/routes'
 import { cn, formatDate, formatShiftRange, initialsOf } from '@/lib/utils'
 import type { LeaveStatus } from '@/types'
@@ -80,6 +84,7 @@ export function EmployeeHomePage() {
     const navigate = useNavigate()
     const user = useAuthStore((s) => s.user)
     const employeeId = user?.employeeId ?? undefined
+    const [tab, setTab] = useState('feed')
 
     const { data: me } = useMyEmployee()
     const { data: leaveList } = useLeaveRequests({ employeeId, limit: 4 })
@@ -142,95 +147,82 @@ export function EmployeeHomePage() {
                 sidebar on the right (collapses to single column on small
                 screens). ── */}
             <div className="grid gap-6 lg:grid-cols-3">
-                <div className="space-y-6 lg:col-span-2">
-                    {/* Quick Actions — compact rail.
-                        The previous layout took two grid rows on every
-                        viewport: 3 columns × 2 rows of chunky tiles
-                        (~180px tall). On tablet that pushed the more
-                        valuable announcements feed below the fold for no
-                        good reason — the actions themselves are one-tap
-                        navigations, not focal content. New shape:
-                          • mobile (< sm): 3 cols × 2 rows, tight
-                          • sm/md/lg (tablet up): 6 cols × 1 row, ~64px tall
-                        Tile chrome shrunk too — smaller icon badge, smaller
-                        label, less padding, smaller card margins. Card
-                        height drops from ~250px to ~120px on tablet. */}
-                    <Card className="border-border/70">
-                        <CardContent className="p-4 sm:p-4">
-                            <div className="mb-2.5 flex items-center justify-between">
-                                <h2 className="font-display text-sm font-semibold text-foreground">
-                                    {t('home.quickActions')}
-                                </h2>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                                <QuickActionTile icon={PenSquare} label={t('home.createPost')} onClick={() => navigate(ROUTES.employeeAnnouncements)} />
-                                <QuickActionTile icon={UserPlus} label={t('home.refer')} onClick={() => navigate(ROUTES.employeeReferrals)} />
-                                <QuickActionTile icon={Award} label={t('home.recognize')} onClick={() => navigate(ROUTES.employeeRecognition)} />
-                                <QuickActionTile icon={CalendarClock} label={t('home.regulariseAttendance')} onClick={() => navigate(ROUTES.employeeAttendance)} />
-                                <QuickActionTile icon={CalendarDays} label={t('home.applyLeave')} onClick={() => navigate(ROUTES.employeeLeave)} />
-                                <QuickActionTile icon={Target} label={t('home.createGoal')} onClick={() => navigate(ROUTES.employeeGoals)} />
-                            </div>
-                        </CardContent>
-                    </Card>
+                <div className="lg:col-span-2">
+                    <Tabs value={tab} onValueChange={setTab} className="space-y-5">
+                        <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:w-auto">
+                            <TabsTrigger value="feed">{t('home.tabFeed', { defaultValue: 'Feed' })}</TabsTrigger>
+                            <TabsTrigger value="overview">{t('home.tabOverview', { defaultValue: 'Overview' })}</TabsTrigger>
+                            <TabsTrigger value="announcements">{t('home.tabAnnouncements', { defaultValue: 'Announcements' })}</TabsTrigger>
+                            <TabsTrigger value="recognitions">{t('home.tabRecognitions', { defaultValue: 'Recognitions' })}</TabsTrigger>
+                        </TabsList>
 
-                    {/* New Joinee — welcome card (always visible per
-                        product spec — replaces the time-windowed gate). */}
-                    <NewJoineeCard
-                        displayName={displayName}
-                        avatarUrl={me?.avatarUrl}
-                        firstName={me?.firstName}
-                        joinDateLabel={joinDateLabel}
-                    />
+                        {/* ── Feed — activity stream: welcome, announcements preview, recent leave ── */}
+                        <TabsContent value="feed" className="space-y-6 focus-visible:outline-none">
+                            <NewJoineeCard
+                                displayName={displayName}
+                                avatarUrl={me?.avatarUrl}
+                                firstName={me?.firstName}
+                                joinDateLabel={joinDateLabel}
+                            />
 
-                    {/* Announcements feed */}
-                    <AnnouncementsList
-                        items={announcements}
-                        onViewAll={() => navigate(ROUTES.employeeAnnouncements)}
-                        currentUserName={displayName}
-                        currentUserAvatarUrl={me?.avatarUrl}
-                    />
+                            <AnnouncementsList
+                                items={announcements}
+                                onViewAll={() => setTab('announcements')}
+                                currentUserName={displayName}
+                                currentUserAvatarUrl={me?.avatarUrl}
+                            />
 
-                    {/* ── Recent leave activity ─────────────────────────────────── */}
-            {leaveList?.data && leaveList.data.length > 0 ? (
-                <section>
-                    <div className="mb-3 flex items-center justify-between">
-                        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Recent leave
-                        </h2>
-                        <Link
-                            to={ROUTES.employeeLeave}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                        >
-                            {t('common.viewAll')} <ChevronRight className="size-3" />
-                        </Link>
-                    </div>
-                    <div className="space-y-2">
-                        {leaveList.data.slice(0, 3).map((req) => (
-                            <Card key={req.id} className="border-border/70 transition-colors hover:border-primary/30">
-                                <CardContent className="flex items-center justify-between gap-3 p-3 text-sm">
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium capitalize">{req.leaveType}</span>
-                                            <Badge
-                                                className={cn(
-                                                    'border-0 text-[10px] uppercase tracking-wider',
-                                                    STATUS_TONE[req.status],
-                                                )}
-                                            >
-                                                {t(`leave.status.${req.status}`)}
-                                            </Badge>
-                                        </div>
-                                        <div className="mt-0.5 text-xs text-muted-foreground">
-                                            {formatDate(req.startDate)} → {formatDate(req.endDate)} · {req.days}{' '}
-                                            {req.days === 1 ? 'day' : 'days'}
-                                        </div>
+                            {leaveList?.data && leaveList.data.length > 0 ? (
+                                <section>
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            {t('home.recentLeave', { defaultValue: 'Recent leave' })}
+                                        </h2>
+                                        <Link
+                                            to={ROUTES.employeeLeave}
+                                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                        >
+                                            {t('common.viewAll')} <ChevronRight className="size-3" data-rtl-flip />
+                                        </Link>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                </section>
-            ) : null}
+                                    <div className="space-y-2">
+                                        {leaveList.data.slice(0, 3).map((req) => (
+                                            <Card key={req.id} className="border-border/70 transition-colors hover:border-primary/30">
+                                                <CardContent className="flex items-center justify-between gap-3 p-3 text-sm">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium">{t(`leave.types.${req.leaveType}`, { defaultValue: req.leaveType })}</span>
+                                                            <Badge className={cn('border-0 text-[10px] uppercase tracking-wider', STATUS_TONE[req.status])}>
+                                                                {t(`leave.status.${req.status}`)}
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="mt-0.5 text-xs text-muted-foreground">
+                                                            {formatDate(req.startDate)} → {formatDate(req.endDate)} · {t(req.days === 1 ? 'leave.days' : 'leave.days_plural', { count: req.days })}
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </section>
+                            ) : null}
+                        </TabsContent>
+
+                        {/* ── Overview — the renamed Reports view, embedded ── */}
+                        <TabsContent value="overview" className="focus-visible:outline-none">
+                            <EmployeeReportsPage embedded />
+                        </TabsContent>
+
+                        {/* ── Announcements — full feed with comments ── */}
+                        <TabsContent value="announcements" className="focus-visible:outline-none">
+                            <AnnouncementsPage embedded />
+                        </TabsContent>
+
+                        {/* ── Recognitions — company-wide recognition feed ── */}
+                        <TabsContent value="recognitions" className="focus-visible:outline-none">
+                            <RecognitionPage embedded />
+                        </TabsContent>
+                    </Tabs>
                 </div>
                 {/* /Left column */}
 
@@ -248,6 +240,22 @@ export function EmployeeHomePage() {
                         checkInPending={checkIn.isPending}
                         checkOutPending={checkOut.isPending}
                     />
+                    {/* Quick Actions — moved here, directly under the Attendance card. */}
+                    <Card className="border-border/70">
+                        <CardContent className="p-5 sm:p-6">
+                            <h2 className="mb-3 font-display text-base font-semibold text-foreground">
+                                {t('home.quickActions')}
+                            </h2>
+                            <div className="grid grid-cols-3 gap-2">
+                                <QuickActionTile icon={PenSquare} label={t('home.createPost')} onClick={() => navigate(ROUTES.employeeAnnouncements)} />
+                                <QuickActionTile icon={UserPlus} label={t('home.refer')} onClick={() => navigate(ROUTES.employeeReferrals)} />
+                                <QuickActionTile icon={Award} label={t('home.recognize')} onClick={() => navigate(ROUTES.employeeRecognition)} />
+                                <QuickActionTile icon={CalendarClock} label={t('home.regulariseAttendance')} onClick={() => navigate(ROUTES.employeeAttendance)} />
+                                <QuickActionTile icon={CalendarDays} label={t('home.applyLeave')} onClick={() => navigate(ROUTES.employeeLeave)} />
+                                <QuickActionTile icon={Target} label={t('home.createGoal')} onClick={() => navigate(ROUTES.employeeGoals)} />
+                            </div>
+                        </CardContent>
+                    </Card>
                     <ImportantLinksCard />
                     <OpenTasksCard
                         pendingLeaveCount={pendingLeaveCount}
@@ -266,7 +274,7 @@ export function EmployeeHomePage() {
                     <BirthdaysCard title={t('home.departmentBirthdaysToday', { defaultValue: 'Department birthdays today' })} />
                     <WhoIsOutCard
                         upcomingLeaves={upcomingMyLeaves}
-                        onViewAll={() => navigate(ROUTES.employeeReports)}
+                        onViewAll={() => setTab('overview')}
                     />
                 </aside>
             </div>

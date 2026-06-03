@@ -47,6 +47,8 @@ export interface SubmitReferralBody {
     experience?: string
     expectedSalary?: string
     currentSalary?: string
+    /** Candidate skill tags — sent JSON-stringified through multipart. */
+    skills?: string[]
     educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
     experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
     resume?: File | null
@@ -100,6 +102,9 @@ export function useSubmitReferral() {
             if (body.expectedSalary) fd.append('expectedSalary', body.expectedSalary)
             if (body.currentSalary) fd.append('currentSalary', body.currentSalary)
             // Arrays travel as JSON strings — multipart values are strings only.
+            if (body.skills && body.skills.length > 0) {
+                fd.append('skills', JSON.stringify(body.skills))
+            }
             if (body.educationHistory && body.educationHistory.length > 0) {
                 fd.append('educationHistory', JSON.stringify(body.educationHistory))
             }

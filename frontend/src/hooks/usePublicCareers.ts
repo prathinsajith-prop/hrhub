@@ -43,6 +43,8 @@ export interface ApplyInput {
     expectedSalary?: string
     currentSalary?: string
     coverNote?: string
+    /** Candidate skill tags — sent JSON-stringified through multipart. */
+    skills?: string[]
     /** Schools attended — sent JSON-stringified through multipart. */
     educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
     /** Past roles — sent JSON-stringified through multipart. */
@@ -142,6 +144,9 @@ export function useApplyToJob(companyCode: string, jobId: string) {
             if (input.expectedSalary) fd.append('expectedSalary', input.expectedSalary)
             if (input.currentSalary) fd.append('currentSalary', input.currentSalary)
             if (input.coverNote) fd.append('coverNote', input.coverNote)
+            if (input.skills && input.skills.length > 0) {
+                fd.append('skills', JSON.stringify(input.skills))
+            }
             // Arrays travel as JSON strings — multipart values are strings only.
             if (input.educationHistory && input.educationHistory.length > 0) {
                 fd.append('educationHistory', JSON.stringify(input.educationHistory))

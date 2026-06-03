@@ -114,6 +114,7 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                 experience: jobApplications.experience,
                 expectedSalary: jobApplications.expectedSalary,
                 currentSalary: jobApplications.currentSalary,
+                skills: jobApplications.skills,
                 educationHistory: jobApplications.educationHistory,
                 experienceHistory: jobApplications.experienceHistory,
                 resumeUrl: jobApplications.resumeUrl,
@@ -202,6 +203,10 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
             fields.experienceHistory as string | undefined,
             (v: any): v is { title: string } => v && typeof v === 'object' && typeof v.title === 'string' && v.title.trim().length > 0,
         )
+        const skills = safeArray<string>(
+            fields.skills as string | undefined,
+            (v: any): v is string => typeof v === 'string' && v.trim().length > 0,
+        ).map((s) => s.trim())
         if (!jobId) return reply.code(400).send(e400('A job is required'))
         if (!candidateName) return reply.code(400).send(e400('Candidate name is required'))
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(candidateEmail)) {
@@ -289,6 +294,7 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                     experience,
                     expectedSalary,
                     currentSalary,
+                    skills,
                     educationHistory,
                     experienceHistory,
                     notes,

@@ -43,7 +43,7 @@ interface UpcomingLeaveLite {
  * separated from the day-to-day Home page. Layout flows from broad insights
  * (charts) to personal pending items to team context.
  */
-export function EmployeeReportsPage() {
+export function EmployeeReportsPage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
     const navigate = useNavigate()
     const employeeId = useAuthStore((s) => s.user?.employeeId) ?? undefined
@@ -70,10 +70,12 @@ export function EmployeeReportsPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader
-                title={t('reports.title', { defaultValue: 'Reports' })}
-                subtitle={t('reports.subtitle', { defaultValue: 'Your personal insights and pending items' })}
-            />
+            {!embedded && (
+                <PageHeader
+                    title={t('reports.title', { defaultValue: 'Overview' })}
+                    subtitle={t('reports.subtitle', { defaultValue: 'Your personal insights and pending items' })}
+                />
+            )}
 
             {/* ── KPI stat cards ── */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

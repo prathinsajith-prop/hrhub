@@ -61,8 +61,12 @@
         "team": "Team",
         "approvals": "Approvals",
         "calendar": "Calendar",
-        "reports": "Reports",
-        "more": "More"
+        "reports": "Overview",
+        "more": "More",
+        "switchToManager": "Switch to Manager view",
+        "switchToEmployee": "Switch to Employee view",
+        "appearance": "Appearance",
+        "myWork": "My Work"
     },
     "announcements": {
         "title": "Announcements",
@@ -190,6 +194,8 @@
         "candidatePhonePlaceholder": "Phone number",
         "parsedLabel": "Parsed",
         "parsedSkills": "Skills",
+        "skills": "Skills",
+        "skillPlaceholder": "Add a skill · Press Enter",
         "parsedLinkedin": "LinkedIn",
         "parsedGithub": "GitHub",
         "parsedPortfolio": "Portfolio",
@@ -237,7 +243,9 @@
         "hidePassword": "Hide password",
         "someone": "Someone",
         "error": "Something went wrong",
-        "selectEmployee": "Select an employee"
+        "selectEmployee": "Select an employee",
+        "lightMode": "Light mode",
+        "darkMode": "Dark mode"
     },
     "home": {
         "greetingMorning": "Good morning",
@@ -297,7 +305,12 @@
         "commentsCountOne": "{{count}} Comment",
         "commentsCountOther": "{{count}} Comment(s)",
         "departmentBirthdaysToday": "Department birthdays today",
-        "myLeaveSchedule": "My leave schedule"
+        "myLeaveSchedule": "My leave schedule",
+        "tabFeed": "Feed",
+        "tabOverview": "Overview",
+        "tabAnnouncements": "Announcements",
+        "tabRecognitions": "Recognitions",
+        "recentLeave": "Recent leave"
     },
     "goals": {
         "title": "Goals",
@@ -376,7 +389,11 @@
             "suspended": "Suspended",
             "terminated": "Terminated",
             "visa_expired": "Visa expired"
-        }
+        },
+        "changeSubmitted": "Submitted for approval",
+        "changeSubmitFailed": "Could not submit changes",
+        "submitForApproval": "Submit for approval",
+        "approvalNote": "Changes to your contact details are submitted for admin approval before they take effect."
     },
     "leave": {
         "title": "My leave",
@@ -420,7 +437,8 @@
         "handoverNotesPlaceholder": "Handover notes",
         "handoverNotifyNote": "Your handover person will be notified once HR approves this request.",
         "endBeforeStart": "End date can't be before the start date",
-        "handoverRequired": "Please pick a colleague to hand over to"
+        "handoverRequired": "Please pick a colleague to hand over to",
+        "newRequestSubtitle": "Submit a new leave request for approval."
     },
     "payslips": {
         "title": "Payslips",
@@ -627,7 +645,7 @@
         "subtitle": "Your reviews and any warnings on record"
     },
     "reports": {
-        "title": "Reports",
+        "title": "Overview",
         "subtitle": "Your personal insights and pending items",
         "notYetAvailable": "Not yet available"
     },
@@ -692,5 +710,9 @@
         "chooseFileError": "Please choose a file to upload",
         "submittedToast": "{{docType}} submitted — awaiting manager approval",
         "uploadFailed": "Upload failed"
+    },
+    "work": {
+        "title": "My Work",
+        "subtitle": "Your attendance, leave and performance — all in one place."
     }
 }

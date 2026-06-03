@@ -61,8 +61,12 @@
         "team": "الفريق",
         "approvals": "الموافقات",
         "calendar": "التقويم",
-        "reports": "التقارير",
-        "more": "المزيد"
+        "reports": "نظرة عامة",
+        "more": "المزيد",
+        "switchToManager": "التبديل إلى عرض المدير",
+        "switchToEmployee": "التبديل إلى عرض الموظف",
+        "appearance": "المظهر",
+        "myWork": "عملي"
     },
     "announcements": {
         "title": "الإعلانات",
@@ -190,6 +194,8 @@
         "candidatePhonePlaceholder": "رقم الهاتف",
         "parsedLabel": "مُستخرج",
         "parsedSkills": "المهارات",
+        "skills": "المهارات",
+        "skillPlaceholder": "أضف مهارة · اضغط Enter",
         "parsedLinkedin": "لينكدإن",
         "parsedGithub": "GitHub",
         "parsedPortfolio": "معرض الأعمال",
@@ -237,7 +243,9 @@
         "hidePassword": "إخفاء كلمة المرور",
         "someone": "شخص ما",
         "error": "حدث خطأ ما",
-        "selectEmployee": "اختر موظفًا"
+        "selectEmployee": "اختر موظفًا",
+        "lightMode": "الوضع الفاتح",
+        "darkMode": "الوضع الداكن"
     },
     "home": {
         "greetingMorning": "صباح الخير",
@@ -297,7 +305,12 @@
         "commentsCountOne": "{{count}} تعليق",
         "commentsCountOther": "{{count}} تعليق(ات)",
         "departmentBirthdaysToday": "أعياد ميلاد القسم اليوم",
-        "myLeaveSchedule": "جدول إجازاتي"
+        "myLeaveSchedule": "جدول إجازاتي",
+        "tabFeed": "المستجدّات",
+        "tabOverview": "نظرة عامة",
+        "tabAnnouncements": "الإعلانات",
+        "tabRecognitions": "التقدير",
+        "recentLeave": "الإجازات الأخيرة"
     },
     "goals": {
         "title": "الأهداف",
@@ -376,7 +389,11 @@
             "suspended": "موقوف",
             "terminated": "منتهي الخدمة",
             "visa_expired": "انتهت التأشيرة"
-        }
+        },
+        "changeSubmitted": "تم الإرسال للموافقة",
+        "changeSubmitFailed": "تعذّر إرسال التغييرات",
+        "submitForApproval": "إرسال للموافقة",
+        "approvalNote": "تُرسَل التغييرات على بيانات الاتصال الخاصة بك للموافقة من المسؤول قبل أن تصبح سارية."
     },
     "leave": {
         "title": "إجازاتي",
@@ -420,7 +437,8 @@
         "handoverNotesPlaceholder": "ملاحظات التسليم",
         "handoverNotifyNote": "سيتم إشعار الشخص المسؤول عن التسليم بمجرد موافقة الموارد البشرية على هذا الطلب.",
         "endBeforeStart": "لا يمكن أن يكون تاريخ الانتهاء قبل تاريخ البدء",
-        "handoverRequired": "يرجى اختيار زميل لتسليم المهام إليه"
+        "handoverRequired": "يرجى اختيار زميل لتسليم المهام إليه",
+        "newRequestSubtitle": "قدّم طلب إجازة جديدًا للموافقة."
     },
     "payslips": {
         "title": "كشوف الرواتب",
@@ -627,7 +645,7 @@
         "subtitle": "تقييماتك وأي إنذارات مسجّلة"
     },
     "reports": {
-        "title": "التقارير",
+        "title": "نظرة عامة",
         "subtitle": "رؤى شخصية ومهامك المعلّقة",
         "notYetAvailable": "غير متاح بعد"
     },
@@ -692,5 +710,9 @@
         "chooseFileError": "يرجى اختيار ملف للرفع",
         "submittedToast": "تم إرسال {{docType}} — بانتظار موافقة المدير",
         "uploadFailed": "فشل الرفع"
+    },
+    "work": {
+        "title": "عملي",
+        "subtitle": "حضورك وإجازاتك وأداؤك في مكان واحد."
     }
 }

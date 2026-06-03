@@ -1,4 +1,4 @@
-import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, ne, count, aliasedTable } from 'drizzle-orm'
+import { eq, and, ilike, desc, asc, getTableColumns, inArray, notInArray, sql, or, lt, count, aliasedTable } from 'drizzle-orm'
 import { withTimestamp, encodeCursor, decodeCursor, extractRows } from '../../lib/db-helpers.js'
 import { cacheDel } from '../../lib/redis.js'
 import { db } from '../../db/index.js'
@@ -402,10 +402,23 @@ export async function archiveEmployee(tenantId: string, id: string) {
         .set(withTimestamp({ isArchived: true, status: 'terminated' as const }))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId)))
         .returning()
+    if (!row) {
+        await cacheDel(`dashboard:kpis:${tenantId}`)
+        return null
+    }
+    // Revoke the linked login account — an archived employee must not be able to
+    // sign in. Mirrors the member-deactivation flow and busts the 5-minute
+    // active-session cache so any live session is rejected on its next request.
+    const linkedUsers = await db
+        .update(users)
+        .set(withTimestamp({ isActive: false }))
+        .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, id)))
+        .returning({ id: users.id })
+    await Promise.all(linkedUsers.map((u) => cacheDel(`user:active:${u.id}`)))
     // Clean up team memberships so archived staff don't linger on teams.
-    if (row) await removeEmployeeFromAllTeams(tenantId, id).catch(() => { })
+    await removeEmployeeFromAllTeams(tenantId, id).catch(() => { })
     await cacheDel(`dashboard:kpis:${tenantId}`)
-    return row ?? null
+    return row
 }
 
 /** Restore an archived employee back to active. Returns null if not found/not archived. */
@@ -415,8 +428,19 @@ export async function unarchiveEmployee(tenantId: string, id: string) {
         .set(withTimestamp({ isArchived: false, status: 'active' as const }))
         .where(and(eq(employees.id, id), eq(employees.tenantId, tenantId), eq(employees.isArchived, true)))
         .returning()
+    if (!row) {
+        await cacheDel(`dashboard:kpis:${tenantId}`)
+        return null
+    }
+    // Re-enable the linked login account so a restored employee regains access.
+    const linkedUsers = await db
+        .update(users)
+        .set(withTimestamp({ isActive: true }))
+        .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, id)))
+        .returning({ id: users.id })
+    await Promise.all(linkedUsers.map((u) => cacheDel(`user:active:${u.id}`)))
     await cacheDel(`dashboard:kpis:${tenantId}`)
-    return row ?? null
+    return row
 }
 
 /**
@@ -433,20 +457,22 @@ export async function assertEmployeeArchivable(
     if (actor.employeeId && actor.employeeId === employeeId) {
         throw Object.assign(new Error('You cannot archive your own account.'), { statusCode: 409, code: 'PROTECTED_SELF' })
     }
-    // Linked login account (every user has an employeeId; an employee may have none).
+    // Administrator (Super Admin) accounts can never be archived. Archiving now
+    // also revokes the login, so archiving an admin would orphan tenant
+    // ownership and lock administration out. If a Super Admin genuinely needs
+    // off-boarding, demote their role first, then archive. Checks both the
+    // primary role and the multi-role array.
     const [linked] = await db
-        .select({ id: users.id, role: users.role })
+        .select({ id: users.id, role: users.role, roles: users.roles })
         .from(users)
         .where(and(eq(users.tenantId, tenantId), eq(users.employeeId, employeeId)))
         .limit(1)
-    if (linked?.role === 'super_admin') {
-        const [{ n }] = await db
-            .select({ n: count() })
-            .from(users)
-            .where(and(eq(users.tenantId, tenantId), eq(users.role, 'super_admin'), eq(users.isActive, true), ne(users.id, linked.id)))
-        if (Number(n) === 0) {
-            throw Object.assign(new Error('You cannot archive the last active Super Admin / account owner.'), { statusCode: 409, code: 'PROTECTED_LAST_ADMIN' })
-        }
+    const isAdmin = !!linked && (linked.role === 'super_admin' || (Array.isArray(linked.roles) && linked.roles.includes('super_admin')))
+    if (isAdmin) {
+        throw Object.assign(
+            new Error('Administrator (Super Admin) accounts cannot be archived. Change their role first, then archive.'),
+            { statusCode: 409, code: 'PROTECTED_ADMIN' },
+        )
     }
 }
 

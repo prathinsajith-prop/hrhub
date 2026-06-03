@@ -70,7 +70,7 @@ function sanitize(html: string): string {
         .replace(/<!--[\s\S]*?-->/g, '')
 }
 
-export function AnnouncementsPage() {
+export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
     const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useAnnouncementFeed()
     const markRead = useMarkAnnouncementRead()
@@ -88,12 +88,14 @@ export function AnnouncementsPage() {
 
     return (
         // Constrain to a comfortable reading column so long announcements don't
-        // stretch edge-to-edge on wide screens.
-        <div className="mx-auto w-full max-w-3xl space-y-5">
-            <PageHeader
-                title={t('announcements.title', { defaultValue: 'Announcements' })}
-                subtitle={t('announcements.subtitle', { defaultValue: 'Company news and updates relevant to you.' })}
-            />
+        // stretch edge-to-edge on wide screens (full width when embedded in a tab).
+        <div className={embedded ? 'w-full space-y-5' : 'mx-auto w-full max-w-3xl space-y-5'}>
+            {!embedded && (
+                <PageHeader
+                    title={t('announcements.title', { defaultValue: 'Announcements' })}
+                    subtitle={t('announcements.subtitle', { defaultValue: 'Company news and updates relevant to you.' })}
+                />
+            )}
 
             {isLoading ? (
                 <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>

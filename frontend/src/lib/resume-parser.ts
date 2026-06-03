@@ -66,8 +66,12 @@ const SKILL_DICTIONARY = [
     'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'SQLite', 'Oracle', 'Elasticsearch', 'DynamoDB', 'GraphQL', 'Prisma', 'Drizzle',
     // cloud / devops
     'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform', 'Jenkins', 'GitHub Actions', 'CI/CD', 'Nginx', 'Linux',
+    // qa / testing
+    'Selenium', 'TestNG', 'JUnit', 'SoapUI', 'Postman', 'Cucumber', 'Appium', 'JMeter', 'LoadRunner', 'TestRail', 'QTP', 'UFT', 'Robot Framework',
+    // tools / collaboration
+    'Git', 'GitHub', 'GitLab', 'Bitbucket', 'Confluence', 'Atlassian', 'Azure DevOps', 'Trello', 'Asana', 'Notion', 'Slack', 'VS Code', 'IntelliJ', 'Eclipse', 'Visual Studio',
     // misc
-    'Git', 'REST', 'gRPC', 'Kafka', 'RabbitMQ', 'Figma', 'Jira', 'Agile', 'Scrum', 'Jest', 'Playwright', 'Cypress',
+    'REST', 'gRPC', 'Kafka', 'RabbitMQ', 'Figma', 'Jira', 'Agile', 'Scrum', 'Kanban', 'Jest', 'Playwright', 'Cypress', 'Mocha', 'Chai', 'Vitest',
 ]
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/
@@ -164,6 +168,9 @@ const SECTION_PATTERNS: Array<{ name: 'experience' | 'education' | 'skills' | 'o
 ]
 
 const NATIONALITY_RE = /\b(?:nationality|citizenship|nationalit[éy])\s*[:\-–—]\s*([A-Za-z][A-Za-z -]{2,40})/i
+/** Bare-nationality fallback: "Indian Visit Visa" / "Filipino Resident Visa" —
+ *  many UAE résumés state nationality + visa status on one un-labelled line. */
+const BARE_NATIONALITY_RE = /\b([A-Z][a-z]{3,15})\s+(?:visit|resident|residence|residency|employment|work|tourist|investor|family|spouse|student|golden|freelance|free)\s+visa\b/i
 // Address signal words: street types + UAE/GCC cities (primary market) + a few
 // regional capitals. Excludes generic words like "building", "tower", "area",
 // "zone" that frequently appear in non-address sentences ("building scalable
@@ -171,7 +178,11 @@ const NATIONALITY_RE = /\b(?:nationality|citizenship|nationalit[éy])\s*[:\-–�
 // positives are visible and annoying to clear.
 const ADDRESS_KEYWORD_RE = /\b(street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|p\.?\s*o\.?\s*box|po\s*box|villa|emirates?|united\s+arab\s+emirates|uae|dubai|abu\s*dhabi|sharjah|ajman|fujairah|ras\s*al\s*khaimah|umm\s*al\s*quwain|al\s*ain|riyadh|jeddah|mecca|medina|doha|kuwait\s*city|manama|muscat|amman|beirut|cairo|alexandria)\b/i
 // City + Country shape: "Dubai, United Arab Emirates" / "Mumbai, India" / "New York, USA".
-const CITY_COUNTRY_RE = /^[A-Z][A-Za-z][A-Za-z .'-]{0,60},\s*[A-Z][A-Za-z][A-Za-z .'-]{1,60}$/
+// First part requires a lowercase letter right after the leading capital — that
+// keeps "Dubai" matching but rejects multi-word all-caps abbreviations like
+// "SNG HSS" (school name) that aren't real city names. Second part stays
+// permissive so country abbreviations ("UAE", "USA", "UK") still pass.
+const CITY_COUNTRY_RE = /^[A-Z][a-z][A-Za-z .'-]{0,60},\s*[A-Z][A-Za-z .'-]{1,60}$/
 
 const SCHOOL_RE = /\b(university|college|institute|academy|school|polytechnic|faculty|conservatory|seminary|gymnasium)\b/i
 const DEGREE_RE = /\b(bachelor'?s?|master'?s?|doctorate|ph\.?d\.?|d\.?phil\.?|mba|emba|b\.?sc\.?|m\.?sc\.?|b\.?a\.?|m\.?a\.?|b\.?e\.?|m\.?e\.?|b\.?eng\.?|m\.?eng\.?|b\.?tech\.?|m\.?tech\.?|b\.?com\.?|m\.?com\.?|b\.?ed\.?|m\.?ed\.?|llb|llm|bds|mds|md|mbbs|diploma|certificate|associate|hnd|hsc|ssc|high\s+school|secondary\s+school|12th|10th|高中|secondary)\b[^,\n]*/i
@@ -253,31 +264,60 @@ const JOB_TITLE_HINT_RE = /\b(engineer|developer|designer|manager|director|offic
 const COMPANY_SUFFIX_RE = /\b(inc\.?|llc|ltd\.?|corp\.?|corporation|co\.?|company|group|gmbh|s\.?a\.?|s\.?r\.?l\.?|b\.?v\.?|plc|holdings?|enterprises?|industries|technologies|systems|services|solutions|consulting|consultants?|associates?|bank|partners?)\b/i
 
 /** True only for lines that are clearly a "City, Country" location and NOT a
- *  "Title, Company" combo — used to filter out location lines from header
- *  collection while keeping real title+company comma pairs intact. */
+ *  "Title, Company" / "Degree, School" combo — used to filter out location
+ *  lines from header collection while keeping real entry lines intact. */
 function isPureCityCountry(line: string): boolean {
     if (!CITY_COUNTRY_RE.test(line)) return false
     if (JOB_TITLE_HINT_RE.test(line)) return false
     if (COMPANY_SUFFIX_RE.test(line)) return false
+    if (SCHOOL_RE.test(line)) return false   // "Cochin College of Engineering, Kerala-India"
+    if (DEGREE_RE.test(line)) return false   // "Master of Science, MIT"
     return true
 }
 
 function collectAboveHeader(block: string[], i: number): string {
-    const aboveCandidates: string[] = []
-    for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+    // Walking back from a date line, we encounter two kinds of non-bullet lines:
+    //   • Continuations of the previous bullet (wrapped summary text) — these
+    //     sit between the date and the nearest bullet ABOVE.
+    //   • The entry's actual header (title/company) — these sit BEYOND the
+    //     nearest bullet, up until the next bullet (which belongs to the
+    //     previous entry).
+    //
+    // Some résumés (Anandhu's QA résumé) interleave dates inside the bullet
+    // block — in that case header lines are several bullets above the date, so
+    // we must keep walking and distinguish "continuation" vs "header" by which
+    // side of the first bullet we're on.
+    //
+    // When NO bullet is encountered during the walk-back, the layout has no
+    // bullets between header and date (very common) — the non-bullet lines we
+    // collected before the boundary ARE the header.
+    const preBullet: string[] = []   // collected before any bullet (might be header — if layout has no bullets between header & date)
+    const postBullet: string[] = []  // collected after crossing the first bullet — these are the real header lines
+    let foundBullet = false
+    let crossedToHeader = false      // crossed from bullet cluster into header lines
+    for (let j = i - 1; j >= Math.max(0, i - 20); j--) {
         const prev = block[j].trim()
         if (!prev) continue
-        if (BULLET_RE.test(block[j]) || DATE_RANGE_RE.test(prev) || SINCE_RE.test(prev) || classifyHeader(prev)) break
-        // Stop at contact-area lines — they belong to the document header,
-        // not to this entry. (Only relevant in the global-fallback pass when
-        // section headers were missing.)
+        if (DATE_RANGE_RE.test(prev) || SINCE_RE.test(prev) || classifyHeader(prev)) break
         if (EMAIL_RE.test(prev) || URL_RE.test(prev)) break
         if (PHONE_RE.test(prev) && prev.replace(/[^\d+]/g, '').length >= 8) break
-        aboveCandidates.push(prev)   // closest first
+        if (BULLET_RE.test(block[j])) {
+            if (crossedToHeader) break   // crossed bullet → header → bullet means we're now in the previous entry
+            foundBullet = true
+            continue
+        }
+        if (foundBullet) {
+            crossedToHeader = true
+            postBullet.push(prev)
+        } else {
+            preBullet.push(prev)
+        }
     }
-    const filtered = aboveCandidates.filter(l => !isPureCityCountry(l) && !LABEL_PREFIX_RE.test(l))
-    // Reading order (topmost first), then keep the closest 2.
-    const ordered = filtered.reverse().slice(-2)
+    const candidates = postBullet.length > 0 ? postBullet : preBullet
+    const filtered = candidates.filter(l => !isPureCityCountry(l) && !LABEL_PREFIX_RE.test(l))
+    // Reading order (topmost first). Take the FIRST 2 — those are the lines
+    // just under the section header, which carry title/company.
+    const ordered = filtered.reverse().slice(0, 2)
     if (ordered.length === 0) return ''
     if (ordered.length === 1) return ordered[0]
     const [a, b] = ordered
@@ -377,7 +417,14 @@ function parseDatedEntries(block: string[]): DatedEntry[] {
 function parseExperienceBlock(block: string[]): ParsedExperience[] {
     return parseDatedEntries(block).map(e => {
         const { title, company } = splitTitleCompany(e.header)
-        return { title: title.slice(0, 120), company: company?.slice(0, 120), summary: e.summary, startDate: e.startDate, endDate: e.endDate, current: e.current }
+        return {
+            title: normalizeWs(title).slice(0, 120),
+            company: company ? normalizeWs(company).slice(0, 120) : undefined,
+            summary: e.summary,
+            startDate: e.startDate,
+            endDate: e.endDate,
+            current: e.current,
+        }
     }).filter(e => e.title.length >= 2)
 }
 
@@ -398,9 +445,18 @@ function parseEducationBlock(block: string[]): ParsedEducation[] {
     return out
 }
 
+/** Collapse runs of whitespace to single spaces. PDFs often emit "Bachelor  of
+ *  Technology" with double spaces — these display badly in form fields. */
+const normalizeWs = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
 function mapEducation(header: string, summary?: string, startDate?: string, endDate?: string, current?: boolean): ParsedEducation | null {
     // school = the segment with a school keyword; degree/field from a degree phrase.
-    const parts = header.split(/\s+(?:—|–|\||·|,|-| at )\s+/).map(p => p.trim()).filter(Boolean)
+    // Separator regex accepts em-dash / en-dash / pipe / bullet / " - " (with
+    // surrounding spaces, so "Kerala-India" isn't split), and ", " (comma
+    // followed by a space — does NOT require a space BEFORE the comma).
+    const parts = header.split(/\s+(?:—|–|\||·)\s+|\s+-\s+|\s+at\s+|,\s+/i)
+        .map(p => normalizeWs(p))
+        .filter(Boolean)
     const schoolPart = parts.find(p => SCHOOL_RE.test(p))
     const degreePart = parts.find(p => DEGREE_RE.test(p))
     const school = schoolPart ?? parts.find(p => !DEGREE_RE.test(p)) ?? parts[0] ?? header
@@ -408,12 +464,20 @@ function mapEducation(header: string, summary?: string, startDate?: string, endD
     let degree: string | undefined
     let fieldOfStudy: string | undefined
     if (degMatch) {
-        const parsed = splitDegreeAndField(degMatch[0].trim())
+        const parsed = splitDegreeAndField(normalizeWs(degMatch[0]))
         degree = parsed.degree
         fieldOfStudy = parsed.fieldOfStudy
     }
     if (!school || school.length < 2) return null
-    return { school: school.slice(0, 160), degree: degree?.slice(0, 80), fieldOfStudy: fieldOfStudy?.slice(0, 120), summary, startDate, endDate, current }
+    return {
+        school: normalizeWs(school).slice(0, 160),
+        degree: degree && normalizeWs(degree).slice(0, 80),
+        fieldOfStudy: fieldOfStudy && normalizeWs(fieldOfStudy).slice(0, 120),
+        summary,
+        startDate,
+        endDate,
+        current,
+    }
 }
 
 /** Generic disciplines that are part of the degree NAME, not the field — used
@@ -484,7 +548,14 @@ function fallbackScanEntries(lines: string[]): { experience: ParsedExperience[];
         } else {
             const { title, company } = splitTitleCompany(e.header)
             if (title.length >= 2) {
-                experience.push({ title: title.slice(0, 120), company: company?.slice(0, 120), summary: e.summary, startDate: e.startDate, endDate: e.endDate, current: e.current })
+                experience.push({
+                    title: normalizeWs(title).slice(0, 120),
+                    company: company ? normalizeWs(company).slice(0, 120) : undefined,
+                    summary: e.summary,
+                    startDate: e.startDate,
+                    endDate: e.endDate,
+                    current: e.current,
+                })
             }
         }
     }
@@ -497,14 +568,21 @@ const LABEL_PREFIX_RE = /^(nationality|citizenship|nationalit[éy]|summary|profi
 const ADDRESS_PREFIX_RE = /^(address|location|residence|residing\s+(?:at|in))\s*[:-]\s*/i
 
 /**
- * Find an address line in the résumé's contact area (top of the document).
- * Strategy: scan the first 20 non-empty lines and pick the one that either
- * contains an address keyword (Street, P.O. Box, city name) or matches the
- * "City, Country" shape. Skip lines that are clearly something else
- * (name-only, email, phone, links, "Nationality:", "Summary:", section headers).
+ * Find an address line in the résumé.
+ *
+ * Scan strategy:
+ *   1. First-pass over the top 25 lines — the usual "contact block" location.
+ *   2. Second-pass over the next 75 lines, but ONLY accept lines that look
+ *      strongly address-shaped (keyword OR city+country form). This catches
+ *      résumés that bury a single "Al Nahda, Sharjah, UAE." line in the
+ *      summary or just below the skills section.
+ *
+ * Skips lines that are clearly something else: name-only, email, phone, URL,
+ * labelled prose (Nationality:/Summary:/Skills:/…) or section headers.
  */
 function findAddress(lines: string[]): string | undefined {
-    for (let i = 0; i < Math.min(lines.length, 20); i++) {
+    const limit = Math.min(lines.length, 100)
+    for (let i = 0; i < limit; i++) {
         let line = lines[i].trim()
         if (!line || line.length < 4 || line.length > 160) continue
         if (EMAIL_RE.test(line)) continue
@@ -517,12 +595,18 @@ function findAddress(lines: string[]): string | undefined {
         if (LABEL_PREFIX_RE.test(line)) continue
         // Pure "First Last" 2–4 word name → not an address.
         if (/^[A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){1,3}$/.test(line) && !/,/.test(line)) continue
+        // Bullet lines are summary text — skip.
+        if (BULLET_RE.test(lines[i])) continue
         // Strip explicit "Address:" / "Location:" prefix if present.
         line = line.replace(ADDRESS_PREFIX_RE, '')
         const hasKeyword = ADDRESS_KEYWORD_RE.test(line)
         const isCityCountry = CITY_COUNTRY_RE.test(line)
         if (hasKeyword || isCityCountry) {
-            return line.replace(/^[•|–—\-\s]+/, '').replace(/[•|–—\-\s]+$/, '').slice(0, 200)
+            return line
+                .replace(/^[•|–—\-\s]+/, '')
+                .replace(/[•|–—\-\s.,]+$/, '')   // strip trailing period too
+                .replace(/\s+/g, ' ')             // collapse runs of whitespace
+                .slice(0, 200)
         }
     }
     return undefined
@@ -562,6 +646,12 @@ export function parseResumeText(text: string): ParsedResume {
         if (value && value.length <= 40 && !/\d|@|http/i.test(value)) {
             out.nationality = value
             out.confidence.nationality = 0.85
+        }
+    } else {
+        const bare = text.match(BARE_NATIONALITY_RE)
+        if (bare) {
+            out.nationality = bare[1]
+            out.confidence.nationality = 0.7
         }
     }
 

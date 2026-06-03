@@ -275,7 +275,95 @@ IIT Bombay
         expect(p.education[0].degree?.toLowerCase()).toMatch(/^b\.?tech/)
         expect(p.education[0].fieldOfStudy).toBe('Computer Engineering')
     })
+})
 
+// End-to-end smoke test — exercises every field the parser exposes against a
+// realistic résumé combining the layouts we've fixed in successive rounds.
+// If a future change breaks any field, this test names exactly which one.
+const FULL_REALISTIC = `JOHN SMITH
+Senior Software Engineer
+Dubai, United Arab Emirates
+Nationality: Indian
+john.smith@example.com | +971 50 123 4567
+LinkedIn: https://linkedin.com/in/johnsmith
+GitHub: https://github.com/johnsmith
+Portfolio: https://johnsmith.dev
+
+PROFESSIONAL SUMMARY
+Experienced engineer with 8 years of experience building scalable apps.
+
+WORK EXPERIENCE
+Senior Software Engineer — Acme Corp
+Dubai, UAE | Jan 2021 - Present
+• Led the platform team
+• Built core services
+
+Software Engineer
+Beta Technologies LLC
+Jun 2017 – Dec 2020
+• Shipped React features
+
+EDUCATION
+Master of Science in Computer Science — Stanford University
+2015 - 2017
+
+B.Tech Computer Engineering
+IIT Bombay
+2011 - 2015
+
+SKILLS
+React, TypeScript, Node.js, Python, AWS, Docker, Kubernetes
+`
+
+describe('parseResumeText — end-to-end smoke test', () => {
+    const p = parseResumeText(FULL_REALISTIC)
+
+    it('extracts every contact-area field', () => {
+        expect(p.name).toBe('JOHN SMITH')
+        expect(p.email).toBe('john.smith@example.com')
+        expect(p.phone?.replace(/\D/g, '')).toContain('971501234567')
+        expect(p.linkedin).toContain('linkedin.com/in/johnsmith')
+        expect(p.github).toContain('github.com/johnsmith')
+        expect(p.portfolio).toBe('https://johnsmith.dev')
+        expect(p.address).toBe('Dubai, United Arab Emirates')
+        expect(p.nationality).toBe('Indian')
+        expect(p.experienceYears).toBe(8)
+    })
+
+    it('extracts skills as a list', () => {
+        expect(p.skills).toEqual(expect.arrayContaining([
+            'React', 'TypeScript', 'Node.js', 'Python', 'AWS', 'Docker', 'Kubernetes',
+        ]))
+    })
+
+    it('extracts both experience entries with title + company correctly', () => {
+        expect(p.experience).toHaveLength(2)
+        // Same-line "Title — Company" layout.
+        expect(p.experience[0].title).toBe('Senior Software Engineer')
+        expect(p.experience[0].company).toBe('Acme Corp')
+        expect(p.experience[0].current).toBe(true)
+        expect(p.experience[0].startDate).toBe('2021-01')
+        // Multi-line layout (title on one line, company on next).
+        expect(p.experience[1].title).toBe('Software Engineer')
+        expect(p.experience[1].company).toBe('Beta Technologies LLC')
+        expect(p.experience[1].current).toBe(false)
+        expect(p.experience[1].endDate).toBe('2020-12')
+    })
+
+    it('extracts both education entries with degree + field of study', () => {
+        expect(p.education).toHaveLength(2)
+        // "X of Y in Z" — degree=X of Y, field=Z.
+        expect(p.education[0].school).toBe('Stanford University')
+        expect(p.education[0].degree).toBe('Master of Science')
+        expect(p.education[0].fieldOfStudy).toBe('Computer Science')
+        // Compact-prefix + field, multi-line school.
+        expect(p.education[1].school).toBe('IIT Bombay')
+        expect(p.education[1].degree?.toLowerCase()).toMatch(/^b\.?tech/)
+        expect(p.education[1].fieldOfStudy).toBe('Computer Engineering')
+    })
+})
+
+describe('parseResumeText — contact-area regression', () => {
     it('extracts address and nationality from the contact area', () => {
         const text = `Jane Doe
 Software Engineer
@@ -315,6 +403,65 @@ Portfolio: https://janedoe.dev
         expect(p.linkedin).toContain('linkedin.com/in/janedoe')
         expect(p.github).toContain('github.com/janedoe')
         expect(p.portfolio).toBe('https://janedoe.dev')
+    })
+
+    it('handles real-world UAE QA résumé (Anandhu format)', () => {
+        // Exact-layout regression — PDF text from a real UAE-based QA résumé.
+        // Date sits MID-block (between bullets in a side column), bullet
+        // wrap-lines have no leading •, school+location is on the same line,
+        // and nationality is on a label-less "Indian Visit Visa" line.
+        const text = `ANANDHU GANESH
+Software Engineer | SOFTWARE QA ENGINEER (SDET)
+anandhuganesh9074@gmail.com  +971 56 3508 789  LinkedIn
+Indian  Visit Visa
+PROFESSIONAL SUMMARY
+Software professional with around 4 years of experience in IT industry.
+WORK EXPERIENCE
+INFOSYS  LIMITED
+ASSOCIATE  CONSULTANT
+• Led the full validation lifecycle (V-Model), defining system requirements and risk
+strategy before directing qualification protocols (IQ/OQ/PQ) for critical GxP
+systems.
+2024 – 2025
+• Managed all deviation and change control processes during execution.
+• Designed and implemented modular, reusable components.
+INFOSYS  LIMITED
+SOFTWARE  QUALITY  ENGINEER
+• Worked in execution of Manual TC's and automation. Ensured proper delivery of
+the end products at the required timelines and have been considered as a critical
+resource.
+2021 – 2024
+• Managed production sanity testing following major releases.
+Al Nahda, Sharjah, UAE.
+EDUCATION
+Bachelor  of  Technology  in  Mechatronics  Engineering
+Cochin  College  of  Engineering, Kerala-India
+• 7.71 GPA
+2017 – 2021
+`
+        const p = parseResumeText(text)
+        // Contact area
+        expect(p.name).toBe('ANANDHU GANESH')
+        expect(p.email).toBe('anandhuganesh9074@gmail.com')
+        expect(p.phone).toContain('971563508789')
+        expect(p.nationality).toBe('Indian')                        // bare-nationality fallback
+        expect(p.address).toBe('Al Nahda, Sharjah, UAE')            // extracted from mid-document, trailing period stripped
+        expect(p.experienceYears).toBe(4)
+        // Experience — both jobs picked up with correct title/company even
+        // though date sits between bullets, not above them.
+        expect(p.experience).toHaveLength(2)
+        expect(p.experience[0].title).toBe('ASSOCIATE CONSULTANT')
+        expect(p.experience[0].company).toBe('INFOSYS LIMITED')
+        expect(p.experience[0].startDate).toBe('2024-01')
+        expect(p.experience[1].title).toBe('SOFTWARE QUALITY ENGINEER')
+        expect(p.experience[1].company).toBe('INFOSYS LIMITED')
+        expect(p.experience[1].startDate).toBe('2021-01')
+        // Education — degree/field/school all correctly populated
+        // (PDF double-spaces collapsed; school + location split correctly).
+        expect(p.education).toHaveLength(1)
+        expect(p.education[0].school).toBe('Cochin College of Engineering')
+        expect(p.education[0].degree).toBe('Bachelor of Technology')
+        expect(p.education[0].fieldOfStudy).toBe('Mechatronics Engineering')
     })
 
     it('falls back to a global date scan when headers are missing', () => {

@@ -71,7 +71,7 @@ export function JobDetailPage() {
     [stagesData],
   )
 
-  const job = (jobData as { data?: Job })?.data
+  const job = jobData as Job | undefined
   const allCandidates = useMemo(
     () => ((appsData as { data?: Candidate[] })?.data ?? []) as Candidate[],
     [appsData],

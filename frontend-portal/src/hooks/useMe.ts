@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import type { Employee, User } from '@/types'
@@ -65,13 +65,7 @@ export interface UpdateMyProfileBody {
     homeCountryAddress?: string
 }
 
-export function useUpdateMyProfile() {
-    const qc = useQueryClient()
-    return useMutation({
-        mutationFn: (body: UpdateMyProfileBody) =>
-            api.patch<{ data: Employee }>('/employees/me', body).then((r) => r.data),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['portal', 'me'] })
-        },
-    })
-}
+// NOTE: direct self-update (PATCH /employees/me) was removed — contact &
+// personal detail changes now go through the approval pipeline
+// (useSubmitChangeRequest → POST /profile-changes). UpdateMyProfileBody is kept
+// as the shape of the editable contact/personal fields.

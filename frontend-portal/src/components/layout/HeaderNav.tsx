@@ -1,21 +1,16 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-    BarChart3,
-    Calendar,
+    Briefcase,
     ClipboardCheck,
     FileCheck2,
     FileText,
     Home,
     ListChecks,
-    Megaphone,
     MoreHorizontal,
     Receipt,
     ShieldCheck,
-    Sparkles,
-    Trophy,
     Clock,
-    UserPlus,
     Users,
 } from 'lucide-react'
 
@@ -33,23 +28,18 @@ import {
 
 type NavItem = { to: string; label: string; icon: typeof Home; end?: boolean }
 
-// Primary nav — the few items employees touch every day. Anything else lives
-// in the "More" overflow dropdown so the header stays uncluttered.
+// Employees get a flat top nav. Home embeds the Feed/Overview/Announcements/
+// Recognitions tabs and My Work embeds the Attendance/Leave/Schedule/
+// Performance tabs, so those screens don't need their own entries. Referrals
+// lives in the avatar dropdown (AccountMenu). No overflow needed → empty "More".
 const PERSONAL_PRIMARY: NavItem[] = [
     { to: ROUTES.employeeHome, label: 'nav.home', icon: Home, end: true },
-    { to: ROUTES.employeeAnnouncements, label: 'nav.announcements', icon: Megaphone },
-    { to: ROUTES.employeeLeave, label: 'nav.leave', icon: Calendar },
-    { to: ROUTES.employeeAttendance, label: 'nav.attendance', icon: Clock },
+    { to: ROUTES.employeeWork, label: 'nav.myWork', icon: Briefcase },
     { to: ROUTES.employeePayslips, label: 'nav.payslips', icon: Receipt },
-    { to: ROUTES.employeeReports, label: 'nav.reports', icon: BarChart3 },
+    { to: ROUTES.employeeDocuments, label: 'nav.documents', icon: FileText },
 ]
 
-const PERSONAL_MORE: NavItem[] = [
-    { to: ROUTES.employeeRecognition, label: 'nav.recognition', icon: Trophy },
-    { to: ROUTES.employeeDocuments, label: 'nav.documents', icon: FileText },
-    { to: ROUTES.employeePerformance, label: 'nav.performance', icon: Sparkles },
-    { to: ROUTES.employeeReferrals, label: 'nav.referrals', icon: UserPlus },
-]
+const PERSONAL_MORE: NavItem[] = []
 
 const TEAM_PRIMARY: NavItem[] = [
     { to: ROUTES.managerHome, label: 'nav.home', icon: Home, end: true },

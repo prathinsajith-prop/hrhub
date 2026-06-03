@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { useUpdateApplication } from '@/hooks/useRecruitment'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
 import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import { ChipsField } from '@/components/shared/ChipsField'
 import type { EducationEntry, ExperienceEntry, Gender } from '@/components/shared/MultiEntryField'
 import type { Candidate } from '@/types'
 
@@ -44,6 +45,13 @@ export function EditCandidateDialog({
     })
     const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
     const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
+    const [skills, setSkills] = useState<string[]>([])
+    const [skillInput, setSkillInput] = useState('')
+    const addSkill = () => {
+        const v = skillInput.trim()
+        if (v && !skills.includes(v)) setSkills(s => [...s, v])
+        setSkillInput('')
+    }
 
     // Reset the form whenever a different candidate is loaded into the dialog.
     useEffect(() => {
@@ -70,6 +78,8 @@ export function EditCandidateDialog({
         })
         setEducationHistory(Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [])
         setExperienceHistory(Array.isArray(candidate.experienceHistory) ? candidate.experienceHistory : [])
+        setSkills(Array.isArray(candidate.skills) ? candidate.skills : [])
+        setSkillInput('')
     }, [candidate?.id, candidate])
 
     if (!candidate) return null
@@ -87,6 +97,7 @@ export function EditCandidateDialog({
             address: form.address.trim(),
             // Send gender only when set — empty string would fail enum validation.
             ...(form.gender ? { gender: form.gender } : {}),
+            skills,
             educationHistory,
             experienceHistory,
             notes: form.notes.trim(),
@@ -184,6 +195,20 @@ export function EditCandidateDialog({
                             onExperienceChange={setExperienceHistory}
                             compact
                         />
+                        <div className="pt-4">
+                            <ChipsField
+                                label="Skills"
+                                optional
+                                chips={skills}
+                                onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                                inputValue={skillInput}
+                                onInputChange={setSkillInput}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
+                                onAdd={addSkill}
+                                placeholder="Add a skill · Press Enter"
+                                chipClassName="bg-sky-100 text-sky-700"
+                            />
+                        </div>
                     </div>
 
                     {/* Notes — recruiter remarks, source notes, parsed résumé extras */}

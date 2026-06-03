@@ -8,9 +8,8 @@ const WORKING_STATUSES = ['active', 'onboarding'] as const
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
 import { employees, orgUnits, shifts } from '../../db/schema/index.js'
-import { e400, e403, e404 } from '../../lib/errors.js'
-import { paginationSchema, parseUuidParam, updateMyProfileSchema, validate } from '../../lib/validation.js'
-import { recordActivity } from '../../lib/audit.js'
+import { e403, e404 } from '../../lib/errors.js'
+import { paginationSchema, parseUuidParam, validate } from '../../lib/validation.js'
 import { buildTeammateScopeWhere, canViewTeammate, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
 
 /**
@@ -28,16 +27,6 @@ function daysUntilBirthday(dob: string | null): number {
     if (next < today) next = new Date(Date.UTC(now.getUTCFullYear() + 1, d.getUTCMonth(), d.getUTCDate()))
     return Math.round((next.getTime() - today.getTime()) / 86_400_000)
 }
-
-const ALLOWED_SELF_UPDATE_FIELDS = [
-    'phone',
-    'mobileNo',
-    'personalEmail',
-    'emergencyContact',
-    'emergencyContactName',
-    'emergencyContactPhone',
-    'homeCountryAddress',
-] as const
 
 /**
  * Fetch an employee plus their reporting-to manager, assigned shift, AND the
@@ -139,41 +128,14 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         return reply.send({ data: employee })
     })
 
-    // PATCH /api/v1/employees/me — update own personal details (restricted field set)
+    // PATCH /api/v1/employees/me — locked. Contact / personal detail changes must
+    // go through the approval pipeline (POST /api/v1/profile-changes) so an
+    // admin / super_admin reviews them before they take effect. Direct
+    // self-updates are rejected here so the review can't be bypassed.
     fastify.patch('/me', { ...auth }, async (request: any, reply: any) => {
-        const { employeeId, tenantId } = request.user
+        const { employeeId } = request.user
         if (!employeeId) return reply.code(404).send(e404('No employee record linked to this account'))
-        const body = validate(updateMyProfileSchema, request.body)
-        const patch: Record<string, unknown> = {}
-        for (const key of ALLOWED_SELF_UPDATE_FIELDS) {
-            if (key in body && (body as any)[key] !== undefined) patch[key] = (body as any)[key]
-        }
-        if (Object.keys(patch).length === 0) return reply.code(400).send(e400('No allowed fields provided'))
-        patch.updatedAt = new Date()
-
-        const [updated] = await db
-            .update(employees)
-            .set(patch as any)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.id, employeeId)))
-            .returning()
-
-        if (!updated) return reply.code(404).send(e404('Employee not found'))
-
-        recordActivity({
-            tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
-            entityType: 'employee',
-            entityId: employeeId,
-            entityName: `${updated.firstName} ${updated.lastName}`,
-            action: 'update',
-            metadata: { fields: Object.keys(patch).filter((k) => k !== 'updatedAt') },
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => {})
-
-        return reply.send({ data: updated })
+        return reply.code(403).send(e403('Profile changes must be submitted for approval. Please submit a change request instead.'))
     })
 
     // GET /api/v1/employees

@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Lock, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Languages, Lock, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
-import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
+import { useMyEmployee, type UpdateMyProfileBody } from '@/hooks/useMe'
+import { useSubmitChangeRequest } from '@/hooks/useProfileChanges'
 import { useChangePassword } from '@/hooks/useChangePassword'
 import { TwoFactorCard } from '@/components/security/TwoFactorCard'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ScheduleCard } from '@/components/shared/ScheduleCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,12 +23,12 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn, formatDate, formatShiftRange } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 
 export function EmployeeProfilePage() {
     const { t } = useTranslation()
     const { data: employee, isLoading } = useMyEmployee()
-    const update = useUpdateMyProfile()
+    const submitChange = useSubmitChangeRequest()
     const [editing, setEditing] = useState(false)
     const [form, setForm] = useState<UpdateMyProfileBody>({})
 
@@ -55,22 +57,39 @@ export function EmployeeProfilePage() {
     }
 
     function onSave() {
-        // Strip empty strings so we don't store ""
-        const cleaned: UpdateMyProfileBody = {}
-        for (const k of Object.keys(form) as (keyof UpdateMyProfileBody)[]) {
-            const v = form[k]
-            if (v !== undefined && v !== '') cleaned[k] = v as string
+        // Contact + personal details are employee-editable but require admin /
+        // super_admin approval before they take effect. Rather than writing the
+        // record directly, submit a change request per affected category — the
+        // change is applied only once a reviewer approves it.
+        const changedIn = (fields: readonly (keyof UpdateMyProfileBody)[]): Record<string, string | null> => {
+            const out: Record<string, string | null> = {}
+            const src = employee as unknown as Record<string, unknown>
+            for (const f of fields) {
+                const current = String(src[f] ?? '')
+                const next = String(form[f] ?? '')
+                if (current !== next) out[f] = next === '' ? null : next
+            }
+            return out
         }
-        if (Object.keys(cleaned).length === 0) {
+        const contactChanges = changedIn(['phone', 'mobileNo', 'personalEmail'])
+        const personalChanges = changedIn(['emergencyContactName', 'emergencyContactPhone', 'emergencyContact', 'homeCountryAddress'])
+
+        const submissions: Promise<unknown>[] = []
+        if (Object.keys(contactChanges).length) submissions.push(submitChange.mutateAsync({ category: 'contact', changes: contactChanges }))
+        if (Object.keys(personalChanges).length) submissions.push(submitChange.mutateAsync({ category: 'personal', changes: personalChanges }))
+
+        if (submissions.length === 0) {
             setEditing(false)
             return
         }
-        update.mutate(cleaned, {
-            onSuccess: () => {
-                toast.success(t('profile.updated'))
+        Promise.all(submissions)
+            .then(() => {
+                toast.success(t('profile.changeSubmitted', { defaultValue: 'Submitted for approval' }))
                 setEditing(false)
-            },
-        })
+            })
+            .catch((err: unknown) => {
+                toast.error(err instanceof Error ? err.message : t('profile.changeSubmitFailed', { defaultValue: 'Could not submit changes' }))
+            })
     }
 
     return (
@@ -81,11 +100,11 @@ export function EmployeeProfilePage() {
                 action={
                     editing ? (
                         <>
-                            <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={update.isPending}>
+                            <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={submitChange.isPending}>
                                 <X className="size-4" /> {t('common.cancel')}
                             </Button>
-                            <Button size="sm" onClick={onSave} loading={update.isPending}>
-                                <Save className="size-4" /> {t('profile.saveChanges')}
+                            <Button size="sm" onClick={onSave} loading={submitChange.isPending}>
+                                <Save className="size-4" /> {t('profile.submitForApproval', { defaultValue: 'Submit for approval' })}
                             </Button>
                         </>
                     ) : (
@@ -95,6 +114,12 @@ export function EmployeeProfilePage() {
                     )
                 }
             />
+
+            {editing ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                    {t('profile.approvalNote', { defaultValue: 'Changes to your contact details are submitted for admin approval before they take effect.' })}
+                </div>
+            ) : null}
 
             <Tabs defaultValue="personal">
                 <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
@@ -410,22 +435,6 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     )
 }
 
-// Day-name ordering used by the weekly-off chips. Mirrors the
-// backend's WEEKDAY_NAMES table so casing of the saved strings doesn't matter.
-const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
-
-// 2024-01-07 is a Sunday, so each index lands on the matching weekday. We format
-// these reference dates through Intl so the short names follow the active locale
-// (e.g. Arabic) rather than hard-coded English abbreviations.
-function localizedWeekdayShort(locale: string): Record<(typeof WEEK_DAYS)[number], string> {
-    const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' })
-    const out = {} as Record<(typeof WEEK_DAYS)[number], string>
-    WEEK_DAYS.forEach((day, i) => {
-        out[day] = fmt.format(new Date(Date.UTC(2024, 0, 7 + i)))
-    })
-    return out
-}
-
 // Humanize the raw employee status enum (e.g. "on_leave" → "On leave"), preferring
 // a translated label when one exists for the value.
 function statusLabel(t: (key: string, opts?: Record<string, unknown>) => string, status: string): string {
@@ -433,89 +442,6 @@ function statusLabel(t: (key: string, opts?: Record<string, unknown>) => string,
         .replace(/[_-]+/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase())
     return t(`profile.statusValue.${status}`, { defaultValue: titleCased })
-}
-
-interface ShiftInfo {
-    name: string
-    startTime: string
-    endTime: string
-    weeklyOffDays: string[]
-}
-
-/**
- * Dedicated schedule card — surfaces the shift name, work hours, and which
- * days of the week are off. When the employee has no shift assigned, falls
- * back to a short hint about tenant-default hours so the panel isn't blank.
- */
-function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
-    const { t, i18n } = useTranslation()
-    const range = shift ? formatShiftRange(shift.startTime, shift.endTime) : null
-    const offSet = new Set((shift?.weeklyOffDays ?? []).map((d) => d.toLowerCase()))
-    const weekdayShort = localizedWeekdayShort(i18n.language)
-
-    return (
-        <Card className="overflow-hidden border-border/70">
-            <CardContent className="p-5">
-                <div className="mb-4 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Clock className="size-3.5" /> {t('profile.schedule', { defaultValue: 'Schedule' })}
-                    </h3>
-                    {shift ? (
-                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                            {shift.name}
-                        </span>
-                    ) : (
-                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            {t('profile.defaultWorkingHours', { defaultValue: 'Default working hours' })}
-                        </span>
-                    )}
-                </div>
-
-                {shift ? (
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-sm">
-                            <Clock className="size-4 text-muted-foreground" />
-                            <span className="font-display text-base font-semibold tabular-figures">
-                                {range ?? '—'}
-                            </span>
-                        </div>
-
-                        <div>
-                            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                <CalendarDays className="size-3" /> {t('profile.weeklyOff', { defaultValue: 'Weekly off' })}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {WEEK_DAYS.map((d) => {
-                                    const isOff = offSet.has(d)
-                                    return (
-                                        <span
-                                            key={d}
-                                            className={
-                                                isOff
-                                                    ? 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md bg-rose-100 px-2 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
-                                                    : 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md border border-border bg-card/50 px-2 text-xs text-muted-foreground'
-                                            }
-                                        >
-                                            {weekdayShort[d]}
-                                        </span>
-                                    )
-                                })}
-                            </div>
-                            {offSet.size === 0 ? (
-                                <p className="mt-2 text-xs text-muted-foreground">
-                                    {t('profile.noWeeklyOff', { defaultValue: 'No weekly off days configured for this shift.' })}
-                                </p>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-sm text-muted-foreground">
-                        {t('profile.defaultWeekHint', { defaultValue: "You're on the tenant's default working week. Ask HR if you need a custom shift." })}
-                    </p>
-                )}
-            </CardContent>
-        </Card>
-    )
 }
 
 function Field({

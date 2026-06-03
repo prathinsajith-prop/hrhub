@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type InfiniteD
 import { api } from '@/lib/api'
 import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import { toast } from '@/components/ui/overlays'
-import type { Candidate } from '@/types'
+import type { Candidate, Job } from '@/types'
 import type { RecruitmentStage } from '@/lib/recruitmentStages'
 
 interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
@@ -35,7 +35,9 @@ export function useJobs(params: JobParams = {}) {
 export function useJob(id: string | undefined) {
     return useQuery({
         queryKey: ['job', id],
-        queryFn: () => api.get<{ data: unknown }>(`/jobs/${id}`),
+        // Unwrap the `{ data: ... }` envelope here so consumers get the Job
+        // directly — consistent with every other detail hook.
+        queryFn: () => api.get<{ data: Job }>(`/jobs/${id}`).then((r) => r.data),
         enabled: !!id,
     })
 }
@@ -51,7 +53,11 @@ export function useCreateJob() {
 export function useApplication(id: string | undefined) {
     return useQuery({
         queryKey: ['application', id],
-        queryFn: () => api.get<unknown>(`/applications/${id}`),
+        // The detail endpoint wraps the record in `{ data: ... }` — unwrap it
+        // here so consumers receive the Candidate directly (the list endpoint
+        // is unwrapped at the call site, this one wasn't).
+        queryFn: () => api.get<{ data: Candidate }>(`/applications/${id}`),
+        select: (res) => res.data,
         enabled: !!id,
     })
 }

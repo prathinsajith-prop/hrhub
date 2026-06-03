@@ -48,7 +48,7 @@ import { acquireLocation, reverseGeocodeClient, type GeolocationFailureReason } 
 
 type ViewMode = 'timeline' | 'list' | 'calendar'
 
-export function EmployeeAttendancePage() {
+export function EmployeeAttendancePage({ embedded = false }: { embedded?: boolean } = {}) {
   const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const employeeId = user?.employeeId ?? undefined
@@ -211,10 +211,12 @@ export function EmployeeAttendancePage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={t('attendance.title')}
-        subtitle={t('attendance.subtitle', { defaultValue: 'Track your check-ins, hours, and weekly attendance.' })}
-      />
+      {!embedded && (
+        <PageHeader
+          title={t('attendance.title')}
+          subtitle={t('attendance.subtitle', { defaultValue: 'Track your check-ins, hours, and weekly attendance.' })}
+        />
+      )}
 
       {/* Stats strip — at-a-glance counters for the visible week. Moved
           above the calendar/list so the headline numbers land in the

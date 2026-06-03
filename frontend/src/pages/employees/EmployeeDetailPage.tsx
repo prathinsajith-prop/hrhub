@@ -483,14 +483,14 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+      <DialogContent className="max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="text-lg font-semibold">Change Salary</DialogTitle>
           <p className="text-sm text-muted-foreground mt-0.5">Record a salary revision and update the employee's compensation package.</p>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="px-6 py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
 
             {/* Effective date + Revision type */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -631,7 +631,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t bg-muted/20">
+          <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0">
             <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
@@ -1200,8 +1200,15 @@ export function EmployeeDetailPage() {
         toast.success('Record archived', `${e.fullName}'s record has been archived.`)
         navigate('/employees')
       },
-      onError: () => {
-        toast.error('Failed', 'Could not archive employee record.')
+      onError: (err) => {
+        // Surface the server's reason (protected account, blocking dependency, …)
+        // instead of a generic failure so admins know why an archive was refused.
+        const data = (err as any)?.data ?? null
+        const code: string | undefined = data?.code
+        const deps: Array<{ message: string }> = data?.dependencies ?? []
+        const detail = deps.length ? deps.map((d) => `• ${d.message}`).join('\n') : (err as Error)?.message
+        const blocked = code === 'ARCHIVE_BLOCKED' || (typeof code === 'string' && code.startsWith('PROTECTED'))
+        toast.error(blocked ? 'Cannot archive' : 'Failed', detail || 'Could not archive employee record.')
         setArchiveConfirm(false)
       },
     })

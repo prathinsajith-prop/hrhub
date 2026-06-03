@@ -642,6 +642,7 @@ export default async function (fastify: any): Promise<void> {
                     expectedSalary: { type: 'number', minimum: 0 },
                     currentSalary: { type: 'number', minimum: 0 },
                     notes: { type: 'string' },
+                    skills: { type: 'array', items: { type: 'string' } },
                     educationHistory: {
                         type: 'array',
                         items: {
@@ -786,6 +787,7 @@ export default async function (fastify: any): Promise<void> {
                     phone: { type: 'string' },
                     address: { type: 'string' },
                     gender: { type: 'string', enum: ['male', 'female', 'other', 'prefer_not_to_say'] },
+                    skills: { type: 'array', items: { type: 'string' } },
                     educationHistory: { type: 'array' },
                     experienceHistory: { type: 'array' },
                 },
@@ -806,6 +808,7 @@ export default async function (fastify: any): Promise<void> {
             ...(b.currentSalary !== undefined && { currentSalary: String(b.currentSalary) }),
             ...(b.notes !== undefined && { notes: b.notes as string }),
             ...(b.score !== undefined && { score: Number(b.score) }),
+            ...(b.skills !== undefined && { skills: b.skills as never }),
             ...(b.educationHistory !== undefined && { educationHistory: b.educationHistory as never }),
             ...(b.experienceHistory !== undefined && { experienceHistory: b.experienceHistory as never }),
         } as never)
@@ -1323,6 +1326,9 @@ export default async function (fastify: any): Promise<void> {
             }
             const eduHistory = safeArray<{ school: string }>(fields.educationHistory, (v: any): v is { school: string } => v && typeof v === 'object' && typeof v.school === 'string' && v.school.trim().length > 0)
             const expHistory = safeArray<{ title: string }>(fields.experienceHistory, (v: any): v is { title: string } => v && typeof v === 'object' && typeof v.title === 'string' && v.title.trim().length > 0)
+            // skills arrives as a JSON-stringified string[]; keep non-empty trimmed tags.
+            const skills = safeArray<string>(fields.skills, (v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+                .map((s) => s.trim())
             const validGenders = ['male', 'female', 'other', 'prefer_not_to_say']
             const genderRaw = fields.gender?.trim() ?? ''
             const gender = validGenders.includes(genderRaw) ? genderRaw : null
@@ -1339,6 +1345,7 @@ export default async function (fastify: any): Promise<void> {
                 expectedSalary: parseOptionalAmount(fields.expectedSalary),
                 currentSalary: parseOptionalAmount(fields.currentSalary),
                 notes: fields.coverNote?.trim() || null,
+                skills: skills as never,
                 educationHistory: eduHistory as never,
                 experienceHistory: expHistory as never,
                 source: 'careers',

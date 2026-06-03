@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Moon, Sun, User } from 'lucide-react'
+import { CircleUser, LogOut, Moon, Sun, User, UserPlus, Users } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 import { useAuthStore } from '@/store/authStore'
+import { useViewModeStore } from '@/store/viewModeStore'
+import { canSwitchToManager } from '@/lib/permissions'
 import { ROUTES } from '@/lib/routes'
 import { cn, initialsOf } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -27,6 +29,9 @@ export function AccountMenu() {
     const navigate = useNavigate()
     const user = useAuthStore((s) => s.user)
     const logout = useAuthStore((s) => s.logout)
+    const mode = useViewModeStore((s) => s.mode)
+    const setMode = useViewModeStore((s) => s.setMode)
+    const canManager = canSwitchToManager(user)
     const { theme, setTheme } = useTheme()
 
     return (
@@ -71,18 +76,35 @@ export function AccountMenu() {
                     <User className="size-4" />
                     <span>{t('nav.profile')}</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate(ROUTES.employeeReferrals)} className="gap-2.5">
+                    <UserPlus className="size-4" />
+                    <span>{t('nav.referrals')}</span>
+                </DropdownMenuItem>
+                {canManager ? (
+                    mode === 'manager' ? (
+                        <DropdownMenuItem onSelect={() => { setMode('employee'); navigate(ROUTES.employeeHome) }} className="gap-2.5">
+                            <CircleUser className="size-4" />
+                            <span>{t('nav.switchToEmployee', { defaultValue: 'Switch to Employee view' })}</span>
+                        </DropdownMenuItem>
+                    ) : (
+                        <DropdownMenuItem onSelect={() => { setMode('manager'); navigate(ROUTES.managerHome) }} className="gap-2.5">
+                            <Users className="size-4" />
+                            <span>{t('nav.switchToManager', { defaultValue: 'Switch to Manager view' })}</span>
+                        </DropdownMenuItem>
+                    )
+                ) : null}
 
                 <DropdownMenuSeparator />
 
                 <DropdownMenuLabel className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Appearance
+                    {t('nav.appearance', { defaultValue: 'Appearance' })}
                 </DropdownMenuLabel>
                 <DropdownMenuItem
                     onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                     className="gap-2.5"
                 >
                     {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-                    <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+                    <span>{theme === 'dark' ? t('common.lightMode', { defaultValue: 'Light mode' }) : t('common.darkMode', { defaultValue: 'Dark mode' })}</span>
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator />

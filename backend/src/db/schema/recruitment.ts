@@ -83,6 +83,10 @@ export const jobApplications = pgTable('job_applications', {
     experienceHistory: jsonb('experience_history')
         .$type<Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>>()
         .notNull().default([]),
+    /** Candidate skill tags (e.g. ["TypeScript", "Negotiation"]). Captured from
+     *  the apply form / HR dialog / referral, or auto-extracted from the résumé.
+     *  Mirrors recruitmentJobs.skills but describes the applicant, not the role. */
+    skills: jsonb('skills').$type<string[]>().notNull().default([]),
     resumeUrl: text('resume_url'),
     // Candidate photo (S3 key) — auto-extracted from the résumé on apply, or
     // uploaded manually. Served as a presigned `avatar` URL by the service.
