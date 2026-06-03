@@ -5,6 +5,7 @@ import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { validate, createEmployeeSchema } from '../../lib/validation.js'
+import { parseOptionalCount, parseOptionalAmount } from '../../lib/applicant-numbers.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
 import { entities, tenants, orgUnits, employees } from '../../db/schema/index.js'
@@ -617,7 +618,9 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const result = await getApplication(request.user.tenantId, id)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Candidate not found' })
-        return reply.send(result)
+        // Wrapped as { data } for consistency with the list endpoint and the
+        // rest of the API. Existing frontend hooks must unwrap accordingly.
+        return reply.send({ data: result })
     })
 
     // POST /api/v1/jobs/:id/applications
@@ -1303,12 +1306,6 @@ export default async function (fastify: any): Promise<void> {
         if (!allowedMime[mime]) return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: 'Only PDF or Word documents are accepted' })
 
         let application: Awaited<ReturnType<typeof createApplication>>
-        // Parse numeric fields explicitly so a genuine 0 (fresh graduate) is kept
-        // and non-numeric free text (e.g. "negotiable") becomes null rather than 0.
-        const expRaw = fields.experience?.trim()
-        const expNum = expRaw ? Number(expRaw) : NaN
-        const salRaw = fields.expectedSalary?.trim()
-        const salNum = salRaw ? Number(salRaw) : NaN
         try {
             // address/gender are simple strings. educationHistory + experienceHistory
             // arrive as JSON-stringified arrays (multipart only supports string
@@ -1337,8 +1334,10 @@ export default async function (fastify: any): Promise<void> {
                 nationality: fields.nationality?.trim() || null,
                 address: fields.address?.trim() || null,
                 gender: gender as never,
-                experience: Number.isFinite(expNum) && Number.isInteger(expNum) && expNum >= 0 ? expNum : null,
-                expectedSalary: Number.isFinite(salNum) && salNum >= 0 ? salNum.toFixed(2) : null,
+                // Keep a genuine 0; null out non-numeric free text (see parseOptional*).
+                experience: parseOptionalCount(fields.experience),
+                expectedSalary: parseOptionalAmount(fields.expectedSalary),
+                currentSalary: parseOptionalAmount(fields.currentSalary),
                 notes: fields.coverNote?.trim() || null,
                 educationHistory: eduHistory as never,
                 experienceHistory: expHistory as never,

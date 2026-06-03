@@ -277,7 +277,9 @@ export function CandidateProfilePage() {
             <div className="flex items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
                     <Avatar className="size-12 border border-border shrink-0">
-                        {candidate.avatar && <img src={candidate.avatar} alt={candidate.name} className="object-cover" />}
+                        {(candidate.avatarUrl ?? candidate.avatar) && (
+                            <img src={(candidate.avatarUrl ?? candidate.avatar) as string} alt={candidate.name} className="object-cover" />
+                        )}
                         <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
                             {getInitials(candidate.name)}
                         </AvatarFallback>
@@ -358,7 +360,7 @@ export function CandidateProfilePage() {
                                 </div>
                             )}
 
-                            {(candidate.expectedSalary || candidate.currentSalary || candidate.score !== undefined) && (
+                            {(candidate.expectedSalary != null || candidate.currentSalary != null || candidate.score !== undefined) && (
                                 <div className="border-t border-border pt-3 space-y-2.5">
                                     {candidate.score !== undefined && (
                                         <div className="flex items-center justify-between text-sm">
@@ -366,13 +368,13 @@ export function CandidateProfilePage() {
                                             <ScoreBadge score={candidate.score} />
                                         </div>
                                     )}
-                                    {candidate.currentSalary && (
+                                    {candidate.currentSalary != null && (
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">{t('recruitment.candidateProfile.currentSalary')}</span>
                                             <span className="font-medium tabular-nums">{formatCurrency(candidate.currentSalary)}</span>
                                         </div>
                                     )}
-                                    {candidate.expectedSalary && (
+                                    {candidate.expectedSalary != null && (
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">{t('recruitment.candidateProfile.expectedSalary')}</span>
                                             <span className="font-medium tabular-nums">{formatCurrency(candidate.expectedSalary)}</span>

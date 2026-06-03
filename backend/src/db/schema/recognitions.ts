@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, boolean, timestamp, integer, jsonb, date, index, uniqueIndex } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { users } from './users.js'
 import { employees } from './employees.js'
@@ -194,6 +195,13 @@ export const recognitionPoints = pgTable('recognition_points', {
     userIdx: index('idx_recognition_points_user').on(t.tenantId, t.userId, t.createdAt),
     employeeIdx: index('idx_recognition_points_employee').on(t.tenantId, t.employeeId),
     typeIdx: index('idx_recognition_points_type').on(t.tenantId, t.type),
+    // Defense-in-depth: at most one earned/given ledger row per (recognition, user).
+    // Makes the double-award bug impossible at the DB layer even if a guard is
+    // bypassed. Partial — granted/redeemed/reversed rows (and any with a null
+    // recognition_id) are unconstrained and may legitimately repeat.
+    awardUniq: uniqueIndex('uq_recognition_points_award')
+        .on(t.recognitionId, t.userId, t.type)
+        .where(sql`${t.recognitionId} IS NOT NULL AND ${t.type} IN ('earned','given')`),
 }))
 
 // ── Approvals trail ──────────────────────────────────────────────────────────

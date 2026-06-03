@@ -20,13 +20,23 @@ const RESUME_MIME = new Set([
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'image/jpeg', 'image/png', 'image/webp',
 ])
-const EXT_MIME: Record<string, string> = {
-    pdf: 'application/pdf',
-    doc: 'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-}
 const IMAGE_MIME: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }
+
+/**
+ * Detect the real content type from magic bytes — never trust the client-supplied
+ * Content-Type / extension (mirrors the main backend's fileTypeFromBuffer check).
+ * Returns a canonical MIME or null. Office Open XML (.docx) is a zip and legacy
+ * .doc is OLE2, so both map to their canonical document MIME.
+ */
+function sniffMime(buf: Buffer): string | null {
+    if (buf.length >= 4 && buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46) return 'application/pdf' // %PDF
+    if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png'
+    if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
+    if (buf.length >= 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
+    if (buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' // PK zip → docx
+    if (buf.length >= 8 && buf[0] === 0xd0 && buf[1] === 0xcf && buf[2] === 0x11 && buf[3] === 0xe0) return 'application/msword' // OLE2 → doc
+    return null
+}
 
 /**
  * Employee-portal referral endpoints.
@@ -94,6 +104,20 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                 // Live pipeline stage of the referred candidate (null if the
                 // application was deleted). Lets the employee track progress.
                 stage: jobApplications.stage,
+                // Extended candidate profile (migration 0081). Pulled from the
+                // linked application so the portal can render exactly what the
+                // employee just submitted — without these the form's extended
+                // inputs are silently lost on the read-back.
+                address: jobApplications.address,
+                gender: jobApplications.gender,
+                nationality: jobApplications.nationality,
+                experience: jobApplications.experience,
+                expectedSalary: jobApplications.expectedSalary,
+                currentSalary: jobApplications.currentSalary,
+                educationHistory: jobApplications.educationHistory,
+                experienceHistory: jobApplications.experienceHistory,
+                resumeUrl: jobApplications.resumeUrl,
+                avatarUrl: jobApplications.avatarUrl,
             })
             .from(referrals)
             .leftJoin(recruitmentJobs, eq(referrals.jobId, recruitmentJobs.id))
@@ -148,9 +172,21 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
         // strings only, so arrays arrive JSON-stringified; parse defensively so a
         // malformed payload never blocks the referral submission.
         const address = fields.address?.trim() || null
+        const nationality = fields.nationality?.trim() || null
         const validGenders = ['male', 'female', 'other', 'prefer_not_to_say']
         const genderRaw = fields.gender?.trim() ?? ''
         const gender = validGenders.includes(genderRaw) ? (genderRaw as 'male' | 'female' | 'other' | 'prefer_not_to_say') : null
+        // Numeric fields: parse explicitly so a literal 0 (e.g. fresh graduate)
+        // is preserved and non-numeric free text becomes null rather than 0.
+        const expRaw = fields.experience?.trim()
+        const expNum = expRaw ? Number(expRaw) : NaN
+        const experience = Number.isFinite(expNum) && Number.isInteger(expNum) && expNum >= 0 ? expNum : null
+        const expectedRaw = fields.expectedSalary?.trim()
+        const expectedNum = expectedRaw ? Number(expectedRaw) : NaN
+        const expectedSalary = Number.isFinite(expectedNum) && expectedNum >= 0 ? expectedNum.toFixed(2) : null
+        const currentRaw = fields.currentSalary?.trim()
+        const currentNum = currentRaw ? Number(currentRaw) : NaN
+        const currentSalary = Number.isFinite(currentNum) && currentNum >= 0 ? currentNum.toFixed(2) : null
         const safeArray = <T,>(raw: string | undefined, valid: (v: any) => v is T): T[] => {
             if (!raw) return []
             try {
@@ -200,13 +236,13 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
             .limit(1)
         if (dup) return reply.code(409).send(e409('This candidate is already in the pipeline for this job'))
 
-        // Resume (optional): validate MIME, stream to S3 server-side.
+        // Resume (optional): validate by MAGIC BYTES (not client headers), then
+        // stream to S3 server-side.
         let resumeUrl: string | null = null
         if (pending) {
-            const ext = pending.originalName.split('.').pop()?.toLowerCase() ?? ''
-            const mime = RESUME_MIME.has(pending.mimetype) ? pending.mimetype : (EXT_MIME[ext] ?? pending.mimetype)
-            if (!RESUME_MIME.has(mime)) {
-                return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: 'Resume must be a PDF, Word doc, or image.' })
+            const mime = sniffMime(pending.buffer)
+            if (!mime || !RESUME_MIME.has(mime)) {
+                return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: 'Resume must be a valid PDF, Word doc, or image.' })
             }
             const key = buildS3Key(request.user.tenantId, `referrals/${jobId}`, pending.originalName)
             try {
@@ -221,11 +257,12 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
         // to S3. A failure here never blocks the referral — photo is a nicety.
         let avatarUrl: string | null = null
         if (photo) {
-            const ext = IMAGE_MIME[photo.mimetype]
-            if (ext) {
+            const detected = sniffMime(photo.buffer)            // trust bytes, not the client
+            const ext = detected ? IMAGE_MIME[detected] : undefined
+            if (ext && detected) {
                 const key = buildS3Key(request.user.tenantId, `referrals/${jobId}/photo`, `photo${ext}`)
                 try {
-                    await uploadObject(key, photo.buffer, photo.mimetype)
+                    await uploadObject(key, photo.buffer, detected)
                     avatarUrl = key
                 } catch {
                     // Swallow — proceed without the photo.
@@ -246,8 +283,12 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                     name: candidateName,
                     email: candidateEmail,
                     phone: candidatePhone,
+                    nationality,
                     address,
                     gender,
+                    experience,
+                    expectedSalary,
+                    currentSalary,
                     educationHistory,
                     experienceHistory,
                     notes,

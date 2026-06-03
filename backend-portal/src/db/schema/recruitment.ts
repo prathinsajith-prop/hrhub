@@ -15,8 +15,13 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     title: text('title').notNull(),
     department: text('department'),
     location: text('location'),
+    // Employment-contract type. The DB column is plain text — the union is a
+    // TypeScript hint only — so widening the union doesn't need a migration.
     type: text('type').notNull().default('full_time')
-        .$type<'full_time' | 'part_time' | 'contract'>(),
+        .$type<'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary' | 'freelance'>(),
+    // Where the work happens. Independent of employment-contract type.
+    workplaceType: text('workplace_type').notNull().default('on_site')
+        .$type<'on_site' | 'hybrid' | 'remote'>(),
     status: text('status').notNull().default('draft')
         .$type<'draft' | 'open' | 'closed' | 'on_hold'>(),
     openings: integer('openings').notNull().default(1),
@@ -25,6 +30,10 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     industry: text('industry'),
     description: text('description'),
     requirements: jsonb('requirements').default([]),
+    // Free-text skill tags. Stored as a jsonb string[].
+    skills: jsonb('skills').$type<string[]>().notNull().default([]),
+    // Qualification bullets. Same shape as skills; distinct semantic.
+    qualifications: jsonb('qualifications').$type<string[]>().notNull().default([]),
     closingDate: date('closing_date'),
     postedBy: uuid('posted_by').references(() => users.id),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -34,7 +43,10 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     tenantIdx: index('idx_jobs_tenant').on(t.tenantId),
     statusIdx: index('idx_jobs_status').on(t.status),
     tenantStatusIdx: index('idx_jobs_tenant_status').on(t.tenantId, t.status),
+    workplaceIdx: index('idx_jobs_workplace').on(t.tenantId, t.workplaceType),
     jobNoUniq: uniqueIndex('idx_jobs_tenant_no_uniq').on(t.tenantId, t.jobNo).where(sql`${t.jobNo} IS NOT NULL`),
+    // Serves the jobs list: WHERE tenant ORDER BY created_at DESC.
+    tenantCreatedIdx: index('idx_jobs_tenant_created').on(t.tenantId, t.createdAt),
 }))
 
 export const jobApplications = pgTable('job_applications', {
@@ -75,6 +87,11 @@ export const jobApplications = pgTable('job_applications', {
     jobIdx: index('idx_applications_job').on(t.jobId),
     tenantIdx: index('idx_applications_tenant').on(t.tenantId),
     stageIdx: index('idx_applications_stage').on(t.stage),
+    tenantStageIdx: index('idx_applications_tenant_stage').on(t.tenantId, t.stage),
+    jobStageIdx: index('idx_applications_job_stage').on(t.jobId, t.stage),
+    referrerIdx: index('idx_applications_referrer').on(t.referredByEmployeeId),
+    // Serves the candidates list: WHERE tenant ORDER BY created_at DESC.
+    tenantCreatedIdx: index('idx_applications_tenant_created').on(t.tenantId, t.createdAt),
 }))
 
 // Employee referrals — see backend/src/db/schema/recruitment.ts for full docs.

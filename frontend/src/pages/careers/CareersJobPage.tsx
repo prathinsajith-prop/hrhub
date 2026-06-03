@@ -287,7 +287,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
 function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobId: string; jobTitle: string }) {
     const { t } = useTranslation()
     const apply = useApplyToJob(companyCode, jobId)
-    const [form, setForm] = useState({ name: '', email: '', phone: '', nationality: '', experience: '', expectedSalary: '', coverNote: '' })
+    const [form, setForm] = useState({ name: '', email: '', phone: '', nationality: '', experience: '', expectedSalary: '', currentSalary: '', coverNote: '' })
     // Additional profile fields — kept as separate state to keep the submit
     // payload assembly explicit (multipart upload).
     const [address, setAddress] = useState('')
@@ -309,6 +309,8 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
         setForm(prev => ({ ...prev, [k]: e.target.value }))
 
     // Pre-fill empty fields from the parsed résumé; never overwrite what the user typed.
+    // Skills/links the parser extracts but the form doesn't surface are prepended
+    // to the cover note as a lossless "Parsed:" block so HR sees them.
     const handleParsed = (p: ParsedResume) => {
         setForm(prev => ({
             ...prev,
@@ -316,6 +318,7 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
             email: prev.email || p.email || '',
             phone: prev.phone || p.phone || '',
             experience: prev.experience || (p.experienceYears != null ? String(p.experienceYears) : ''),
+            coverNote: prev.coverNote || buildParsedNoteBlock(p),
         }))
     }
 
@@ -401,6 +404,9 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
                     <Field label={t('careers.apply.expectedSalary')}>
                         <NumericInput decimal={false} value={form.expectedSalary} onChange={set('expectedSalary')} />
                     </Field>
+                    <Field label={t('careers.apply.currentSalary', { defaultValue: 'Current salary' })}>
+                        <NumericInput decimal={false} value={form.currentSalary} onChange={set('currentSalary')} />
+                    </Field>
                 </div>
                 <Field label={t('careers.apply.photo', { defaultValue: 'Photo (optional)' })}>
                     <PhotoField photo={photo} onPick={onPickPhoto} onRemove={onRemovePhoto} t={t} />
@@ -431,6 +437,20 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
             </Button>
         </form>
     )
+}
+
+/**
+ * Lossless capture of résumé-parsed fields the form doesn't surface (skills,
+ * LinkedIn, GitHub, portfolio). Returns a single "Parsed:" line block ready to
+ * prefix into a free-text notes field; empty string when nothing was parsed.
+ */
+function buildParsedNoteBlock(p: ParsedResume): string {
+    const lines: string[] = []
+    if (p.skills.length > 0) lines.push(`Skills: ${p.skills.join(', ')}`)
+    if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
+    if (p.github) lines.push(`GitHub: ${p.github}`)
+    if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)
+    return lines.length > 0 ? `Parsed:\n${lines.join('\n')}` : ''
 }
 
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) {

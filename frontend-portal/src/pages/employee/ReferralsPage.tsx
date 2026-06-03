@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
-import { parseResumeFile, extractResumeImage } from '@/lib/resume-parser'
+import { parseResumeFile, extractResumeImage, type ParsedResume } from '@/lib/resume-parser'
 import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
 import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 
@@ -231,6 +231,10 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const [form, setForm] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
     // Extended candidate profile (matches public apply form + admin candidate
     // dialogs). All optional — referrer adds what they know.
+    const [nationality, setNationality] = useState('')
+    const [experience, setExperience] = useState('')
+    const [expectedSalary, setExpectedSalary] = useState('')
+    const [currentSalary, setCurrentSalary] = useState('')
     const [address, setAddress] = useState('')
     const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
     const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
@@ -239,6 +243,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const reset = () => {
         setForm({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
         setJob(null); setResume(null); setPhoto(null); setParsedNote(null)
+        setNationality(''); setExperience(''); setExpectedSalary(''); setCurrentSalary('')
         setAddress(''); setGender(''); setEducationHistory([]); setExperienceHistory([])
         if (fileRef.current) fileRef.current.value = ''
     }
@@ -269,7 +274,12 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     candidateName: prev.candidateName || p.name || '',
                     candidateEmail: prev.candidateEmail || p.email || '',
                     candidatePhone: prev.candidatePhone || p.phone || '',
+                    // Lossless capture for fields the form doesn't surface
+                    // (skills + social/portfolio links): pre-fill notes only if
+                    // the referrer hasn't written their own note yet.
+                    notes: prev.notes || buildReferralParsedNote(p),
                 }))
+                if (p.experienceYears != null) setExperience((prev) => prev || String(p.experienceYears))
                 const filled = (['name', 'email', 'phone'] as const).filter((k) => p[k])
                 if (p.textLength === 0) {
                     setParsedNote(t('referrals.resumeUnreadable', { defaultValue: 'Couldn’t read text (scanned résumé?) — please fill the fields manually.' }))
@@ -292,6 +302,10 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 candidatePhone: form.candidatePhone.trim() || undefined,
                 relationship: form.relationship.trim() || undefined,
                 notes: form.notes.trim() || undefined,
+                nationality: nationality.trim() || undefined,
+                experience: experience.trim() || undefined,
+                expectedSalary: expectedSalary.trim() || undefined,
+                currentSalary: currentSalary.trim() || undefined,
                 address: address.trim() || undefined,
                 gender: gender || undefined,
                 educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
@@ -409,6 +423,51 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                         </Select>
                     </div>
 
+                    {/* Optional candidate metadata that HR also captures via the
+                        admin Add Candidate dialog & the public apply form. Plain
+                        inputs here — the portal doesn't ship the country/numeric
+                        helpers, but a free-text field is enough for a referral. */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                            <Label>{t('referrals.nationality', { defaultValue: 'Nationality' })}</Label>
+                            <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder={t('referrals.nationalityPlaceholder', { defaultValue: 'e.g. Indian' })} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>{t('referrals.experience', { defaultValue: 'Experience (years)' })}</Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                inputMode="numeric"
+                                value={experience}
+                                onChange={(e) => setExperience(e.target.value)}
+                                placeholder="0"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>{t('referrals.expectedSalary', { defaultValue: 'Expected salary (AED)' })}</Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                inputMode="decimal"
+                                value={expectedSalary}
+                                onChange={(e) => setExpectedSalary(e.target.value)}
+                                placeholder="0"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>{t('referrals.currentSalary', { defaultValue: 'Current salary (AED)' })}</Label>
+                            <Input
+                                type="number"
+                                min={0}
+                                inputMode="decimal"
+                                value={currentSalary}
+                                onChange={(e) => setCurrentSalary(e.target.value)}
+                                placeholder="0"
+                            />
+                        </div>
+                    </div>
+
                     <div className="space-y-1.5">
                         <Label>{t('referrals.notes', { defaultValue: 'Why are you referring them?' })}</Label>
                         <Textarea rows={3} value={form.notes} onChange={(e) => set('notes')(e.target.value)} placeholder={t('referrals.notesPlaceholder', { defaultValue: 'A short note for the hiring team…' })} />
@@ -440,4 +499,19 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
             </DialogContent>
         </Dialog>
     )
+}
+
+/**
+ * Lossless capture of résumé-parsed fields the referral form doesn't surface
+ * (skills + social/portfolio links). Returns a single "Parsed:" block we
+ * pre-fill into the free-text "why are you referring them?" textarea; empty
+ * string when nothing useful was found.
+ */
+function buildReferralParsedNote(p: ParsedResume): string {
+    const lines: string[] = []
+    if (p.skills.length > 0) lines.push(`Skills: ${p.skills.join(', ')}`)
+    if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
+    if (p.github) lines.push(`GitHub: ${p.github}`)
+    if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)
+    return lines.length > 0 ? `Parsed:\n${lines.join('\n')}` : ''
 }

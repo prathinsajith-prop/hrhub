@@ -222,6 +222,7 @@ export interface Candidate {
   score: number
   appliedDate: string
   avatar?: string
+  avatarUrl?: string | null
   experience: number
   currentSalary?: number
   expectedSalary?: number

@@ -129,6 +129,9 @@ const CandidateCard = memo(function CandidateCard({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Avatar className="size-8 shrink-0">
+            {(candidate.avatarUrl ?? candidate.avatar) && (
+              <img src={(candidate.avatarUrl ?? candidate.avatar) as string} alt={candidate.name} className="object-cover" />
+            )}
             <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
@@ -414,6 +417,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
   const [experience, setExperience] = useState('')
   const [expectedSalary, setExpectedSalary] = useState('')
+  const [currentSalary, setCurrentSalary] = useState('')
   const [notes, setNotes] = useState('')
   const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
   const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
@@ -426,16 +430,20 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const reset = () => {
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
     setAddress(''); setGender('')
-    setExperience(''); setExpectedSalary(''); setNotes(''); setResumeFile(null); setPhoto(null)
+    setExperience(''); setExpectedSalary(''); setCurrentSalary(''); setNotes(''); setResumeFile(null); setPhoto(null)
     setEducationHistory([]); setExperienceHistory([])
   }
 
   // Pre-fill empty fields from the parsed résumé; never overwrite what's typed.
+  // Parsed skills/links the form doesn't expose are appended to notes as a
+  // lossless "Parsed:" block so HR keeps the context.
   const handleParsed = (p: ParsedResume) => {
     if (p.name) setName(prev => prev || p.name!)
     if (p.email) setEmail(prev => prev || p.email!)
     if (p.phone) setPhone(prev => prev || p.phone!)
     if (p.experienceYears != null) setExperience(prev => prev || String(p.experienceYears))
+    const parsedBlock = buildCandidateParsedNote(p)
+    if (parsedBlock) setNotes(prev => prev || parsedBlock)
   }
 
   const handleSave = async () => {
@@ -454,6 +462,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           gender: gender || undefined,
           experience: experience ? Number(experience) : undefined,
           expectedSalary: expectedSalary ? Number(expectedSalary) : undefined,
+          currentSalary: currentSalary ? Number(currentSalary) : undefined,
           notes: notes.trim() || undefined,
           educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
           experienceHistory: experienceHistory.length > 0 ? experienceHistory : undefined,
@@ -546,6 +555,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               <Label>Expected salary (AED)</Label>
               <NumericInput value={expectedSalary} onChange={(e) => setExpectedSalary(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Current salary (AED)</Label>
+              <NumericInput value={currentSalary} onChange={(e) => setCurrentSalary(e.target.value)} />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Notes</Label>
@@ -576,6 +589,20 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * Lossless capture of résumé-parsed fields the candidate dialog doesn't expose
+ * (skills + social/portfolio links). Returns a single "Parsed:" block we can
+ * pre-fill into the free-text notes; empty string when nothing useful was found.
+ */
+function buildCandidateParsedNote(p: ParsedResume): string {
+  const lines: string[] = []
+  if (p.skills.length > 0) lines.push(`Skills: ${p.skills.join(', ')}`)
+  if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
+  if (p.github) lines.push(`GitHub: ${p.github}`)
+  if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)
+  return lines.length > 0 ? `Parsed:\n${lines.join('\n')}` : ''
 }
 
 /**

@@ -71,6 +71,7 @@
       "nationality": "Nationality",
       "experience": "Years of experience",
       "expectedSalary": "Expected salary (AED)",
+      "currentSalary": "Current salary (AED)",
       "coverNote": "Cover note",
       "coverNotePlaceholder": "Tell us why you're a great fit (optional)",
       "resume": "Resume / CV",

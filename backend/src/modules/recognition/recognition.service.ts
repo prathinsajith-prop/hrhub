@@ -945,6 +945,9 @@ async function insertPointsAtomic(
             END,
             ${row.createdByUserId}
         FROM cur
+        ON CONFLICT (recognition_id, user_id, type)
+            WHERE recognition_id IS NOT NULL AND type IN ('earned','given')
+            DO NOTHING
         RETURNING *
     `)
     return (((res as any).rows ?? res) as any[])[0]

@@ -3,6 +3,7 @@ import { Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NumericInput } from '@/components/ui/numeric-input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/primitives'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { useUpdateApplication } from '@/hooks/useRecruitment'
@@ -39,6 +40,7 @@ export function EditCandidateDialog({
         currentSalary: '',
         expectedSalary: '',
         score: '',
+        notes: '',
     })
     const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
     const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
@@ -52,27 +54,22 @@ export function EditCandidateDialog({
         const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
         const num = (v: unknown): string =>
             v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '' : String(v)
-        const c = candidate as unknown as {
-            address?: string | null
-            gender?: Gender | null
-            educationHistory?: EducationEntry[] | null
-            experienceHistory?: ExperienceEntry[] | null
-        }
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setForm({
             name: str(candidate.name),
             email: str(candidate.email),
             phone: str(candidate.phone),
             nationality: str(candidate.nationality),
-            address: str(c.address),
-            gender: (c.gender ?? '') as '' | Gender,
+            address: str(candidate.address),
+            gender: (candidate.gender ?? '') as '' | Gender,
             experience: num(candidate.experience),
             currentSalary: num(candidate.currentSalary),
             expectedSalary: num(candidate.expectedSalary),
             score: num(candidate.score),
+            notes: str(candidate.notes),
         })
-        setEducationHistory(Array.isArray(c.educationHistory) ? c.educationHistory : [])
-        setExperienceHistory(Array.isArray(c.experienceHistory) ? c.experienceHistory : [])
+        setEducationHistory(Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [])
+        setExperienceHistory(Array.isArray(candidate.experienceHistory) ? candidate.experienceHistory : [])
     }, [candidate?.id, candidate])
 
     if (!candidate) return null
@@ -92,6 +89,7 @@ export function EditCandidateDialog({
             ...(form.gender ? { gender: form.gender } : {}),
             educationHistory,
             experienceHistory,
+            notes: form.notes.trim(),
         }
         if (form.experience !== '') payload.experience = Number(form.experience)
         if (form.currentSalary !== '') payload.currentSalary = Number(form.currentSalary)
@@ -185,6 +183,17 @@ export function EditCandidateDialog({
                             experience={experienceHistory}
                             onExperienceChange={setExperienceHistory}
                             compact
+                        />
+                    </div>
+
+                    {/* Notes — recruiter remarks, source notes, parsed résumé extras */}
+                    <div className="space-y-1.5 pt-4 border-t border-border/60">
+                        <Label>Notes</Label>
+                        <Textarea
+                            value={form.notes}
+                            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                            rows={4}
+                            placeholder="Recruiter remarks, parsed links, source, etc."
                         />
                     </div>
                 </DialogBody>

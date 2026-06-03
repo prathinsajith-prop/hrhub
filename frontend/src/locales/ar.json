@@ -71,6 +71,7 @@
       "nationality": "الجنسية",
       "experience": "سنوات الخبرة",
       "expectedSalary": "الراتب المتوقع (درهم)",
+      "currentSalary": "الراتب الحالي (درهم)",
       "coverNote": "ملاحظة تعريفية",
       "coverNotePlaceholder": "أخبرنا لماذا أنت الأنسب لهذه الوظيفة (اختياري)",
       "resume": "السيرة الذاتية",

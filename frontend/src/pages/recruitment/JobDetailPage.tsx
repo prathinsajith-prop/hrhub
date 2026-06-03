@@ -108,7 +108,9 @@ export function JobDetailPage() {
         return (
           <div className="flex items-center gap-3 min-w-0">
             <Avatar className="size-9 shrink-0 border border-border/60">
-              {c.avatar && <img src={c.avatar} alt={c.name} className="object-cover" />}
+              {(c.avatarUrl ?? c.avatar) && (
+                <img src={(c.avatarUrl ?? c.avatar) as string} alt={c.name} className="object-cover" />
+              )}
               <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">{getInitials(c.name)}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">

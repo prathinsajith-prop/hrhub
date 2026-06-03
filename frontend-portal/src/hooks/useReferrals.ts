@@ -39,8 +39,14 @@ export interface SubmitReferralBody {
     // Extended candidate profile (migration 0081) — same shape as the public
     // careers apply form so HR sees one consistent candidate record regardless
     // of source.
+    nationality?: string
     address?: string
     gender?: '' | 'male' | 'female' | 'other' | 'prefer_not_to_say'
+    /** Years of relevant experience — sent as a string so the multipart parser
+     *  can coerce defensively on the server. */
+    experience?: string
+    expectedSalary?: string
+    currentSalary?: string
     educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
     experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
     resume?: File | null
@@ -87,8 +93,12 @@ export function useSubmitReferral() {
             if (body.candidatePhone) fd.append('candidatePhone', body.candidatePhone)
             if (body.relationship) fd.append('relationship', body.relationship)
             if (body.notes) fd.append('notes', body.notes)
+            if (body.nationality) fd.append('nationality', body.nationality)
             if (body.address) fd.append('address', body.address)
             if (body.gender) fd.append('gender', body.gender)
+            if (body.experience) fd.append('experience', body.experience)
+            if (body.expectedSalary) fd.append('expectedSalary', body.expectedSalary)
+            if (body.currentSalary) fd.append('currentSalary', body.currentSalary)
             // Arrays travel as JSON strings — multipart values are strings only.
             if (body.educationHistory && body.educationHistory.length > 0) {
                 fd.append('educationHistory', JSON.stringify(body.educationHistory))

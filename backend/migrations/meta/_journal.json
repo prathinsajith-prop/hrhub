@@ -575,6 +575,13 @@
       "when": 1781884800000,
       "tag": "0081_candidate_profile_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1781971200000,
+      "tag": "0082_recognition_points_award_uniq",
+      "breakpoints": true
     }
   ]
 }
