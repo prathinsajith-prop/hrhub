@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles, UploadCloud, CalendarDays } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +21,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { cn, initialsOf } from '@/lib/utils'
+import { cn, initialsOf, formatDate } from '@/lib/utils'
 import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
 import { parseResumeFile, extractResumeImage, type ParsedResume } from '@/lib/resume-parser'
 import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
@@ -64,9 +66,10 @@ const RELATIONSHIP_OPTIONS: Array<{ value: string; key: string }> = [
     { value: 'Other', key: 'referrals.rel.other' },
 ]
 
-function humanizeStage(stage: string | null): string {
-    if (!stage) return 'Removed'
-    return stage.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+function humanizeStage(stage: string | null, t: TFunction): string {
+    if (!stage) return t('referrals.stageRemoved', { defaultValue: 'Removed' })
+    const humanized = stage.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+    return t(`referrals.stage.${stage}`, { defaultValue: humanized })
 }
 
 export function ReferralsPage() {
@@ -96,22 +99,16 @@ export function ReferralsPage() {
                     {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
                 </div>
             ) : list.length === 0 ? (
-                <Card>
-                    <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-                        <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                            <Users className="size-6 text-muted-foreground" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium">{t('referrals.emptyTitle', { defaultValue: 'No referrals yet' })}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                                {t('referrals.emptyDesc', { defaultValue: 'Refer a candidate for an open role to get started.' })}
-                            </p>
-                        </div>
+                <EmptyState
+                    icon={<Users className="size-6" />}
+                    title={t('referrals.emptyTitle', { defaultValue: 'No referrals yet' })}
+                    description={t('referrals.emptyDesc', { defaultValue: 'Refer a candidate for an open role to get started.' })}
+                    action={
                         <Button variant="outline" size="sm" onClick={() => setOpen(true)} className="gap-2">
                             <UserPlus className="size-4" /> {t('referrals.refer', { defaultValue: 'Refer someone' })}
                         </Button>
-                    </CardContent>
-                </Card>
+                    }
+                />
             ) : (
                 <div className="space-y-3">
                     {list.map((r) => {
@@ -146,7 +143,7 @@ export function ReferralsPage() {
                                                 </div>
                                                 <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium capitalize ring-1 ${tone}`}>
                                                     <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
-                                                    {humanizeStage(r.stage)}
+                                                    {humanizeStage(r.stage, t)}
                                                 </span>
                                             </div>
 
@@ -178,7 +175,7 @@ export function ReferralsPage() {
                                                 )}
                                                 <span className="inline-flex items-center gap-1">
                                                     <CalendarDays className="size-3" />
-                                                    {new Date(r.createdAt).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    {formatDate(r.createdAt)}
                                                 </span>
                                             </div>
                                         </div>
@@ -219,7 +216,7 @@ function JobCombobox({ value, onChange }: { value: ReferralJob | null; onChange:
                 >
                     {value ? (
                         <span className="flex min-w-0 items-center gap-2">
-                            {value.jobNo && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{value.jobNo}</span>}
+                            {value.jobNo && <span className="shrink-0 font-mono text-xs text-muted-foreground">{value.jobNo}</span>}
                             <span className="truncate">{value.title}</span>
                         </span>
                     ) : (
@@ -256,10 +253,10 @@ function JobCombobox({ value, onChange }: { value: ReferralJob | null; onChange:
                                 <Check className={cn('mt-0.5 size-4 shrink-0', value?.id === j.id ? 'opacity-100 text-primary' : 'opacity-0')} />
                                 <span className="min-w-0 flex-1">
                                     <span className="flex items-center gap-2">
-                                        {j.jobNo && <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{j.jobNo}</span>}
+                                        {j.jobNo && <span className="shrink-0 font-mono text-xs text-muted-foreground">{j.jobNo}</span>}
                                         <span className="truncate font-medium">{j.title}</span>
                                     </span>
-                                    <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                    <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                         {j.department && <span>{j.department}</span>}
                                         {j.location && <span className="inline-flex items-center gap-0.5"><MapPin className="size-3" />{j.location}</span>}
                                     </span>
@@ -332,7 +329,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     // Lossless capture for fields the form doesn't surface
                     // (skills + social/portfolio links): pre-fill notes only if
                     // the referrer hasn't written their own note yet.
-                    notes: prev.notes || buildReferralParsedNote(p),
+                    notes: prev.notes || buildReferralParsedNote(p, t),
                 }))
                 if (p.experienceYears != null) setExperience((prev) => prev || String(p.experienceYears))
                 if (p.education.length) setEducationHistory((prev) => prev.length ? prev : p.education)
@@ -394,7 +391,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 <div className="space-y-4">
                     {/* Résumé first — attach to auto-fill the fields below */}
                     <div className="space-y-1.5">
-                        <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume' })} *</Label>
+                        <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume' })} <span className="text-destructive">*</span></Label>
                         <input
                             ref={fileRef}
                             type="file"
@@ -409,18 +406,18 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                                         {parsing ? <Loader2 className="size-4 shrink-0 animate-spin text-primary" /> : <FileText className="size-4 shrink-0 text-primary" />}
                                         <span className="min-w-0">
                                             <span className="block truncate font-medium">{resume.name}</span>
-                                            <span className="block text-[11px] text-muted-foreground">{(resume.size / 1024).toFixed(0)} KB</span>
+                                            <span className="block text-xs text-muted-foreground">{(resume.size / 1024).toFixed(0)} KB</span>
                                         </span>
                                     </span>
                                     <span className="flex shrink-0 items-center gap-1">
-                                        <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">{t('referrals.replace', { defaultValue: 'Replace' })}</button>
-                                        <button type="button" aria-label="Remove résumé" onClick={() => { setResume(null); setPhoto(null); setParsedNote(null); if (fileRef.current) fileRef.current.value = '' }} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                                        <Button type="button" variant="ghost" size="sm" onClick={() => fileRef.current?.click()} className="h-8 px-2 text-xs font-medium text-primary hover:text-primary">{t('referrals.replace', { defaultValue: 'Replace' })}</Button>
+                                        <Button type="button" variant="ghost" size="icon" aria-label={t('referrals.removeResume', { defaultValue: 'Remove résumé' })} onClick={() => { setResume(null); setPhoto(null); setParsedNote(null); if (fileRef.current) fileRef.current.value = '' }} className="size-8 text-muted-foreground hover:text-foreground">
                                             <X className="size-4" />
-                                        </button>
+                                        </Button>
                                     </span>
                                 </div>
                                 {(parsing || parsedNote) && (
-                                    <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                                         <Sparkles className="size-3 text-primary" />
                                         {parsing ? t('referrals.resumeReading', { defaultValue: 'Reading résumé…' }) : parsedNote}
                                     </p>
@@ -440,29 +437,29 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                             >
                                 <span className="grid size-9 place-items-center rounded-full bg-primary/10 text-primary"><UploadCloud className="size-4" /></span>
                                 <span className="text-sm font-medium">{t('referrals.attachResume', { defaultValue: 'Upload résumé to auto-fill' })}</span>
-                                <span className="text-[11px] text-muted-foreground">{t('referrals.resumeHint', { defaultValue: 'PDF, Word, or image · up to 10 MB. We’ll read it and fill the form for you.' })}</span>
+                                <span className="text-xs text-muted-foreground">{t('referrals.resumeHint', { defaultValue: 'PDF, Word, or image · up to 10 MB. We’ll read it and fill the form for you.' })}</span>
                             </button>
                         )}
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label>{t('referrals.job', { defaultValue: 'Open position' })} *</Label>
+                        <Label>{t('referrals.job', { defaultValue: 'Open position' })} <span className="text-destructive">*</span></Label>
                         <JobCombobox value={job} onChange={setJob} />
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label>{t('referrals.candidateName', { defaultValue: 'Candidate name' })} *</Label>
-                        <Input value={form.candidateName} onChange={(e) => set('candidateName')(e.target.value)} placeholder="Jane Doe" />
+                        <Label>{t('referrals.candidateName', { defaultValue: 'Candidate name' })} <span className="text-destructive">*</span></Label>
+                        <Input value={form.candidateName} onChange={(e) => set('candidateName')(e.target.value)} placeholder={t('referrals.candidateNamePlaceholder', { defaultValue: 'Jane Doe' })} />
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                            <Label>{t('referrals.candidateEmail', { defaultValue: 'Email' })} *</Label>
-                            <Input type="email" value={form.candidateEmail} onChange={(e) => set('candidateEmail')(e.target.value)} placeholder="jane@example.com" aria-invalid={form.candidateEmail.length > 0 && !emailValid} />
+                            <Label>{t('referrals.candidateEmail', { defaultValue: 'Email' })} <span className="text-destructive">*</span></Label>
+                            <Input type="email" value={form.candidateEmail} onChange={(e) => set('candidateEmail')(e.target.value)} placeholder={t('referrals.candidateEmailPlaceholder', { defaultValue: 'jane@example.com' })} aria-invalid={form.candidateEmail.length > 0 && !emailValid} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>{t('referrals.candidatePhone', { defaultValue: 'Phone' })}</Label>
-                            <Input value={form.candidatePhone} onChange={(e) => set('candidatePhone')(e.target.value)} placeholder="+971…" />
+                            <Input value={form.candidatePhone} onChange={(e) => set('candidatePhone')(e.target.value)} placeholder={t('referrals.candidatePhonePlaceholder', { defaultValue: '+971…' })} />
                         </div>
                     </div>
 
@@ -570,11 +567,11 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
  * pre-fill into the free-text "why are you referring them?" textarea; empty
  * string when nothing useful was found.
  */
-function buildReferralParsedNote(p: ParsedResume): string {
+function buildReferralParsedNote(p: ParsedResume, t: TFunction): string {
     const lines: string[] = []
-    if (p.skills.length > 0) lines.push(`Skills: ${p.skills.join(', ')}`)
-    if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
-    if (p.github) lines.push(`GitHub: ${p.github}`)
-    if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)
-    return lines.length > 0 ? `Parsed:\n${lines.join('\n')}` : ''
+    if (p.skills.length > 0) lines.push(`${t('referrals.parsedSkills', { defaultValue: 'Skills' })}: ${p.skills.join(', ')}`)
+    if (p.linkedin) lines.push(`${t('referrals.parsedLinkedin', { defaultValue: 'LinkedIn' })}: ${p.linkedin}`)
+    if (p.github) lines.push(`${t('referrals.parsedGithub', { defaultValue: 'GitHub' })}: ${p.github}`)
+    if (p.portfolio) lines.push(`${t('referrals.parsedPortfolio', { defaultValue: 'Portfolio' })}: ${p.portfolio}`)
+    return lines.length > 0 ? `${t('referrals.parsedLabel', { defaultValue: 'Parsed' })}:\n${lines.join('\n')}` : ''
 }

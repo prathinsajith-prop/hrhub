@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Link } from 'react-router-dom'
@@ -7,12 +6,8 @@ import {
     Bell,
     Calendar,
     CalendarDays,
-    CalendarRange,
-    ClipboardCheck,
     ExternalLink,
     Link2,
-    MapPin,
-    Plane,
     Receipt,
     Sparkles,
     User,
@@ -21,6 +16,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CompactEmptyState as EmptyState } from '@/components/shared/EmptyState'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useAuthStore } from '@/store/authStore'
 import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
 import { useMyChangeRequests } from '@/hooks/useProfileChanges'
@@ -45,7 +41,7 @@ interface UpcomingLeaveLite {
 /**
  * Employee Reports — a dashboard of insights and personal-context widgets
  * separated from the day-to-day Home page. Layout flows from broad insights
- * (charts) → personal pending items → team context.
+ * (charts) to personal pending items to team context.
  */
 export function EmployeeReportsPage() {
     const { t } = useTranslation()
@@ -74,12 +70,10 @@ export function EmployeeReportsPage() {
 
     return (
         <div className="space-y-6">
-            <header>
-                <p className="text-sm text-muted-foreground">{t('home.systemNotification')}</p>
-                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                    {t('nav.reports')}
-                </h1>
-            </header>
+            <PageHeader
+                title={t('reports.title', { defaultValue: 'Reports' })}
+                subtitle={t('reports.subtitle', { defaultValue: 'Your personal insights and pending items' })}
+            />
 
             {/* ── KPI stat cards ── */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -105,7 +99,14 @@ export function EmployeeReportsPage() {
                         </div>
                     )}
                     <FooterLink to={ROUTES.employeeLeave} accent="indigo">
-                        {pendingLeaveCount > 0 ? `${pendingLeaveCount} pending` : t('home.requestLeave')}
+                        {pendingLeaveCount > 0
+                            ? t(
+                                  pendingLeaveCount === 1
+                                      ? 'home.pendingLeaveRequestOne'
+                                      : 'home.pendingLeaveRequestOther',
+                                  { count: pendingLeaveCount },
+                              )
+                            : t('home.requestLeave')}
                     </FooterLink>
                 </StatCard>
 
@@ -125,7 +126,9 @@ export function EmployeeReportsPage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="text-sm text-muted-foreground">Not yet available</div>
+                        <div className="text-sm text-muted-foreground">
+                            {t('reports.notYetAvailable', { defaultValue: 'Not yet available' })}
+                        </div>
                     )}
                     <FooterLink to={ROUTES.employeePayslips} accent="emerald">
                         {t('home.viewPayslips')}
@@ -162,7 +165,7 @@ export function EmployeeReportsPage() {
                                 {pendingLeaveCount > 0 ? (
                                     <TaskRow
                                         icon={CalendarDays}
-                                        iconClass="text-amber-500"
+                                        iconClass="text-amber-600"
                                         label={t(
                                             pendingLeaveCount === 1
                                                 ? 'home.pendingLeaveRequestOne'
@@ -204,36 +207,15 @@ export function EmployeeReportsPage() {
                 </Card>
             </div>
 
-            {/* ── Who is out? (full width) ── */}
+            {/* ── My upcoming leaves (full width) ── */}
             <Card className="border-border/70">
                 <CardContent className="p-5 sm:p-6">
-                    <WhoIsOutContent
+                    <UpcomingLeavesContent
                         upcomingLeaves={upcomingMyLeaves}
                         onViewAll={() => navigate(ROUTES.employeeLeave)}
                     />
                 </CardContent>
             </Card>
-
-            {/* ── Tasks & interviews row ── */}
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Card className="border-border/70">
-                    <CardContent className="p-5 sm:p-6">
-                        <h2 className="mb-4 font-display text-base font-semibold text-foreground">
-                            {t('home.toDos')}
-                        </h2>
-                        <EmptyState icon={ClipboardCheck} message={t('home.noPendingToDo')} />
-                    </CardContent>
-                </Card>
-
-                <Card className="border-border/70">
-                    <CardContent className="p-5 sm:p-6">
-                        <h2 className="mb-4 font-display text-base font-semibold text-foreground">
-                            {t('home.interviews')}
-                        </h2>
-                        <EmptyState icon={CalendarRange} message={t('home.noInterviewsScheduled')} />
-                    </CardContent>
-                </Card>
-            </div>
 
             {/* ── Team context row ──
                 Department birthdays moved to the home page right rail
@@ -277,7 +259,7 @@ function TaskRow({
     )
 }
 
-function WhoIsOutContent({
+function UpcomingLeavesContent({
     upcomingLeaves,
     onViewAll,
 }: {
@@ -285,13 +267,12 @@ function WhoIsOutContent({
     onViewAll: () => void
 }) {
     const { t } = useTranslation()
-    const [tab, setTab] = useState<'leave' | 'remote'>('leave')
 
     return (
         <>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-display text-base font-semibold text-foreground">
-                    {t('home.whoIsOut')}
+                    {t('home.myUpcomingLeaves')}
                 </h2>
                 <button
                     type="button"
@@ -302,87 +283,40 @@ function WhoIsOutContent({
                 </button>
             </div>
 
-            <div className="mb-4 grid w-full grid-cols-2 rounded-full bg-muted/50 p-1 sm:max-w-md">
-                <button
-                    type="button"
-                    onClick={() => setTab('leave')}
-                    className={cn(
-                        'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-                        tab === 'leave'
-                            ? 'bg-sky-500 text-white shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground',
-                    )}
-                >
-                    <Plane className="size-3.5" />
-                    {t('home.leaveTab')}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setTab('remote')}
-                    className={cn(
-                        'inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-                        tab === 'remote'
-                            ? 'bg-sky-500 text-white shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground',
-                    )}
-                >
-                    <MapPin className="size-3.5" />
-                    {t('home.remoteTab')}
-                </button>
-            </div>
-
-            <div className="space-y-3 text-sm">
-                <WhoIsOutRow label={t('home.today')} count={0} />
-                <WhoIsOutRow label={t('home.tomorrow')} count={0} />
-                <WhoIsOutRow label={t('home.dayAfterTomorrow')} count={0} />
-            </div>
-
-            <div className="mt-5 border-t border-border/60 pt-4">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('home.myUpcomingLeaves')}
-                </h3>
-                {upcomingLeaves.length === 0 ? (
-                    <EmptyState icon={CalendarDays} message={t('home.noUpcomingLeaves')} />
-                ) : (
-                    <ul className="space-y-2">
-                        {upcomingLeaves.map((l) => (
-                            <li
-                                key={l.id}
-                                className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-xs"
-                            >
-                                <span className="font-medium capitalize text-foreground">{l.leaveType}</span>
-                                <span className="text-muted-foreground">
-                                    {formatDate(l.startDate)} → {formatDate(l.endDate)}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+            {upcomingLeaves.length === 0 ? (
+                <EmptyState icon={CalendarDays} message={t('home.noUpcomingLeaves')} />
+            ) : (
+                <ul className="space-y-2">
+                    {upcomingLeaves.map((l) => (
+                        <li
+                            key={l.id}
+                            className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-xs"
+                        >
+                            <span className="font-medium text-foreground">
+                                {t(`leave.types.${l.leaveType}`, { defaultValue: l.leaveType })}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                {formatDate(l.startDate)}
+                                <ArrowRight className="size-3" data-rtl-flip />
+                                {formatDate(l.endDate)}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </>
-    )
-}
-
-function WhoIsOutRow({ label, count }: { label: string; count: number }) {
-    return (
-        <div className="flex items-center justify-between">
-            <span className="text-sm text-foreground">
-                {label} <span className="text-muted-foreground">({count})</span>
-            </span>
-            <span className="text-xs text-muted-foreground">—</span>
-        </div>
     )
 }
 
 const ACCENT_CLASSES = {
     indigo: {
-        label: 'text-indigo-700/80 dark:text-indigo-300/80',
-        icon: 'text-indigo-700/70 dark:text-indigo-300/70',
+        label: 'text-indigo-700 dark:text-indigo-300',
+        icon: 'text-indigo-700 dark:text-indigo-300',
         link: 'text-indigo-700 dark:text-indigo-300',
     },
     emerald: {
-        label: 'text-emerald-700/80 dark:text-emerald-300/80',
-        icon: 'text-emerald-700/70 dark:text-emerald-300/70',
+        label: 'text-emerald-700 dark:text-emerald-300',
+        icon: 'text-emerald-700 dark:text-emerald-300',
         link: 'text-emerald-700 dark:text-emerald-300',
     },
 } as const
@@ -405,7 +339,7 @@ function StatCard({
     return (
         <GlassCard tone={tone} className="flex flex-col gap-3 p-5">
             <div className="flex items-center justify-between">
-                <div className={cn('text-[11px] font-semibold uppercase tracking-wider', ACCENT_CLASSES[accent].label)}>
+                <div className={cn('text-xs font-semibold uppercase tracking-wider', ACCENT_CLASSES[accent].label)}>
                     {label}
                 </div>
                 <span className={ACCENT_CLASSES[accent].icon}>{icon}</span>

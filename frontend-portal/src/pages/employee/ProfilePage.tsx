@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Lock, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
 import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
@@ -98,8 +98,8 @@ export function EmployeeProfilePage() {
 
             <Tabs defaultValue="personal">
                 <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
-                    <TabsTrigger value="personal">Personal</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
+                    <TabsTrigger value="personal">{t('common.personal', { defaultValue: 'Personal' })}</TabsTrigger>
+                    <TabsTrigger value="settings">{t('common.settings', { defaultValue: 'Settings' })}</TabsTrigger>
                 </TabsList>
 
                 {/* ── Personal: Employment basics + Schedule + Contact + Address + Emergency ── */}
@@ -110,23 +110,23 @@ export function EmployeeProfilePage() {
                                 {t('profile.employment')}
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                <Field label="Employee No" value={employee.employeeNo} />
-                                <Field label="Status" value={employee.status} />
-                                <Field label="Join date" value={formatDate(employee.joinDate)} />
-                                <Field label="Designation" value={employee.designation ?? '—'} />
-                                <Field label="Nationality" value={employee.nationality ?? '—'} />
+                                <Field label={t('profile.employeeNo', { defaultValue: 'Employee No' })} value={employee.employeeNo} />
+                                <Field label={t('profile.status', { defaultValue: 'Status' })} value={statusLabel(t, employee.status)} />
+                                <Field label={t('profile.joinDate', { defaultValue: 'Join date' })} value={formatDate(employee.joinDate)} />
+                                <Field label={t('profile.designation', { defaultValue: 'Designation' })} value={employee.designation ?? '—'} />
+                                <Field label={t('profile.nationality', { defaultValue: 'Nationality' })} value={employee.nationality ?? '—'} />
                                 {/* Branch → Division → Department triad — joined
                                     from org_units server-side. We hide rows that
                                     have no value so a flat-org tenant (just one
                                     branch) doesn't show three em-dashes. */}
                                 {employee.branchName ? (
-                                    <Field label="Branch" value={employee.branchName} />
+                                    <Field label={t('profile.branch', { defaultValue: 'Branch' })} value={employee.branchName} />
                                 ) : null}
                                 {employee.divisionName ? (
-                                    <Field label="Division" value={employee.divisionName} />
+                                    <Field label={t('profile.division', { defaultValue: 'Division' })} value={employee.divisionName} />
                                 ) : null}
                                 <Field
-                                    label="Department"
+                                    label={t('profile.department', { defaultValue: 'Department' })}
                                     value={employee.departmentName ?? employee.department ?? '—'}
                                 />
                             </div>
@@ -141,23 +141,29 @@ export function EmployeeProfilePage() {
                                 {t('profile.contact')}
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <Field label="Work email" value={employee.email ?? '—'} icon={<Mail className="size-3.5" />} />
+                                <Field
+                                    label={t('profile.workEmail', { defaultValue: 'Work email' })}
+                                    value={employee.email ?? '—'}
+                                    icon={<Mail className="size-3.5" />}
+                                    locked={editing}
+                                    lockedHint={t('profile.managedByHr', { defaultValue: 'Managed by HR' })}
+                                />
                                 <EditableField
-                                    label="Personal email"
+                                    label={t('profile.personalEmail', { defaultValue: 'Personal email' })}
                                     value={form.personalEmail ?? employee.personalEmail ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('personalEmail', v)}
                                     type="email"
                                 />
                                 <EditableField
-                                    label="Phone"
+                                    label={t('profile.phone', { defaultValue: 'Phone' })}
                                     value={form.phone ?? employee.phone ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('phone', v)}
                                     icon={<Phone className="size-3.5" />}
                                 />
                                 <EditableField
-                                    label="Mobile"
+                                    label={t('profile.mobile', { defaultValue: 'Mobile' })}
                                     value={form.mobileNo ?? employee.mobileNo ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('mobileNo', v)}
@@ -168,7 +174,7 @@ export function EmployeeProfilePage() {
                                 {t('profile.address')}
                             </h3>
                             <EditableField
-                                label="Home country address"
+                                label={t('profile.homeCountryAddress', { defaultValue: 'Home country address' })}
                                 value={form.homeCountryAddress ?? ''}
                                 editing={editing}
                                 onChange={(v) => onChange('homeCountryAddress', v)}
@@ -182,19 +188,19 @@ export function EmployeeProfilePage() {
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <EditableField
-                                    label="Contact name"
+                                    label={t('profile.contactName', { defaultValue: 'Contact name' })}
                                     value={form.emergencyContactName ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('emergencyContactName', v)}
                                 />
                                 <EditableField
-                                    label="Contact phone"
+                                    label={t('profile.contactPhone', { defaultValue: 'Contact phone' })}
                                     value={form.emergencyContactPhone ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('emergencyContactPhone', v)}
                                 />
                                 <EditableField
-                                    label="Relationship / notes"
+                                    label={t('profile.relationshipNotes', { defaultValue: 'Relationship / notes' })}
                                     value={form.emergencyContact ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('emergencyContact', v)}
@@ -216,13 +222,13 @@ export function EmployeeProfilePage() {
     )
 }
 
-const LANGUAGES: { code: 'en' | 'ar'; label: string; native: string }[] = [
-    { code: 'en', label: 'English', native: 'EN' },
-    { code: 'ar', label: 'العربية', native: 'AR' },
+const LANGUAGES: { code: 'en' | 'ar'; label: string }[] = [
+    { code: 'en', label: 'English' },
+    { code: 'ar', label: 'العربية' },
 ]
 
 function LanguageCard() {
-    const { i18n } = useTranslation()
+    const { t, i18n } = useTranslation()
     const current = (i18n.language?.slice(0, 2) ?? 'en') as 'en' | 'ar'
     return (
         <Card className="overflow-hidden border-border/70">
@@ -232,8 +238,12 @@ function LanguageCard() {
                         <Languages className="size-5" />
                     </span>
                     <div>
-                        <h3 className="text-sm font-semibold">Language</h3>
-                        <p className="text-xs text-muted-foreground">Choose the interface language.</p>
+                        <h3 className="font-display text-sm font-semibold">
+                            {t('profile.language', { defaultValue: 'Language' })}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                            {t('profile.languageDesc', { defaultValue: 'Choose the interface language.' })}
+                        </p>
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -254,7 +264,6 @@ function LanguageCard() {
                             >
                                 {active ? <Check className="size-3.5" /> : null}
                                 <span>{l.label}</span>
-                                <span className="text-[10px] tracking-wider text-muted-foreground">{l.native}</span>
                             </button>
                         )
                     })}
@@ -275,7 +284,7 @@ function SecurityCard() {
                         <ShieldCheck className="size-5" />
                     </span>
                     <div>
-                        <h3 className="text-sm font-semibold">{t('security.title')}</h3>
+                        <h3 className="font-display text-sm font-semibold">{t('security.title')}</h3>
                         <p className="text-xs text-muted-foreground">{t('security.changePassword')}</p>
                     </div>
                 </div>
@@ -368,7 +377,7 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                             <button
                                 type="button"
                                 onClick={() => setShow((v) => !v)}
-                                aria-label={show ? 'Hide password' : 'Show password'}
+                                aria-label={show ? t('common.hidePassword', { defaultValue: 'Hide password' }) : t('common.showPassword', { defaultValue: 'Show password' })}
                                 aria-pressed={show}
                                 className="absolute end-0 top-0 flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
                             >
@@ -404,9 +413,26 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 // Day-name ordering used by the weekly-off chips. Mirrors the
 // backend's WEEKDAY_NAMES table so casing of the saved strings doesn't matter.
 const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
-const WEEK_DAY_SHORT: Record<(typeof WEEK_DAYS)[number], string> = {
-    sunday: 'Sun', monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed',
-    thursday: 'Thu', friday: 'Fri', saturday: 'Sat',
+
+// 2024-01-07 is a Sunday, so each index lands on the matching weekday. We format
+// these reference dates through Intl so the short names follow the active locale
+// (e.g. Arabic) rather than hard-coded English abbreviations.
+function localizedWeekdayShort(locale: string): Record<(typeof WEEK_DAYS)[number], string> {
+    const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' })
+    const out = {} as Record<(typeof WEEK_DAYS)[number], string>
+    WEEK_DAYS.forEach((day, i) => {
+        out[day] = fmt.format(new Date(Date.UTC(2024, 0, 7 + i)))
+    })
+    return out
+}
+
+// Humanize the raw employee status enum (e.g. "on_leave" → "On leave"), preferring
+// a translated label when one exists for the value.
+function statusLabel(t: (key: string, opts?: Record<string, unknown>) => string, status: string): string {
+    const titleCased = status
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+    return t(`profile.statusValue.${status}`, { defaultValue: titleCased })
 }
 
 interface ShiftInfo {
@@ -422,15 +448,17 @@ interface ShiftInfo {
  * back to a short hint about tenant-default hours so the panel isn't blank.
  */
 function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
+    const { t, i18n } = useTranslation()
     const range = shift ? formatShiftRange(shift.startTime, shift.endTime) : null
     const offSet = new Set((shift?.weeklyOffDays ?? []).map((d) => d.toLowerCase()))
+    const weekdayShort = localizedWeekdayShort(i18n.language)
 
     return (
         <Card className="overflow-hidden border-border/70">
             <CardContent className="p-5">
                 <div className="mb-4 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Clock className="size-3.5" /> Schedule
+                    <h3 className="flex items-center gap-2 font-display text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        <Clock className="size-3.5" /> {t('profile.schedule', { defaultValue: 'Schedule' })}
                     </h3>
                     {shift ? (
                         <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
@@ -438,7 +466,7 @@ function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
                         </span>
                     ) : (
                         <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            Default working hours
+                            {t('profile.defaultWorkingHours', { defaultValue: 'Default working hours' })}
                         </span>
                     )}
                 </div>
@@ -453,8 +481,8 @@ function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
                         </div>
 
                         <div>
-                            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                                <CalendarDays className="size-3" /> Weekly off
+                            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                <CalendarDays className="size-3" /> {t('profile.weeklyOff', { defaultValue: 'Weekly off' })}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                                 {WEEK_DAYS.map((d) => {
@@ -468,21 +496,21 @@ function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
                                                     : 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md border border-border bg-card/50 px-2 text-xs text-muted-foreground'
                                             }
                                         >
-                                            {WEEK_DAY_SHORT[d]}
+                                            {weekdayShort[d]}
                                         </span>
                                     )
                                 })}
                             </div>
                             {offSet.size === 0 ? (
-                                <p className="mt-2 text-[11px] text-muted-foreground">
-                                    No weekly off days configured for this shift.
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    {t('profile.noWeeklyOff', { defaultValue: 'No weekly off days configured for this shift.' })}
                                 </p>
                             ) : null}
                         </div>
                     </div>
                 ) : (
                     <p className="text-sm text-muted-foreground">
-                        You're on the tenant's default working week. Ask HR if you need a custom shift.
+                        {t('profile.defaultWeekHint', { defaultValue: "You're on the tenant's default working week. Ask HR if you need a custom shift." })}
                     </p>
                 )}
             </CardContent>
@@ -490,14 +518,39 @@ function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
     )
 }
 
-function Field({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function Field({
+    label,
+    value,
+    icon,
+    locked,
+    lockedHint,
+}: {
+    label: string
+    value: string
+    icon?: React.ReactNode
+    /** When true (i.e. the surrounding form is in edit mode), render the value
+        as a disabled Input with a lock icon so it reads as intentionally
+        non-editable alongside the live inputs rather than looking forgotten. */
+    locked?: boolean
+    lockedHint?: string
+}) {
     return (
         <div>
-            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {icon}
                 {label}
             </div>
-            <div className="mt-1 text-sm font-medium">{value}</div>
+            {locked ? (
+                <div className="relative mt-1.5">
+                    <Input value={value} disabled readOnly className="pe-9" />
+                    <Lock
+                        className="pointer-events-none absolute end-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                        aria-label={lockedHint}
+                    />
+                </div>
+            ) : (
+                <div className="mt-1 text-sm font-medium">{value}</div>
+            )}
         </div>
     )
 }
@@ -521,7 +574,7 @@ function EditableField({
 }) {
     return (
         <div className={className}>
-            <Label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <Label className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {icon}
                 {label}
             </Label>

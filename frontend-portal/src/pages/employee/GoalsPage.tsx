@@ -10,12 +10,21 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem,
+} from '@/components/ui/select'
+import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { cn, formatDate } from '@/lib/utils'
 import {
@@ -65,18 +74,16 @@ export function EmployeeGoalsPage() {
 
     return (
         <div className="space-y-6">
-            <header className="flex flex-wrap items-start sm:items-end justify-between gap-3">
-                <div>
-                    <p className="text-sm text-muted-foreground">{t('goals.subtitle')}</p>
-                    <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                        {t('goals.title')}
-                    </h1>
-                </div>
-                <Button onClick={openCreate}>
-                    <Plus className="size-4" />
-                    {t('goals.createGoal')}
-                </Button>
-            </header>
+            <PageHeader
+                title={t('goals.title')}
+                subtitle={t('goals.subtitle')}
+                action={
+                    <Button onClick={openCreate}>
+                        <Plus className="size-4" />
+                        {t('goals.createGoal')}
+                    </Button>
+                }
+            />
 
             {isLoading ? (
                 <div className="space-y-3">
@@ -85,19 +92,17 @@ export function EmployeeGoalsPage() {
                     ))}
                 </div>
             ) : list.length === 0 ? (
-                <Card className="border-border/70">
-                    <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                        <span className="flex size-14 items-center justify-center rounded-full bg-primary/10">
-                            <Target className="size-7 text-primary" />
-                        </span>
-                        <h2 className="font-display text-lg font-semibold">{t('goals.emptyTitle')}</h2>
-                        <p className="max-w-sm text-sm text-muted-foreground">{t('goals.emptyDesc')}</p>
-                        <Button variant="outline" onClick={openCreate} className="mt-2">
+                <EmptyState
+                    icon={<Target className="size-8" />}
+                    title={t('goals.emptyTitle')}
+                    description={t('goals.emptyDesc')}
+                    action={
+                        <Button variant="outline" onClick={openCreate}>
                             <Plus className="size-4" />
                             {t('goals.createFirst')}
                         </Button>
-                    </CardContent>
-                </Card>
+                    }
+                />
             ) : (
                 <div className="space-y-3">
                     {list.map((g) => (
@@ -183,15 +188,15 @@ function GoalCard({
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className={cn('font-medium', isDone && 'text-muted-foreground line-through')}>{goal.title}</h3>
-                            <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide', STATUS_TONE[goal.status])}>
+                            <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide', STATUS_TONE[goal.status])}>
                                 {t(`goals.status.${goal.status}`, { defaultValue: goal.status })}
                             </span>
                         </div>
                         {goal.description ? (
                             <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{goal.description}</p>
                         ) : null}
-                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span className="capitalize">{goal.category}</span>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span>{t(`goals.category.${goal.category}`, { defaultValue: goal.category })}</span>
                             {goal.targetDate ? (
                                 <span className="inline-flex items-center gap-1">
                                     <CalendarDays className="size-3" />
@@ -213,7 +218,7 @@ function GoalCard({
                 {/* Progress: bar + a native range slider. 100% auto-completes
                     server-side; the bar turns emerald once done. */}
                 <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-medium">
+                    <div className="flex items-center justify-between text-xs font-medium">
                         <span className="text-muted-foreground">{t('goals.progress', { defaultValue: 'Progress' })}</span>
                         <span className="tabular-nums inline-flex items-center gap-1">
                             {savingProgress ? <Loader2 className="size-3 animate-spin" /> : isDone ? <CheckCircle2 className="size-3 text-emerald-600" /> : null}
@@ -234,7 +239,7 @@ function GoalCard({
                         value={goal.progress}
                         onChange={(e) => onProgress(Number(e.target.value))}
                         aria-label={t('goals.progress', { defaultValue: 'Progress' }) as string}
-                        className="h-1.5 w-full cursor-pointer accent-primary"
+                        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                     />
                 </div>
             </CardContent>
@@ -322,16 +327,16 @@ function GoalDialog({
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label htmlFor="goal-category">{t('goals.fieldCategory', { defaultValue: 'Category' })}</Label>
-                            <select
-                                id="goal-category"
-                                value={category}
-                                onChange={(e) => setCategory(e.target.value)}
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
-                            >
-                                {CATEGORY_OPTIONS.map((c) => (
-                                    <option key={c} value={c}>{t(`goals.category.${c}`, { defaultValue: c })}</option>
-                                ))}
-                            </select>
+                            <Select value={category} onValueChange={setCategory}>
+                                <SelectTrigger id="goal-category">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {CATEGORY_OPTIONS.map((c) => (
+                                        <SelectItem key={c} value={c}>{t(`goals.category.${c}`, { defaultValue: c })}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="goal-target">{t('goals.fieldTargetDate', { defaultValue: 'Target date' })}</Label>
@@ -356,7 +361,7 @@ function GoalDialog({
                             step={5}
                             value={progress}
                             onChange={(e) => setProgress(Number(e.target.value))}
-                            className="h-1.5 w-full cursor-pointer accent-primary"
+                            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                         />
                     </div>
                 </div>

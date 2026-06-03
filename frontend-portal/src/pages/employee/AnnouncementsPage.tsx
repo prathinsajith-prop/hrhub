@@ -5,16 +5,21 @@ import { Megaphone, Pin, AlertTriangle, Check, Loader2, CheckCircle2, ChevronDow
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useAnnouncementFeed, useMarkAnnouncementRead, useAcknowledgeAnnouncement, type FeedAnnouncement } from '@/hooks/useAnnouncements'
 
-const PRIORITY: Record<string, { ring: string; label: string; tone: string }> = {
-    low: { ring: 'border-l-slate-200', label: 'Low', tone: 'bg-slate-100 text-slate-600' },
-    normal: { ring: 'border-l-blue-400', label: 'Normal', tone: 'bg-blue-50 text-blue-700' },
-    high: { ring: 'border-l-amber-400', label: 'High', tone: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900/60' },
-    critical: { ring: 'border-l-rose-500', label: 'Critical', tone: 'bg-rose-50 text-rose-700' },
+// Priority → left accent rail + shadcn Badge variant. The Badge variants carry
+// design-system tokens with guaranteed contrast (≥4.5:1) in both themes, which
+// the previous bespoke amber-on-amber / slate washes did not.
+type BadgeVariant = 'secondary' | 'info' | 'warning' | 'destructive'
+const PRIORITY: Record<string, { ring: string; label: string; variant: BadgeVariant }> = {
+    low: { ring: 'border-l-slate-200', label: 'Low', variant: 'secondary' },
+    normal: { ring: 'border-l-blue-400', label: 'Normal', variant: 'info' },
+    high: { ring: 'border-l-amber-400', label: 'High', variant: 'warning' },
+    critical: { ring: 'border-l-rose-500', label: 'Critical', variant: 'destructive' },
 }
 const CATEGORY_LABEL: Record<string, string> = {
     general: 'General', hr_policy: 'HR Policy', holiday: 'Holiday', event: 'Event', org_news: 'Org News',
@@ -107,7 +112,7 @@ export function AnnouncementsPage() {
                             onMarkRead={(id) => markRead.mutate(id)}
                             onAck={(id) => acknowledge.mutate(id, {
                                 onSuccess: () => toast.success(t('announcements.acknowledged', { defaultValue: 'Acknowledged' })),
-                                onError: (e: any) => toast.error(e?.message ?? 'Failed'),
+                                onError: (e: any) => toast.error(e?.message ?? t('common.error', { defaultValue: 'Something went wrong' })),
                             })}
                             ackPending={acknowledge.isPending}
                         />
@@ -153,16 +158,16 @@ function AnnouncementCard({ a, onMarkRead, onAck, ackPending }: {
         <Card className={cn('border-l-4 transition-shadow', p.ring, a.pinned && 'ring-1 ring-primary/15', unread && 'shadow-sm')}>
             <CardContent className="p-4">
                 <div className="flex items-start gap-2">
-                    {unread && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label="unread" />}
+                    {unread && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label={t('announcements.unread', { defaultValue: 'Unread' })} />}
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                            {a.pinned && <Pin className="size-3.5 text-primary" aria-label="pinned" />}
+                            {a.pinned && <Pin className="size-3.5 text-primary" aria-label={t('announcements.pinned', { defaultValue: 'Pinned' })} />}
                             {a.priority === 'critical' && <AlertTriangle className="size-3.5 text-rose-600" />}
                             <h3 className={cn('text-sm', unread ? 'font-semibold' : 'font-medium')}>{a.title}</h3>
                         </div>
-                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[11px] text-muted-foreground">
-                            <span className={cn('rounded-full px-2 py-0.5 font-medium', p.tone)}>{p.label}</span>
-                            <span>{CATEGORY_LABEL[a.category] ?? a.category}</span>
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                            <Badge variant={p.variant} className="px-2 py-0.5 text-xs">{t(`announcements.priority.${a.priority}`, { defaultValue: p.label })}</Badge>
+                            <span>{t(`announcements.category.${a.category}`, { defaultValue: CATEGORY_LABEL[a.category] ?? a.category })}</span>
                             {a.authorName && <span aria-hidden>·</span>}
                             {a.authorName && <span>{a.authorName}</span>}
                             <span aria-hidden>·</span>

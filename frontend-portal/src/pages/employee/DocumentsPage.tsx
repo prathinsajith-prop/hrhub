@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useCallback, type FormEvent, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import {
     AlertCircle,
@@ -63,16 +64,18 @@ import {
 } from '@/components/ui/select'
 import { cn, formatDate } from '@/lib/utils'
 
-// ─── Icon + label per category ───────────────────────────────────────────────
-const CATEGORY_META: Record<DocumentCategory, { label: string; icon: typeof FileText; tone: string }> = {
-    identity: { label: 'Identity', icon: ShieldCheck, tone: 'text-indigo-600 dark:text-indigo-300' },
-    visa: { label: 'Visa & permits', icon: Stamp, tone: 'text-sky-600 dark:text-sky-300' },
-    company: { label: 'Company', icon: Briefcase, tone: 'text-fuchsia-600 dark:text-fuchsia-300' },
-    employment: { label: 'Employment', icon: ScrollText, tone: 'text-emerald-600 dark:text-emerald-300' },
-    insurance: { label: 'Insurance', icon: HeartPulse, tone: 'text-rose-600 dark:text-rose-300' },
-    qualification: { label: 'Qualifications', icon: FileText, tone: 'text-amber-600 dark:text-amber-300' },
-    financial: { label: 'Financial', icon: Landmark, tone: 'text-violet-600 dark:text-violet-300' },
-    compliance: { label: 'Compliance', icon: ShieldCheck, tone: 'text-teal-600 dark:text-teal-300' },
+// ─── Icon + tone per category ────────────────────────────────────────────────
+// Heading text is sourced from CATEGORY_LABELS (single label source) and
+// localized via categoryLabel() — only the icon + accent colour live here.
+const CATEGORY_META: Record<DocumentCategory, { icon: typeof FileText; tone: string }> = {
+    identity: { icon: ShieldCheck, tone: 'text-indigo-600 dark:text-indigo-300' },
+    visa: { icon: Stamp, tone: 'text-sky-600 dark:text-sky-300' },
+    company: { icon: Briefcase, tone: 'text-fuchsia-600 dark:text-fuchsia-300' },
+    employment: { icon: ScrollText, tone: 'text-emerald-600 dark:text-emerald-300' },
+    insurance: { icon: HeartPulse, tone: 'text-rose-600 dark:text-rose-300' },
+    qualification: { icon: FileText, tone: 'text-amber-600 dark:text-amber-300' },
+    financial: { icon: Landmark, tone: 'text-violet-600 dark:text-violet-300' },
+    compliance: { icon: ShieldCheck, tone: 'text-teal-600 dark:text-teal-300' },
 }
 
 const STATUS_TONE: Record<DocumentStatus, string> = {
@@ -84,19 +87,44 @@ const STATUS_TONE: Record<DocumentStatus, string> = {
     rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
 }
 
-function statusLabel(s: DocumentStatus): string {
-    return s.replace(/_/g, ' ')
+const STATUS_LABEL_KEY: Record<DocumentStatus, string> = {
+    valid: 'valid',
+    expiring_soon: 'expiringSoon',
+    expired: 'expired',
+    pending_upload: 'pendingUpload',
+    under_review: 'underReview',
+    rejected: 'rejected',
 }
 
-function humanFileSize(bytes: number | null): string {
+const STATUS_LABEL_FALLBACK: Record<DocumentStatus, string> = {
+    valid: 'Valid',
+    expiring_soon: 'Expiring soon',
+    expired: 'Expired',
+    pending_upload: 'Pending upload',
+    under_review: 'Under review',
+    rejected: 'Rejected',
+}
+
+function statusLabel(s: DocumentStatus, t: TFunction): string {
+    return t(`documents.status.${STATUS_LABEL_KEY[s]}`, { defaultValue: STATUS_LABEL_FALLBACK[s] })
+}
+
+// Single source for category heading text — translated copy of CATEGORY_LABELS
+// (from lib/docTypes) keyed by category, so the section heading and the upload
+// dialog's Select groups never drift apart.
+function categoryLabel(category: DocumentCategory, t: TFunction): string {
+    return t(`documents.category.${category}`, { defaultValue: CATEGORY_LABELS[category] })
+}
+
+function humanFileSize(bytes: number | null, kbDigits = 1): string {
     if (bytes == null) return ''
     if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(kbDigits)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function EmployeeDocumentsPage() {
-    const { t: _t } = useTranslation()
+    const { t } = useTranslation()
     const { data: docs, isLoading } = useMyDocuments()
     const [uploadOpen, setUploadOpen] = useState(false)
 
@@ -109,29 +137,31 @@ export function EmployeeDocumentsPage() {
             map.set(d.category, arr)
         }
         return Array.from(map.entries()).sort(([a], [b]) =>
-            (CATEGORY_META[a]?.label ?? a).localeCompare(CATEGORY_META[b]?.label ?? b),
+            categoryLabel(a, t).localeCompare(categoryLabel(b, t)),
         )
-    }, [docs])
+    }, [docs, t])
 
     const totalCount = docs?.length ?? 0
     const expiringCount = docs?.filter((d) => d.status === 'expiring_soon' || d.status === 'expired').length ?? 0
 
+    const subtitle = isLoading || totalCount === 0
+        ? undefined
+        : expiringCount > 0
+          ? t('documents.summaryWithAttention', {
+                count: totalCount,
+                attention: expiringCount,
+                defaultValue: '{{count}} on file · {{attention}} need attention',
+            })
+          : t('documents.summary', { count: totalCount, defaultValue: '{{count}} on file' })
+
     return (
         <div className="space-y-5">
             <PageHeader
-                title="My documents"
-                subtitle={
-                    isLoading
-                        ? undefined
-                        : totalCount === 0
-                          ? undefined
-                          : expiringCount > 0
-                            ? `${totalCount} on file · ${expiringCount} need attention`
-                            : `${totalCount} on file`
-                }
+                title={t('documents.title', { defaultValue: 'My documents' })}
+                subtitle={subtitle}
                 action={
                     <Button size="sm" onClick={() => setUploadOpen(true)}>
-                        <Upload className="size-4" /> Upload
+                        <Upload className="size-4" /> {t('documents.upload', { defaultValue: 'Upload' })}
                     </Button>
                 }
             />
@@ -149,11 +179,15 @@ export function EmployeeDocumentsPage() {
             ) : totalCount === 0 ? (
                 <EmptyState
                     icon={<FileText className="size-8" />}
-                    title="No documents yet"
-                    description="Upload your visa, contract or other personal documents. Your manager will review them before they go live."
+                    title={t('documents.emptyTitle', { defaultValue: 'No documents yet' })}
+                    description={t('documents.emptyDesc', {
+                        defaultValue:
+                            'Upload your visa, contract or other personal documents. Your manager will review them before they go live.',
+                    })}
                     action={
                         <Button size="sm" onClick={() => setUploadOpen(true)}>
-                            <Upload className="size-4" /> Upload your first document
+                            <Upload className="size-4" />{' '}
+                            {t('documents.uploadFirst', { defaultValue: 'Upload your first document' })}
                         </Button>
                     }
                 />
@@ -165,10 +199,10 @@ export function EmployeeDocumentsPage() {
                         <section key={category}>
                             <div className="mb-2 flex items-center gap-2">
                                 <Icon className={cn('size-4', meta?.tone)} />
-                                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    {meta?.label ?? category}
+                                <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                    {categoryLabel(category, t)}
                                 </h2>
-                                <span className="text-[10px] tabular-figures text-muted-foreground/70">
+                                <span className="text-xs tabular-figures text-muted-foreground/70">
                                     {items.length}
                                 </span>
                             </div>
@@ -186,6 +220,7 @@ export function EmployeeDocumentsPage() {
 }
 
 function DocumentRow({ doc }: { doc: MyDocument }) {
+    const { t } = useTranslation()
     const [downloading, setDownloading] = useState(false)
 
     async function download() {
@@ -194,7 +229,7 @@ function DocumentRow({ doc }: { doc: MyDocument }) {
         try {
             await triggerDocumentDownload(doc.id)
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Download failed')
+            toast.error(err instanceof Error ? err.message : t('documents.downloadFailed', { defaultValue: 'Download failed' }))
         } finally {
             setDownloading(false)
         }
@@ -211,36 +246,54 @@ function DocumentRow({ doc }: { doc: MyDocument }) {
                         <span className="truncate text-sm font-medium">{doc.docType}</span>
                         <Badge
                             className={cn(
-                                'border-0 text-[10px] uppercase tracking-wider',
+                                'border-0 text-xs uppercase tracking-wider',
                                 STATUS_TONE[doc.status],
                             )}
                         >
-                            {statusLabel(doc.status)}
+                            {statusLabel(doc.status, t)}
                         </Badge>
                         {doc.verified ? (
                             <span
-                                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                title={doc.verifiedAt ? `Verified ${formatDate(doc.verifiedAt)}` : 'Verified'}
+                                className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                title={
+                                    doc.verifiedAt
+                                        ? t('documents.verifiedOn', {
+                                              date: formatDate(doc.verifiedAt),
+                                              defaultValue: 'Verified {{date}}',
+                                          })
+                                        : t('documents.verified', { defaultValue: 'Verified' })
+                                }
                             >
-                                <CheckCircle2 className="size-3" /> verified
+                                <CheckCircle2 className="size-3" /> {t('documents.verified', { defaultValue: 'Verified' })}
                             </span>
                         ) : null}
                     </div>
                     <div className="mt-1 truncate text-xs text-muted-foreground">{doc.fileName}</div>
                     {doc.status === 'rejected' && doc.rejectionReason ? (
-                        <div className="mt-1 flex items-start gap-1 text-[11px] text-rose-700 dark:text-rose-300">
+                        <div className="mt-1 flex items-start gap-1 text-xs text-rose-700 dark:text-rose-300">
                             <XCircle className="mt-0.5 size-3 shrink-0" />
-                            <span><span className="font-semibold">Rejected:</span> {doc.rejectionReason}</span>
+                            <span>
+                                <span className="font-semibold">{t('documents.rejectedLabel', { defaultValue: 'Rejected:' })}</span>{' '}
+                                {doc.rejectionReason}
+                            </span>
                         </div>
                     ) : null}
                     {doc.status === 'under_review' ? (
-                        <div className="mt-1 flex items-center gap-1 text-[11px] text-sky-700 dark:text-sky-300">
-                            <Clock className="size-3" /> Awaiting manager approval
+                        <div className="mt-1 flex items-center gap-1 text-xs text-sky-700 dark:text-sky-300">
+                            <Clock className="size-3" />{' '}
+                            {t('documents.awaitingApproval', { defaultValue: 'Awaiting manager approval' })}
                         </div>
                     ) : null}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/90">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground/90">
                         {doc.docNumber ? <span>#{doc.docNumber}</span> : null}
-                        {doc.issueDate ? <span>Issued {formatDate(doc.issueDate)}</span> : null}
+                        {doc.issueDate ? (
+                            <span>
+                                {t('documents.issuedOn', {
+                                    date: formatDate(doc.issueDate),
+                                    defaultValue: 'Issued {{date}}',
+                                })}
+                            </span>
+                        ) : null}
                         {doc.expiryDate ? (
                             <span
                                 className={cn(
@@ -248,12 +301,15 @@ function DocumentRow({ doc }: { doc: MyDocument }) {
                                     expired
                                         ? 'text-rose-600 dark:text-rose-300'
                                         : expiringSoon
-                                          ? 'text-amber-700 dark:text-amber-300'
+                                          ? 'text-amber-800 dark:text-amber-300'
                                           : '',
                                 )}
                             >
                                 {(expired || expiringSoon) ? <AlertCircle className="size-3" /> : <Clock className="size-3" />}
-                                Expires {formatDate(doc.expiryDate)}
+                                {t('documents.expiresOn', {
+                                    date: formatDate(doc.expiryDate),
+                                    defaultValue: 'Expires {{date}}',
+                                })}
                             </span>
                         ) : null}
                         {doc.fileSize ? <span>{humanFileSize(doc.fileSize)}</span> : null}
@@ -265,10 +321,14 @@ function DocumentRow({ doc }: { doc: MyDocument }) {
                     onClick={download}
                     loading={downloading}
                     disabled={!doc.hasFile}
-                    aria-label={doc.hasFile ? `Download ${doc.fileName}` : 'No file attached'}
+                    aria-label={
+                        doc.hasFile
+                            ? t('documents.downloadFile', { file: doc.fileName, defaultValue: 'Download {{file}}' })
+                            : t('documents.noFile', { defaultValue: 'No file attached' })
+                    }
                 >
                     <Download className="size-4" />
-                    <span className="hidden sm:inline">Download</span>
+                    <span className="hidden sm:inline">{t('documents.download', { defaultValue: 'Download' })}</span>
                 </Button>
             </CardContent>
         </Card>
@@ -296,13 +356,8 @@ function addOneYear(dateStr: string): string {
     return d.toISOString().split('T')[0]!
 }
 
-function humanFileSizeShort(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+    const { t } = useTranslation()
     const upload = useUploadMyDocument()
     const fileInputRef = useRef<HTMLInputElement>(null)
     const autoExpiryRef = useRef<string>('')
@@ -361,11 +416,15 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             ALLOWED_MIME_TYPES.includes(picked.type) ||
             /\.(pdf|jpg|jpeg|png|webp|doc|docx|xls|xlsx)$/i.test(picked.name)
         if (!looksAllowed) {
-            toast.error('Invalid file type — use PDF, image, Word or Excel')
+            toast.error(
+                t('documents.invalidFileType', {
+                    defaultValue: 'Invalid file type — use PDF, image, Word or Excel',
+                }),
+            )
             return
         }
         if (picked.size > MAX_FILE_BYTES) {
-            toast.error('File too large (max 10 MB)')
+            toast.error(t('documents.fileTooLarge', { defaultValue: 'File too large (max 10 MB)' }))
             return
         }
         setFile(picked)
@@ -388,9 +447,13 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     function onSubmit(e: FormEvent) {
         e.preventDefault()
         const newErrors: typeof errors = {}
-        if (!docType) newErrors.docType = 'Please select a document type'
-        if (expiryRequired && !expiryDate) newErrors.expiryDate = `${docType} requires an expiry date`
-        if (!file) newErrors.file = 'Please choose a file to upload'
+        if (!docType) newErrors.docType = t('documents.selectTypeError', { defaultValue: 'Please select a document type' })
+        if (expiryRequired && !expiryDate)
+            newErrors.expiryDate = t('documents.expiryRequiredError', {
+                docType,
+                defaultValue: '{{docType}} requires an expiry date',
+            })
+        if (!file) newErrors.file = t('documents.chooseFileError', { defaultValue: 'Please choose a file to upload' })
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors)
             return
@@ -409,11 +472,16 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
         upload.mutate(payload, {
             onSuccess: () => {
-                toast.success(`${docType} submitted — awaiting manager approval`)
+                toast.success(
+                    t('documents.submittedToast', {
+                        docType,
+                        defaultValue: '{{docType}} submitted — awaiting manager approval',
+                    }),
+                )
                 handleClose(false)
             },
             onError: (err) => {
-                toast.error(err instanceof ApiError ? err.message : 'Upload failed')
+                toast.error(err instanceof ApiError ? err.message : t('documents.uploadFailed', { defaultValue: 'Upload failed' }))
             },
         })
     }
@@ -422,9 +490,14 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent className="flex max-h-[90vh] flex-col p-0 sm:max-w-2xl">
                 <DialogHeader className="shrink-0 border-b px-6 pb-4 pt-6">
-                    <DialogTitle className="text-lg font-semibold">Add Document</DialogTitle>
+                    <DialogTitle className="font-display text-lg font-semibold">
+                        {t('documents.addDocument', { defaultValue: 'Add Document' })}
+                    </DialogTitle>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                        Your manager will review the document before it appears as valid in your profile.
+                        {t('documents.reviewHint', {
+                            defaultValue:
+                                'Your manager will review the document before it appears as valid in your profile.',
+                        })}
                     </p>
                 </DialogHeader>
 
@@ -433,7 +506,8 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                         {/* ── Document type ── */}
                         <div className="space-y-1.5">
                             <Label htmlFor="doc-type" className="text-sm font-medium">
-                                Document Type <span className="text-destructive">*</span>
+                                {t('documents.documentType', { defaultValue: 'Document Type' })}{' '}
+                                <span className="text-destructive">*</span>
                             </Label>
                             <Select
                                 value={docType}
@@ -447,7 +521,11 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                     aria-invalid={errors.docType ? 'true' : 'false'}
                                     className={cn(errors.docType && 'border-destructive')}
                                 >
-                                    <SelectValue placeholder="Select document type…" />
+                                    <SelectValue
+                                        placeholder={t('documents.selectTypePlaceholder', {
+                                            defaultValue: 'Select document type…',
+                                        })}
+                                    />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-72">
                                     {CATEGORY_DISPLAY_ORDER.flatMap((cat) => {
@@ -455,8 +533,8 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                         if (!items || items.length === 0) return []
                                         return (
                                             <SelectGroup key={cat}>
-                                                <SelectLabel className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                                                    {CATEGORY_LABELS[cat]}
+                                                <SelectLabel className="text-xs uppercase tracking-wider text-muted-foreground">
+                                                    {categoryLabel(cat, t)}
                                                 </SelectLabel>
                                                 {items.map((d) => (
                                                     <SelectItem key={d.docType} value={d.docType}>
@@ -476,7 +554,9 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                             <div className="space-y-1.5">
                                 <Label htmlFor="doc-number" className="text-sm font-medium">
                                     {numberMeta.label}{' '}
-                                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                                    <span className="text-xs font-normal text-muted-foreground">
+                                        {t('documents.optional', { defaultValue: '(optional)' })}
+                                    </span>
                                 </Label>
                                 <Input
                                     id="doc-number"
@@ -492,13 +572,16 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-1.5">
                                 <Label htmlFor="doc-issue" className="text-sm font-medium text-muted-foreground">
-                                    Issue Date <span className="text-xs font-normal">(optional)</span>
+                                    {t('documents.issueDate', { defaultValue: 'Issue Date' })}{' '}
+                                    <span className="text-xs font-normal">
+                                        {t('documents.optional', { defaultValue: '(optional)' })}
+                                    </span>
                                 </Label>
                                 <DatePicker
                                     id="doc-issue"
                                     value={issueDate}
                                     onChange={handleIssueDateChange}
-                                    placeholder="Issue date"
+                                    placeholder={t('documents.issueDatePlaceholder', { defaultValue: 'Issue date' })}
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -506,11 +589,13 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                     htmlFor="doc-expiry"
                                     className={cn('text-sm font-medium', !expiryRequired && 'text-muted-foreground')}
                                 >
-                                    Expiry Date
+                                    {t('documents.expiryDate', { defaultValue: 'Expiry Date' })}
                                     {expiryRequired ? (
                                         <span className="ms-0.5 text-destructive">*</span>
                                     ) : (
-                                        <span className="ms-1 text-xs font-normal">(optional)</span>
+                                        <span className="ms-1 text-xs font-normal">
+                                            {t('documents.optional', { defaultValue: '(optional)' })}
+                                        </span>
                                     )}
                                 </Label>
                                 <DatePicker
@@ -519,12 +604,12 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                     onChange={handleExpiryDateChange}
                                     aria-invalid={!!errors.expiryDate}
                                     className={cn(errors.expiryDate && 'border-destructive')}
-                                    placeholder="Expiry date"
+                                    placeholder={t('documents.expiryDatePlaceholder', { defaultValue: 'Expiry date' })}
                                 />
                                 {errors.expiryDate ? (
                                     <p className="text-xs text-destructive">{errors.expiryDate}</p>
                                 ) : selectedDef?.hint ? (
-                                    <p className="text-[11px] text-muted-foreground">{selectedDef.hint}</p>
+                                    <p className="text-xs text-muted-foreground">{selectedDef.hint}</p>
                                 ) : null}
                             </div>
                         </div>
@@ -532,13 +617,18 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                         {/* ── Notes ── */}
                         <div className="space-y-1.5">
                             <Label htmlFor="doc-notes" className="text-sm font-medium text-muted-foreground">
-                                Notes <span className="text-xs font-normal">(optional)</span>
+                                {t('documents.notes', { defaultValue: 'Notes' })}{' '}
+                                <span className="text-xs font-normal">
+                                    {t('documents.optional', { defaultValue: '(optional)' })}
+                                </span>
                             </Label>
                             <Textarea
                                 id="doc-notes"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Add any notes or comments about this document…"
+                                placeholder={t('documents.notesPlaceholder', {
+                                    defaultValue: 'Add any notes or comments about this document…',
+                                })}
                                 rows={2}
                                 className="resize-none text-sm"
                             />
@@ -547,7 +637,8 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                         {/* ── File drop zone ── */}
                         <div className="space-y-1.5">
                             <Label className="text-sm font-medium">
-                                File <span className="text-destructive">*</span>
+                                {t('documents.file', { defaultValue: 'File' })}{' '}
+                                <span className="text-destructive">*</span>
                             </Label>
                             <input
                                 ref={fileInputRef}
@@ -555,7 +646,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                 className="hidden"
                                 accept={ALLOWED_FILE_TYPES}
                                 onChange={(e) => pickFile(e.target.files?.[0])}
-                                aria-label="Upload document file"
+                                aria-label={t('documents.uploadFileAria', { defaultValue: 'Upload document file' })}
                             />
                             {file ? (
                                 <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
@@ -564,19 +655,20 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate text-sm font-medium">{file.name}</p>
-                                        <p className="text-xs text-muted-foreground">{humanFileSizeShort(file.size)}</p>
+                                        <p className="text-xs text-muted-foreground">{humanFileSize(file.size, 0)}</p>
                                     </div>
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="ghost"
+                                        size="icon"
                                         onClick={() => {
                                             setFile(null)
                                             if (fileInputRef.current) fileInputRef.current.value = ''
                                         }}
-                                        className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                        aria-label="Remove file"
+                                        aria-label={t('documents.removeFile', { defaultValue: 'Remove file' })}
                                     >
                                         <X className="size-3.5" />
-                                    </button>
+                                    </Button>
                                 </div>
                             ) : (
                                 <button
@@ -586,7 +678,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                     onDragOver={onDragOver}
                                     onDragLeave={onDragLeave}
                                     className={cn(
-                                        'flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 transition-colors',
+                                        'flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                                         dragging
                                             ? 'border-primary bg-primary/5'
                                             : errors.file
@@ -599,11 +691,15 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                     </div>
                                     <div className="text-center">
                                         <p className="text-sm font-medium text-foreground">
-                                            Click to upload{' '}
-                                            <span className="font-normal text-muted-foreground">or drag and drop</span>
+                                            {t('documents.clickToUpload', { defaultValue: 'Click to upload' })}{' '}
+                                            <span className="font-normal text-muted-foreground">
+                                                {t('documents.orDragAndDrop', { defaultValue: 'or drag and drop' })}
+                                            </span>
                                         </p>
                                         <p className="mt-0.5 text-xs text-muted-foreground">
-                                            PDF, JPG, PNG, WEBP, DOCX, XLSX · Max 10 MB
+                                            {t('documents.fileHint', {
+                                                defaultValue: 'PDF, JPG, PNG, WEBP, DOCX, XLSX · Max 10 MB',
+                                            })}
                                         </p>
                                     </div>
                                 </button>
@@ -619,11 +715,13 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                             onClick={() => handleClose(false)}
                             disabled={upload.isPending}
                         >
-                            Cancel
+                            {t('common.cancel', { defaultValue: 'Cancel' })}
                         </Button>
                         <Button type="submit" loading={upload.isPending}>
                             <Upload className="me-1.5 size-3.5" />
-                            {upload.isPending ? 'Uploading…' : 'Submit'}
+                            {upload.isPending
+                                ? t('documents.uploading', { defaultValue: 'Uploading…' })
+                                : t('common.submit', { defaultValue: 'Submit' })}
                         </Button>
                     </DialogFooter>
                 </form>
