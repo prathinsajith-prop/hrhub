@@ -44,7 +44,7 @@ export function EmployeePayslipsPage() {
             ) : (
                 <div className="space-y-2.5">
                     {data.map((p) => (
-                        <Card key={p.id} className="border-border/70 transition-all hover:border-primary/40 hover:shadow-md">
+                        <Card key={p.id} className="border-border/70 transition-colors hover:border-primary/30">
                             <CardContent className="flex items-center justify-between gap-3 p-4">
                                 <div>
                                     <div className="font-display text-base font-semibold">

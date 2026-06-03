@@ -170,7 +170,7 @@ function RecognitionCard({ r, onOpen }: { r: Recognition; onOpen: () => void }) 
                     <div className="flex items-center gap-1.5 shrink-0">
                         {r.isPinned && <Pin className="size-3.5 text-primary" />}
                         {r.points > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900/60">
                                 <Award className="size-3" /> {r.points}
                             </span>
                         )}

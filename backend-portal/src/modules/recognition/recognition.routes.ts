@@ -144,15 +144,32 @@ export default async function recognitionRoutes(fastify: FastifyInstance): Promi
         return reply.send({ data: await listBadges(request.user.tenantId) })
     })
 
+    // Visibility helper.
+    //
+    // Recognitions can be scoped to private / team / department / manager /
+    // hr audiences — it's not enough to check tenant scoping at the SQL
+    // layer. Every interaction surface that takes a `:id` (detail, reactions,
+    // comments) needs to clear `canViewRecognition`, otherwise a portal
+    // caller who learnt or guessed a UUID could react/comment on a
+    // recognition that was never surfaced to them in the feed (which would
+    // also leak its existence + comment thread back to legitimate viewers).
+    // Centralised here so the four endpoints below can't drift.
+    async function loadVisibleRecognition(req: any): Promise<any | null> {
+        const { id } = req.params as { id: string }
+        const row = await getRecognition(req.user.tenantId, id, req.user.id)
+        if (!row) return null
+        const allowed = await canViewRecognition(req.user.tenantId, row as any, {
+            userId: req.user.id,
+            employeeId: req.user.employeeId ?? null,
+            role: req.user.role,
+        })
+        return allowed ? row : null
+    }
+
     // ── Detail ───────────────────────────────────────────────────────────────
     fastify.get('/:id', { ...auth }, async (request: any, reply: any) => {
-        const { id } = request.params as { id: string }
-        const row = await getRecognition(request.user.tenantId, id, request.user.id)
+        const row = await loadVisibleRecognition(request)
         if (!row) return notFound(reply, 'Recognition not found')
-        const allowed = await canViewRecognition(request.user.tenantId, row as any, {
-            userId: request.user.id, employeeId: request.user.employeeId ?? null, role: request.user.role,
-        })
-        if (!allowed) return notFound(reply, 'Recognition not found')
         return reply.send({ data: row })
     })
 
@@ -233,7 +250,10 @@ export default async function recognitionRoutes(fastify: FastifyInstance): Promi
         const { id } = request.params as { id: string }
         const type = (request.body as any)?.type as ReactionType
         if (!VALID_REACTIONS.includes(type)) return bad(reply, 'Invalid reaction type')
-        const rec = await getRecognition(request.user.tenantId, id, request.user.id)
+        // Audience-gate: must be allowed to view this recognition before
+        // we accept a reaction. Returns 404 (not 403) so we don't leak
+        // "this recognition exists but you can't see it".
+        const rec = await loadVisibleRecognition(request)
         if (!rec) return notFound(reply, 'Recognition not found')
         await setReaction(request.user.tenantId, id, request.user.id, type)
         return reply.send({ data: { ok: true } })
@@ -241,6 +261,10 @@ export default async function recognitionRoutes(fastify: FastifyInstance): Promi
 
     fastify.delete('/:id/reactions', { ...auth }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+        // Same audience-gate as POST — even removing a reaction confirms
+        // existence to the caller, so don't allow it on hidden rows.
+        const rec = await loadVisibleRecognition(request)
+        if (!rec) return notFound(reply, 'Recognition not found')
         await removeReaction(request.user.tenantId, id, request.user.id)
         return reply.send({ data: { ok: true } })
     })
@@ -248,6 +272,10 @@ export default async function recognitionRoutes(fastify: FastifyInstance): Promi
     // ── Comments ────────────────────────────────────────────────────────────────
     fastify.get('/:id/comments', { ...auth }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
+        // Audience-gate before listing comments — the comment bodies would
+        // otherwise leak from a hidden recognition.
+        const rec = await loadVisibleRecognition(request)
+        if (!rec) return notFound(reply, 'Recognition not found')
         return reply.send({ data: await listComments(request.user.tenantId, id) })
     })
 
@@ -255,7 +283,7 @@ export default async function recognitionRoutes(fastify: FastifyInstance): Promi
         const { id } = request.params as { id: string }
         const body = typeof (request.body as any)?.body === 'string' ? (request.body as any).body.trim() : ''
         if (!body) return bad(reply, 'Comment body is required')
-        const rec = await getRecognition(request.user.tenantId, id, request.user.id)
+        const rec = await loadVisibleRecognition(request)
         if (!rec) return notFound(reply, 'Recognition not found')
         if ((rec as any).commentsDisabled) return bad(reply, 'Comments are disabled for this recognition')
         const parentId = typeof (request.body as any)?.parentId === 'string' ? (request.body as any).parentId : null

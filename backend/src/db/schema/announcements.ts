@@ -78,10 +78,32 @@ export const announcementReceipts = pgTable('announcement_receipts', {
     employeeIdx: index('idx_ann_receipts_employee').on(t.tenantId, t.employeeId),
 }))
 
+// Threaded comments on an announcement. Mirrors recognition_comments.
+// Visibility is enforced at the route layer (caller must clear the
+// audience gate). Soft-delete via `deletedAt`; one level of threading
+// via `parentId` (optional, UI is flat today).
+export const announcementComments = pgTable('announcement_comments', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    announcementId: uuid('announcement_id').notNull().references(() => announcements.id, { onDelete: 'cascade' }),
+    parentId: uuid('parent_id'),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    authorName: text('author_name'),
+    body: text('body').notNull(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedByUserId: uuid('deleted_by_user_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    announcementIdx: index('idx_announcement_comments_announcement').on(t.announcementId, t.createdAt),
+    parentIdx: index('idx_announcement_comments_parent').on(t.parentId),
+}))
+
 export const announcementsRelations = relations(announcements, ({ one, many }) => ({
     tenant: one(tenants, { fields: [announcements.tenantId], references: [tenants.id] }),
     audiences: many(announcementAudiences),
     receipts: many(announcementReceipts),
+    comments: many(announcementComments),
 }))
 
 export const announcementAudiencesRelations = relations(announcementAudiences, ({ one }) => ({

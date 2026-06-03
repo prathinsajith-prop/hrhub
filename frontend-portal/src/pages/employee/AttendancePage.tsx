@@ -215,13 +215,13 @@ export function EmployeeAttendancePage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 rounded-lg border bg-card px-2 py-1 shadow-sm">
-          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Previous week">
+          <Button size="icon" variant="ghost" className="size-9 sm:size-8" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Previous week">
             <ChevronLeft className="size-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Pick week">
+          <Button size="icon" variant="ghost" className="size-9 sm:size-8" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Pick week">
             <Calendar className="size-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">
+          <Button size="icon" variant="ghost" className="size-9 sm:size-8" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">
             <ChevronRight className="size-4" />
           </Button>
           <span className="px-2 text-sm font-medium tabular-nums">
@@ -230,13 +230,13 @@ export function EmployeeAttendancePage() {
         </div>
 
         <div className="flex items-center gap-1 rounded-lg border bg-card p-1 shadow-sm">
-          <Button size="icon" variant={view === 'timeline' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('timeline')} aria-label="Timeline view">
+          <Button size="icon" variant={view === 'timeline' ? 'secondary' : 'ghost'} className="size-9 sm:size-8" onClick={() => setView('timeline')} aria-label="Timeline view">
             <LayoutGrid className="size-3.5" />
           </Button>
-          <Button size="icon" variant={view === 'list' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('list')} aria-label="List view">
+          <Button size="icon" variant={view === 'list' ? 'secondary' : 'ghost'} className="size-9 sm:size-8" onClick={() => setView('list')} aria-label="List view">
             <ListIcon className="size-3.5" />
           </Button>
-          <Button size="icon" variant={view === 'calendar' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('calendar')} aria-label="Calendar view">
+          <Button size="icon" variant={view === 'calendar' ? 'secondary' : 'ghost'} className="size-9 sm:size-8" onClick={() => setView('calendar')} aria-label="Calendar view">
             <CalendarDays className="size-3.5" />
           </Button>
         </div>

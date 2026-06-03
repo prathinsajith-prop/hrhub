@@ -33,4 +33,5 @@ export const performanceReviews = pgTable('performance_reviews', {
     tenantStatusIdx:   index('idx_perf_reviews_tenant_status').on(t.tenantId, t.status),
     tenantEmployeeIdx: index('idx_perf_reviews_tenant_employee').on(t.tenantId, t.employeeId),
     activeIdx:         index('idx_perf_reviews_tenant_active').on(t.tenantId, t.employeeId).where(sql`deleted_at IS NULL`),
+    tenantCreatedIdx:  index('idx_performance_reviews_tenant_created').on(t.tenantId, t.createdAt).where(sql`deleted_at IS NULL`),
 }))

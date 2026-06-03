@@ -34,6 +34,23 @@ export interface CandidateProfileFieldsProps {
     experience: ExperienceEntry[]
     onExperienceChange: (v: ExperienceEntry[]) => void
     compact?: boolean
+    /** When false, Gender is omitted and Address spans full width (host renders
+     *  Gender itself, e.g. beside Nationality). Defaults to true. */
+    showGender?: boolean
+}
+
+/** Standalone Gender select so a host form can place it in a top position. */
+export function GenderSelect({ value, onChange }: { value: Gender | ''; onChange: (v: Gender | '') => void }) {
+    return (
+        <Select value={value || ''} onValueChange={(v) => onChange(v as Gender)}>
+            <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+            <SelectContent>
+                {GENDER_OPTIONS.map((g) => (
+                    <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    )
 }
 
 export function CandidateProfileFields({
@@ -42,30 +59,24 @@ export function CandidateProfileFields({
     education, onEducationChange,
     experience, onExperienceChange,
     compact = false,
+    showGender = true,
 }: CandidateProfileFieldsProps) {
     return (
         <div className={compact ? 'space-y-4' : 'space-y-5'}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {showGender ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FieldShell label="Address" optional>
+                        <Textarea rows={2} value={address} onChange={(e) => onAddressChange(e.target.value)} placeholder="Street, city, country" className="resize-none" />
+                    </FieldShell>
+                    <FieldShell label="Gender" optional>
+                        <GenderSelect value={gender} onChange={onGenderChange} />
+                    </FieldShell>
+                </div>
+            ) : (
                 <FieldShell label="Address" optional>
-                    <Textarea
-                        rows={2}
-                        value={address}
-                        onChange={(e) => onAddressChange(e.target.value)}
-                        placeholder="Street, city, country"
-                        className="resize-none"
-                    />
+                    <Textarea rows={2} value={address} onChange={(e) => onAddressChange(e.target.value)} placeholder="Street, city, country" className="resize-none" />
                 </FieldShell>
-                <FieldShell label="Gender" optional>
-                    <Select value={gender || ''} onValueChange={(v) => onGenderChange(v as Gender)}>
-                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                        <SelectContent>
-                            {GENDER_OPTIONS.map((g) => (
-                                <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </FieldShell>
-            </div>
+            )}
 
             <MultiEntryField<ExperienceEntry>
                 label="Experience"

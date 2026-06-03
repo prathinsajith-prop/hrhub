@@ -29,4 +29,5 @@ export const exitRequests = pgTable('exit_requests', {
     tenantIdx:         index('idx_exit_requests_tenant').on(t.tenantId),
     tenantStatusIdx:   index('idx_exit_requests_tenant_status').on(t.tenantId, t.status),
     tenantEmployeeIdx: index('idx_exit_requests_tenant_employee').on(t.tenantId, t.employeeId),
+    tenantCreatedIdx:  index('idx_exit_requests_tenant_created').on(t.tenantId, t.createdAt),
 }))

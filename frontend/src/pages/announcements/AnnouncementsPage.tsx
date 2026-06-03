@@ -194,7 +194,9 @@ function AnnouncementDialog({ announcement, open, onOpenChange }: { announcement
         priority: (announcement?.priority ?? 'normal') as AnnouncementPriority,
         pinned: announcement?.pinned ?? false,
         requireAck: announcement?.requireAck ?? false,
-        publishAt: toLocalDateTimeInput(announcement?.publishAt),
+        // Default a new announcement's publish time to "now" (editing keeps the
+        // saved value). The field stays editable so it can be scheduled forward.
+        publishAt: toLocalDateTimeInput(announcement?.publishAt) || toLocalDateTimeInput(new Date().toISOString()),
         expireAt: toLocalDateTimeInput(announcement?.expireAt),
     })
     const [everyone, setEveryone] = useState(initAud.some(a => a.kind === 'all'))

@@ -57,4 +57,69 @@ describe('parseResumeText', () => {
         expect(p.confidence.skills).toBeGreaterThan(0)
         expect(p.confidence.experienceYears).toBeGreaterThan(0)
     })
+
+    it('always returns experience/education arrays (empty when no sections)', () => {
+        const p = parseResumeText(FULL)
+        expect(Array.isArray(p.experience)).toBe(true)
+        expect(Array.isArray(p.education)).toBe(true)
+        expect(parseResumeText('').experience).toEqual([])
+        expect(parseResumeText('').education).toEqual([])
+    })
+})
+
+const SECTIONED = `John Doe
+Software Engineer
+john@example.com
+
+EXPERIENCE
+Senior Engineer — Acme Corp
+Jan 2020 - Present
+• Built the core platform
+• Led a team of 5
+
+Junior Engineer, Beta LLC
+Jun 2017 – Dec 2019
+• Shipped features
+
+EDUCATION
+B.Sc in Computer Science — Stanford University
+2013 - 2017
+
+SKILLS
+React, Node.js
+`
+
+describe('parseResumeText — experience & education sections', () => {
+    it('parses work history with title, company, dates and current flag', () => {
+        const p = parseResumeText(SECTIONED)
+        expect(p.experience.length).toBeGreaterThanOrEqual(2)
+        const senior = p.experience[0]
+        expect(senior.title).toBe('Senior Engineer')
+        expect(senior.company).toBe('Acme Corp')
+        expect(senior.startDate).toBe('2020-01')
+        expect(senior.current).toBe(true)
+        const junior = p.experience[1]
+        expect(junior.title).toBe('Junior Engineer')
+        expect(junior.company).toBe('Beta LLC')
+        expect(junior.endDate).toBe('2019-12')
+        expect(junior.current).toBe(false)
+    })
+
+    it('parses education with the school and degree', () => {
+        const p = parseResumeText(SECTIONED)
+        expect(p.education.length).toBeGreaterThanOrEqual(1)
+        expect(p.education[0].school).toContain('Stanford University')
+        expect(p.education[0].degree?.toLowerCase()).toContain('sc')
+    })
+
+    it('derives years-of-experience from the work-history span when not stated', () => {
+        const p = parseResumeText(SECTIONED)   // no "N years" phrase present
+        expect(p.experienceYears).toBeGreaterThan(0)
+    })
+
+    it('does not crash on a résumé with headers but no parseable entries', () => {
+        const p = parseResumeText('EXPERIENCE\n(see attached)\nEDUCATION\nvarious')
+        expect(Array.isArray(p.experience)).toBe(true)
+        expect(Array.isArray(p.education)).toBe(true)
+    })
 })

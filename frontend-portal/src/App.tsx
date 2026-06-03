@@ -29,6 +29,8 @@ const EmployeePerformancePage = lazy(() => import('@/pages/employee/PerformanceP
 const EmployeeReferralsPage = lazy(() => import('@/pages/employee/ReferralsPage').then((m) => ({ default: m.ReferralsPage })))
 const EmployeeAnnouncementsPage = lazy(() => import('@/pages/employee/AnnouncementsPage').then((m) => ({ default: m.AnnouncementsPage })))
 const EmployeeRecognitionPage = lazy(() => import('@/pages/employee/RecognitionPage').then((m) => ({ default: m.RecognitionPage })))
+const EmployeeReportsPage = lazy(() => import('@/pages/employee/ReportsPage').then((m) => ({ default: m.EmployeeReportsPage })))
+const EmployeeGoalsPage = lazy(() => import('@/pages/employee/GoalsPage').then((m) => ({ default: m.EmployeeGoalsPage })))
 // NOTE: the exit-interview pages were removed — the portal backend (port
 // 4001) serves no exit/offboarding routes, so /my-exit and
 // /exit-interview/by-token 404'd. The feature lives in the admin app only.
@@ -128,6 +130,8 @@ export default function App() {
                 <Route path={ROUTES.employeeAnnouncements} element={<EmployeeAnnouncementsPage />} />
                 <Route path={ROUTES.employeeRecognition} element={<EmployeeRecognitionPage />} />
                 <Route path={ROUTES.employeeRecognitionDetail()} element={<EmployeeRecognitionPage />} />
+                <Route path={ROUTES.employeeReports} element={<EmployeeReportsPage />} />
+                <Route path={ROUTES.employeeGoals} element={<EmployeeGoalsPage />} />
 
                 {/* Shared (both modes) */}
                 <Route path={ROUTES.notifications} element={<NotificationsPage />} />

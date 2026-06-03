@@ -9,11 +9,13 @@ import { ROUTES } from '@/lib/routes'
 import { cn } from '@/lib/utils'
 
 /**
- * Single-button toggle: shows ONLY the target mode (where you can switch to).
- * Plain employees see nothing. Dept_heads in Employee view see "→ Manager",
- * Dept_heads in Manager view see "→ Employee".
+ * Mode-switch button. Plain employees see nothing. Dept_heads see a single
+ * pill that takes them to the *other* mode.
+ *
+ *   variant="default" — full pill with icon + label (desktop right cluster)
+ *   variant="compact" — square icon-only button (mobile header, tight space)
  */
-export function ModeToggle({ className }: { className?: string }) {
+export function ModeToggle({ className, variant = 'default' }: { className?: string; variant?: 'default' | 'compact' }) {
     const { t } = useTranslation()
     const user = useAuthStore((s) => s.user)
     const navigate = useNavigate()
@@ -29,6 +31,24 @@ export function ModeToggle({ className }: { className?: string }) {
     function switchMode() {
         setMode(target)
         navigate(target === 'manager' ? ROUTES.managerHome : ROUTES.employeeHome)
+    }
+
+    if (variant === 'compact') {
+        return (
+            <button
+                type="button"
+                onClick={switchMode}
+                aria-label={`Switch to ${targetLabel} view`}
+                title={`Switch to ${targetLabel} view`}
+                className={cn(
+                    'inline-flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    className,
+                )}
+            >
+                <TargetIcon className="size-4" aria-hidden />
+                <span className="sr-only">{targetLabel}</span>
+            </button>
+        )
     }
 
     return (

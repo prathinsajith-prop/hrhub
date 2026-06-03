@@ -1,57 +1,71 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
     ArrowRight,
-    Calendar,
+    Award,
+    Bell,
+    CalendarClock,
+    CalendarDays,
     CheckCircle2,
     ChevronRight,
     Clock,
-    FileText,
+    ExternalLink,
+    Link2,
+    Loader2,
     LogIn,
     LogOut,
-    PieChart,
-    Receipt,
-    TrendingUp,
+    Megaphone,
+    MessageCircle,
+    Pin,
+    PenSquare,
+    Send,
+    Sparkles,
+    Target,
     User,
+    UserPlus,
+    Contact as UserPin,
 } from 'lucide-react'
-import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    Cell,
-    Pie,
-    PieChart as RPieChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-} from 'recharts'
 
 import { useAuthStore } from '@/store/authStore'
 import { useMyEmployee, useAccountFlags } from '@/hooks/useMe'
-import { useLeaveBalance, useLeaveRequests } from '@/hooks/useLeave'
-import { useMyPayslips } from '@/hooks/usePayslips'
+import { useLeaveRequests } from '@/hooks/useLeave'
 import { useAttendance, useCheckIn, useCheckOut } from '@/hooks/useAttendance'
-import { formatTime } from '@/lib/datetime'
-import { GlassCard } from '@/components/shared/GlassCard'
-import { ChartCard } from '@/components/shared/ChartCard'
-import { AssignedAssetsCard } from '@/components/shared/AssignedAssetsCard'
+import {
+    useAnnouncementFeed,
+    useAnnouncementComments,
+    useAddAnnouncementComment,
+    type FeedAnnouncement,
+} from '@/hooks/useAnnouncements'
 import { BirthdaysCard } from '@/components/shared/BirthdaysCard'
-import { MyTeamsCard } from '@/components/shared/MyTeamsCard'
-import { Skeleton } from '@/components/ui/skeleton'
+import { CompactEmptyState } from '@/components/shared/EmptyState'
+import { useMyChangeRequests } from '@/hooks/useProfileChanges'
+import { useUnreadNotificationsCount } from '@/hooks/useNotifications'
+import { formatTime } from '@/lib/datetime'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { ROUTES } from '@/lib/routes'
-import { cn, formatCurrency, formatDate, formatShiftRange, monthName } from '@/lib/utils'
-import type { LeaveStatus, Payslip } from '@/types'
+import { cn, formatDate, formatShiftRange, initialsOf } from '@/lib/utils'
+import type { LeaveStatus } from '@/types'
 
 function greetingKey(hour: number): 'greetingMorning' | 'greetingAfternoon' | 'greetingEvening' {
     if (hour < 12) return 'greetingMorning'
     if (hour < 17) return 'greetingAfternoon'
     return 'greetingEvening'
+}
+
+function formatJoinDate(joinDate: string | undefined | null, locale: string): string {
+    if (!joinDate) return ''
+    const d = new Date(joinDate)
+    if (Number.isNaN(d.getTime())) return joinDate
+    try {
+        return d.toLocaleDateString(locale, { month: 'short', day: '2-digit', year: 'numeric' })
+    } catch {
+        return joinDate
+    }
 }
 
 const STATUS_TONE: Record<LeaveStatus, string> = {
@@ -62,14 +76,17 @@ const STATUS_TONE: Record<LeaveStatus, string> = {
 }
 
 export function EmployeeHomePage() {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
+    const navigate = useNavigate()
     const user = useAuthStore((s) => s.user)
     const employeeId = user?.employeeId ?? undefined
 
     const { data: me } = useMyEmployee()
-    const { data: balance, isLoading: balanceLoading } = useLeaveBalance(employeeId)
-    const { data: payslips } = useMyPayslips()
     const { data: leaveList } = useLeaveRequests({ employeeId, limit: 4 })
+    const { data: announcementPages } = useAnnouncementFeed(5)
+    const announcements = (announcementPages?.pages?.[0]?.data ?? []).slice(0, 3)
+    const { data: myChanges } = useMyChangeRequests()
+    const { data: unreadCount } = useUnreadNotificationsCount()
 
     const today = new Date().toISOString().slice(0, 10)
     const { data: todayAttendance } = useAttendance({
@@ -84,19 +101,27 @@ export function EmployeeHomePage() {
     // when self-punch is revoked for this user.
     const { attendancePunchEnabled } = useAccountFlags()
 
-    const annualBalance = balance?.balance?.annual
-    const latestSlip = payslips?.[0]
     const todayRecord = todayAttendance?.data?.[0]
     const isCheckedIn = !!todayRecord?.checkIn && !todayRecord?.checkOut
     const checkedOutToday = !!todayRecord?.checkOut
     const liveTimer = useLiveDuration(todayRecord?.checkIn, todayRecord?.checkOut)
 
     const pendingLeaveCount = leaveList?.data.filter((l) => l.status === 'pending').length ?? 0
+    const pendingProfileChangeCount = myChanges?.filter((c) => c.status === 'pending').length ?? 0
+    const unread = unreadCount ?? 0
+    const openTasksTotal = pendingLeaveCount + pendingProfileChangeCount + unread
+
+    const upcomingMyLeaves = (leaveList?.data ?? [])
+        .filter((l) => (l.status === 'approved' || l.status === 'pending') && l.startDate >= today)
+        .slice(0, 3)
+
+    const joinDateLabel = formatJoinDate(me?.joinDate, i18n.language)
+    const displayName = me ? `${me.firstName} ${me.lastName}`.trim() : (user?.name ?? '')
 
     return (
         <div className="space-y-6">
             {/* ── Greeting ──────────────────────────────────────────────── */}
-            <header className="flex flex-wrap items-end justify-between gap-3">
+            <header className="flex flex-wrap items-start sm:items-end justify-between gap-3">
                 <div>
                     <p className="text-sm text-muted-foreground">
                         {t(`home.${greetingKey(new Date().getHours())}`)},
@@ -105,7 +130,7 @@ export function EmployeeHomePage() {
                         {me ? `${me.firstName} ${me.lastName}`.trim() : (user?.name ?? '')} 👋
                     </h1>
                 </div>
-                <div className="text-right text-xs text-muted-foreground">
+                <div className="text-end text-xs text-muted-foreground">
                     <div>{formatDate(today, { weekday: 'long' })}</div>
                     <div className="text-sm font-semibold text-foreground">
                         {formatDate(today, { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -113,151 +138,59 @@ export function EmployeeHomePage() {
                 </div>
             </header>
 
-            {/* ── Hero: today's attendance ──────────────────────────────── */}
-            <GlassCard
-                tone={isCheckedIn ? 'success' : checkedOutToday ? 'default' : 'primary'}
-                className="overflow-hidden p-5 sm:p-6"
-            >
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider opacity-80">
-                            <span className="inline-flex items-center gap-1.5">
-                                <Clock className="size-3" />
-                                {t('attendance.title')}
-                            </span>
-                            {/* Show today's scheduled shift inline so the user knows what window they're tracking against. */}
-                            {me?.shift ? (() => {
-                                const range = formatShiftRange(me.shift!.startTime, me.shift!.endTime)
-                                return range ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-white/35 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal opacity-80 dark:bg-white/10">
-                                        {me.shift!.name} · {range}
-                                    </span>
-                                ) : null
-                            })() : null}
-                        </div>
-                        {todayRecord?.checkIn ? (
-                            <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                                <div className="font-display text-2xl font-bold tabular-figures">
-                                    {formatTime(todayRecord.checkIn)}
-                                </div>
-                                <div className="text-xs text-muted-foreground">→</div>
-                                {todayRecord.checkOut ? (
-                                    <div className="font-display text-2xl font-bold tabular-figures">
-                                        {formatTime(todayRecord.checkOut)}
-                                    </div>
-                                ) : (
-                                    <div className="text-sm font-medium text-foreground/70">{t('common.today')}…</div>
-                                )}
-                                {todayRecord.hoursWorked ? (
-                                    <Badge variant="secondary" className="text-[10px] tabular-figures">
-                                        {todayRecord.hoursWorked}h
-                                    </Badge>
-                                ) : null}
+            {/* ── 2-column home layout — main content on the left, widget
+                sidebar on the right (collapses to single column on small
+                screens). ── */}
+            <div className="grid gap-6 lg:grid-cols-3">
+                <div className="space-y-6 lg:col-span-2">
+                    {/* Quick Actions — compact rail.
+                        The previous layout took two grid rows on every
+                        viewport: 3 columns × 2 rows of chunky tiles
+                        (~180px tall). On tablet that pushed the more
+                        valuable announcements feed below the fold for no
+                        good reason — the actions themselves are one-tap
+                        navigations, not focal content. New shape:
+                          • mobile (< sm): 3 cols × 2 rows, tight
+                          • sm/md/lg (tablet up): 6 cols × 1 row, ~64px tall
+                        Tile chrome shrunk too — smaller icon badge, smaller
+                        label, less padding, smaller card margins. Card
+                        height drops from ~250px to ~120px on tablet. */}
+                    <Card className="border-border/70">
+                        <CardContent className="p-4 sm:p-4">
+                            <div className="mb-2.5 flex items-center justify-between">
+                                <h2 className="font-display text-sm font-semibold text-foreground">
+                                    {t('home.quickActions')}
+                                </h2>
                             </div>
-                        ) : (
-                            <div className="mt-2 font-display text-xl font-semibold sm:text-2xl">
-                                {t('home.checkInPrompt')}
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                                <QuickActionTile icon={PenSquare} label={t('home.createPost')} onClick={() => navigate(ROUTES.employeeAnnouncements)} />
+                                <QuickActionTile icon={UserPlus} label={t('home.refer')} onClick={() => navigate(ROUTES.employeeReferrals)} />
+                                <QuickActionTile icon={Award} label={t('home.recognize')} onClick={() => navigate(ROUTES.employeeRecognition)} />
+                                <QuickActionTile icon={CalendarClock} label={t('home.regulariseAttendance')} onClick={() => navigate(ROUTES.employeeAttendance)} />
+                                <QuickActionTile icon={CalendarDays} label={t('home.applyLeave')} onClick={() => navigate(ROUTES.employeeLeave)} />
+                                <QuickActionTile icon={Target} label={t('home.createGoal')} onClick={() => navigate(ROUTES.employeeGoals)} />
                             </div>
-                        )}
-                    </div>
+                        </CardContent>
+                    </Card>
 
-                    {attendancePunchEnabled && (
-                        <div className="shrink-0">
-                            {checkedOutToday ? (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                    <CheckCircle2 className="size-3.5" /> Done for the day
-                                </span>
-                            ) : isCheckedIn ? (
-                                <Button
-                                    onClick={() =>
-                                        checkOut.mutate({}, {
-                                            onSuccess: () => toast.success(t('attendance.checkOut')),
-                                        })
-                                    }
-                                    loading={checkOut.isPending}
-                                >
-                                    <LogOut className="size-4" /> {t('attendance.checkOut')}
-                                    <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
-                                </Button>
-                            ) : (
-                                <Button
-                                    onClick={() =>
-                                        checkIn.mutate({}, {
-                                            onSuccess: () => toast.success(t('attendance.checkIn')),
-                                        })
-                                    }
-                                    loading={checkIn.isPending}
-                                >
-                                    <LogIn className="size-4" /> {t('attendance.checkIn')}
-                                    <span className="ms-1.5 text-xs tabular-nums opacity-90">{liveTimer}</span>
-                                </Button>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </GlassCard>
+                    {/* New Joinee — welcome card (always visible per
+                        product spec — replaces the time-windowed gate). */}
+                    <NewJoineeCard
+                        displayName={displayName}
+                        avatarUrl={me?.avatarUrl}
+                        firstName={me?.firstName}
+                        joinDateLabel={joinDateLabel}
+                    />
 
-            {/* ── Stats: leave + payslip ────────────────────────────────── */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 3xl:grid-cols-4">
-                <StatCard
-                    tone="primary"
-                    icon={<Calendar className="size-4" />}
-                    label={t('home.leaveBalance')}
-                    accent="indigo"
-                >
-                    {balanceLoading ? (
-                        <Skeleton className="mt-1 h-10 w-32" />
-                    ) : (
-                        <div className="flex items-baseline gap-3">
-                            <div className="font-display text-4xl font-bold tabular-figures text-foreground">
-                                {annualBalance ? Math.round(annualBalance.available) : 0}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                                <span className="block">{t('home.available')}</span>
-                                <span className="block">
-                                    {annualBalance ? Math.round(annualBalance.taken) : 0} {t('home.taken')}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                    <FooterLink to={ROUTES.employeeLeave} accent="indigo">
-                        {pendingLeaveCount > 0
-                            ? `${pendingLeaveCount} pending`
-                            : t('home.requestLeave')}
-                    </FooterLink>
-                </StatCard>
+                    {/* Announcements feed */}
+                    <AnnouncementsList
+                        items={announcements}
+                        onViewAll={() => navigate(ROUTES.employeeAnnouncements)}
+                        currentUserName={displayName}
+                        currentUserAvatarUrl={me?.avatarUrl}
+                    />
 
-                <StatCard
-                    tone="success"
-                    icon={<Receipt className="size-4" />}
-                    label={t('home.nextPayslip')}
-                    accent="emerald"
-                >
-                    {latestSlip ? (
-                        <div className="flex items-baseline gap-3">
-                            <div className="font-display text-2xl font-bold tabular-figures text-foreground sm:text-3xl">
-                                {formatCurrency(latestSlip.netSalary)}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                                {monthName(latestSlip.month)} {latestSlip.year}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-sm text-muted-foreground">Not yet available</div>
-                    )}
-                    <FooterLink to={ROUTES.employeePayslips} accent="emerald">
-                        {t('home.viewPayslips')}
-                    </FooterLink>
-                </StatCard>
-            </div>
-
-            {/* ── Charts row ────────────────────────────────────────────── */}
-            <div className="grid gap-4 lg:grid-cols-2 3xl:grid-cols-3">
-                <LeaveUsageChart balance={annualBalance} />
-                <PayslipTrendChart payslips={payslips ?? []} />
-            </div>
-
-            {/* ── Recent leave activity ─────────────────────────────────── */}
+                    {/* ── Recent leave activity ─────────────────────────────────── */}
             {leaveList?.data && leaveList.data.length > 0 ? (
                 <section>
                     <div className="mb-3 flex items-center justify-between">
@@ -298,259 +231,749 @@ export function EmployeeHomePage() {
                     </div>
                 </section>
             ) : null}
-
-            {/* ── Team memberships + birthdays + assets ───────────────────
-                Three small cards that together answer "what context am I in
-                today?" — which teams I'm part of, who has a birthday today,
-                what hardware I'm holding. Two-column on lg, single-column
-                on smaller viewports. */}
-            <div className="grid gap-4 lg:grid-cols-2 3xl:grid-cols-3">
-                <MyTeamsCard variant="me" />
-                <BirthdaysCard title="Department birthdays today" />
-            </div>
-            <AssignedAssetsCard variant="me" />
-
-            {/* ── Quick actions ─────────────────────────────────────────── */}
-            <section>
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t('home.quickActions')}
-                </h2>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 3xl:grid-cols-6">
-                    <ActionLink to={ROUTES.employeeLeave} icon={<Calendar className="size-5" />} label={t('home.requestLeave')} />
-                    <ActionLink to={ROUTES.employeePayslips} icon={<Receipt className="size-5" />} label={t('home.viewPayslips')} />
-                    <ActionLink to={ROUTES.employeeAttendance} icon={<Clock className="size-5" />} label={t('home.viewAttendance')} />
-                    <ActionLink to={ROUTES.employeeDocuments} icon={<FileText className="size-5" />} label={t('nav.documents')} />
-                    <ActionLink to={ROUTES.employeeProfile} icon={<User className="size-5" />} label={t('home.viewProfile')} />
                 </div>
-            </section>
+                {/* /Left column */}
+
+                {/* ── Right sidebar widgets ── */}
+                <aside className="space-y-6">
+                    <AttendanceSidebarCard
+                        todayRecord={todayRecord}
+                        isCheckedIn={isCheckedIn}
+                        checkedOutToday={checkedOutToday}
+                        liveTimer={liveTimer}
+                        attendancePunchEnabled={attendancePunchEnabled}
+                        shift={me?.shift ?? null}
+                        onCheckIn={() => checkIn.mutate({}, { onSuccess: () => toast.success(t('attendance.checkIn')) })}
+                        onCheckOut={() => checkOut.mutate({}, { onSuccess: () => toast.success(t('attendance.checkOut')) })}
+                        checkInPending={checkIn.isPending}
+                        checkOutPending={checkOut.isPending}
+                    />
+                    <ImportantLinksCard />
+                    <OpenTasksCard
+                        pendingLeaveCount={pendingLeaveCount}
+                        pendingProfileChangeCount={pendingProfileChangeCount}
+                        unread={unread}
+                        openTasksTotal={openTasksTotal}
+                        onOpenLeave={() => navigate(ROUTES.employeeLeave)}
+                        onOpenProfile={() => navigate(ROUTES.employeeProfile)}
+                        onOpenNotifications={() => navigate(ROUTES.notifications)}
+                    />
+                    {/* Department birthdays today — moved here from the
+                        portal Reports page. Sits directly after the Open
+                        Tasks card so the right rail goes: my live state
+                        (attendance) → my actions (open tasks) → people
+                        signals (birthdays, who's out). */}
+                    <BirthdaysCard title={t('home.departmentBirthdaysToday', { defaultValue: 'Department birthdays today' })} />
+                    <WhoIsOutCard
+                        upcomingLeaves={upcomingMyLeaves}
+                        onViewAll={() => navigate(ROUTES.employeeReports)}
+                    />
+                </aside>
+            </div>
         </div>
     )
 }
 
-const ACCENT_CLASSES = {
-    indigo: {
-        label: 'text-indigo-700/80 dark:text-indigo-300/80',
-        icon: 'text-indigo-700/70 dark:text-indigo-300/70',
-        link: 'text-indigo-700 dark:text-indigo-300',
-    },
-    emerald: {
-        label: 'text-emerald-700/80 dark:text-emerald-300/80',
-        icon: 'text-emerald-700/70 dark:text-emerald-300/70',
-        link: 'text-emerald-700 dark:text-emerald-300',
-    },
-} as const
-
-type Accent = keyof typeof ACCENT_CLASSES
-
-function StatCard({
-    tone,
-    icon,
-    label,
-    accent,
-    children,
-}: {
-    tone: 'primary' | 'success' | 'warning' | 'default'
-    icon: React.ReactNode
-    label: string
-    accent: Accent
-    children: React.ReactNode
-}) {
+function QuickActionTile({ icon: Icon, label, onClick }: { icon: React.ElementType; label: string; onClick: () => void }) {
+    // Compact, single-orientation tile (icon on top, label below) for both
+    // breakpoints — keeps the row visually uniform whether it's 3-up
+    // (mobile) or 6-up (tablet+). The mobile build used to switch to a
+    // horizontal layout on `sm:`, but on a 6-col tablet row that flipped
+    // each tile to icon-left/label-right and overflowed the column.
+    //
+    // Sizing trimmed across the board:
+    //   • icon badge 9 → 8
+    //   • padding 12-16 → 8-10
+    //   • label text-xs (was -sm on tablet) with tight leading
+    //   • truncate to 1 line everywhere; full label stays in the `title`
+    //     attribute for the rare case of a long string.
     return (
-        <GlassCard tone={tone} className="flex flex-col gap-3 p-5">
-            <div className="flex items-center justify-between">
-                <div className={cn('text-[11px] font-semibold uppercase tracking-wider', ACCENT_CLASSES[accent].label)}>
-                    {label}
-                </div>
-                <span className={ACCENT_CLASSES[accent].icon}>{icon}</span>
-            </div>
-            {children}
-        </GlassCard>
-    )
-}
-
-function FooterLink({ to, accent, children }: { to: string; accent: Accent; children: React.ReactNode }) {
-    return (
-        <Link
-            to={to}
-            className={cn(
-                'inline-flex items-center gap-1 text-xs font-medium hover:underline',
-                ACCENT_CLASSES[accent].link,
-            )}
+        <button
+            type="button"
+            onClick={onClick}
+            title={label}
+            className="group flex flex-col items-center gap-1 rounded-lg bg-muted/40 px-2 py-2.5 text-center transition-all hover:bg-accent/60 hover:shadow-sm active:scale-[0.97]"
         >
-            {children} <ArrowRight className="size-3" data-rtl-flip />
-        </Link>
-    )
-}
-
-function ActionLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
-    return (
-        <Link
-            to={to}
-            className="group flex flex-col items-start gap-2 rounded-xl border border-border bg-card/70 p-4 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-        >
-            <span className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-50 to-sky-50 text-indigo-600 transition-transform group-hover:scale-110 dark:from-indigo-950/40 dark:to-sky-950/30 dark:text-indigo-300">
-                {icon}
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-card shadow-sm">
+                <Icon className="size-3.5 text-primary" />
             </span>
-            <span className="text-sm font-medium leading-snug">{label}</span>
-        </Link>
+            <span className="w-full truncate text-[11px] font-medium leading-tight text-foreground">
+                {label}
+            </span>
+        </button>
     )
 }
 
-/**
- * Donut showing leave used vs. remaining for the current year.
- * Center label is the remaining count.
- */
-function LeaveUsageChart({
-    balance,
-}: {
-    balance: { available: number; taken: number; entitled: number; accrued: number } | undefined
-}) {
-    const available = balance ? Math.max(0, Math.round(balance.available)) : 0
-    const taken = balance ? Math.max(0, Math.round(balance.taken)) : 0
-    const total = available + taken
+// `CardEmptyState` used to live here as a private duplicate of the
+// shared `CompactEmptyState`. The alias keeps the local call sites
+// (4 of them) intact while delegating to the single source of truth.
+const CardEmptyState = CompactEmptyState
 
-    const data =
-        total === 0
-            ? [{ name: 'No data', value: 1 }]
-            : [
-                  { name: 'Available', value: available },
-                  { name: 'Taken', value: taken },
-              ]
-    const COLORS = total === 0 ? ['#e2e8f0'] : ['#6366f1', '#0ea5e9']
+interface NewJoineeCardProps {
+    displayName: string
+    avatarUrl?: string | null
+    firstName?: string | null
+    joinDateLabel: string
+}
+
+function NewJoineeCard({ displayName, avatarUrl, firstName, joinDateLabel }: NewJoineeCardProps) {
+    const { t } = useTranslation()
 
     return (
-        <ChartCard
-            title="Leave usage"
-            subtitle={total > 0 ? `${taken} taken of ${total} days` : 'No leave records yet'}
-            icon={<PieChart className="size-4 text-indigo-500" />}
-            height={220}
-        >
-            <ResponsiveContainer width="100%" height="100%">
-                <RPieChart>
-                    <Pie
-                        data={data}
-                        innerRadius={60}
-                        outerRadius={90}
-                        paddingAngle={total > 0 ? 4 : 0}
-                        dataKey="value"
-                        startAngle={90}
-                        endAngle={-270}
-                        stroke="none"
+        <Card className="overflow-hidden border-border/70">
+            {/* ─── Header strip ─── */}
+            <div className="flex items-center gap-3 px-5 py-4 sm:px-6">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                    <UserPin className="size-5 text-slate-600 dark:text-slate-300" />
+                </span>
+                <div className="min-w-0">
+                    <h2 className="font-display text-base font-semibold text-foreground">{t('home.newJoinee')}</h2>
+                    <p className="text-xs text-muted-foreground">
+                        {t('home.systemNotification')}{joinDateLabel ? ` · ${joinDateLabel}` : ''}
+                    </p>
+                </div>
+            </div>
+
+            {/* ─── Banner strip ─── */}
+            <div className="relative h-40 overflow-hidden bg-gradient-to-b from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40">
+                {/* Decorative leaves — pure CSS shapes evoking the reference */}
+                <LeafCluster className="absolute -bottom-2 -left-3 text-emerald-500/70" />
+                <LeafCluster className="absolute -bottom-2 -right-3 scale-x-[-1] text-emerald-500/70" />
+                <span aria-hidden className="absolute right-12 top-3 size-2 rounded-full bg-emerald-400/60" />
+                <span aria-hidden className="absolute left-12 top-6 size-1.5 rounded-full bg-emerald-400/50" />
+                <span aria-hidden className="absolute right-1/3 top-8 size-1 rounded-full bg-emerald-400/60" />
+
+                {/* Welcome text */}
+                <div className="relative flex h-full items-center justify-center">
+                    <p className="font-display text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl">
+                        {t('home.welcomeOnBoard')}
+                    </p>
+                </div>
+            </div>
+
+            {/* ─── Footer strip with overlapping avatar ─── */}
+            <div className="relative flex flex-col items-center px-5 pb-5 pt-0 sm:px-6">
+                <Avatar className="-mt-9 mb-2 size-[72px] border-4 border-card shadow-md">
+                    {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
+                    <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 font-display text-xl font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
+                        {initialsOf(displayName || firstName || '')}
+                    </AvatarFallback>
+                </Avatar>
+                <p className="text-sm font-bold uppercase tracking-wider text-foreground">{displayName}</p>
+            </div>
+        </Card>
+    )
+}
+
+interface AnnouncementsListProps {
+    items: FeedAnnouncement[]
+    onViewAll: () => void
+    currentUserName?: string
+    currentUserAvatarUrl?: string | null
+}
+
+function AnnouncementsList({ items, onViewAll, currentUserName, currentUserAvatarUrl }: AnnouncementsListProps) {
+    const { t, i18n } = useTranslation()
+
+    return (
+        <Card className="overflow-hidden border-border/70">
+            <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-3 sm:px-6">
+                <h2 className="font-display text-base font-semibold text-foreground">
+                    {t('home.announcements')}
+                </h2>
+                {items.length > 0 ? (
+                    <button
+                        type="button"
+                        onClick={onViewAll}
+                        className="text-xs font-medium text-primary hover:underline"
                     >
-                        {data.map((slice, i) => (
-                            <Cell key={slice.name} fill={COLORS[i % COLORS.length]} />
+                        {t('home.viewAll')}
+                    </button>
+                ) : null}
+            </div>
+            <CardContent className="p-5 sm:p-6">
+                {items.length === 0 ? (
+                    <CardEmptyState icon={Megaphone} message={t('home.noAnnouncements')} />
+                ) : (
+                    <ul className="space-y-4">
+                        {items.map((a) => (
+                            <li key={a.id}>
+                                <AnnouncementCard
+                                    item={a}
+                                    locale={i18n.language}
+                                    currentUserName={currentUserName}
+                                    currentUserAvatarUrl={currentUserAvatarUrl}
+                                />
+                            </li>
                         ))}
-                        <foreignObject x="35%" y="35%" width="30%" height="30%">
-                            <div className="flex size-full flex-col items-center justify-center">
-                                <div className="font-display text-3xl font-bold tabular-figures">{available}</div>
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                    {total > 0 ? 'days left' : '—'}
-                                </div>
-                            </div>
-                        </foreignObject>
-                    </Pie>
-                    {total > 0 ? (
-                        <Tooltip
-                            formatter={((value: unknown, name: unknown) => [`${value} days`, String(name)]) as any}
-                            contentStyle={{
-                                borderRadius: 8,
-                                border: '1px solid hsl(var(--border))',
-                                fontSize: 12,
-                                background: 'hsl(var(--card) / 0.95)',
-                                backdropFilter: 'blur(8px)',
-                            }}
-                        />
-                    ) : null}
-                </RPieChart>
-            </ResponsiveContainer>
-            {total > 0 ? (
-                <div className="-mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <Legend swatch="#6366f1" label="Available" value={available} />
-                    <Legend swatch="#0ea5e9" label="Taken" value={taken} />
+                    </ul>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+function AnnouncementCard({
+    item,
+    locale,
+    currentUserName,
+    currentUserAvatarUrl,
+}: {
+    item: FeedAnnouncement
+    locale: string
+    currentUserName?: string
+    currentUserAvatarUrl?: string | null
+}) {
+    const { t } = useTranslation()
+    const dateLabel = formatJoinDate(item.publishedAt ?? item.createdAt, locale)
+    const authorInitials = initialsOf(item.authorName ?? '?')
+
+    // Lazy-load comments only when the user opens the thread — keeps the
+    // home feed snappy when there are several announcements but each
+    // thread is unread. The toggle flips `showComments`, which is also
+    // what flips the textarea/submit into "active" state.
+    const [showComments, setShowComments] = useState(false)
+    const [draft, setDraft] = useState('')
+    const { data: comments } = useAnnouncementComments(item.id, showComments)
+    const addComment = useAddAnnouncementComment(item.id)
+    const commentCount = comments?.length ?? 0
+
+    function submitComment() {
+        const body = draft.trim()
+        if (!body || addComment.isPending) return
+        addComment.mutate(
+            { body },
+            {
+                onSuccess: () => {
+                    setDraft('')
+                    setShowComments(true)
+                },
+                onError: (err: unknown) => {
+                    const message = err instanceof Error ? err.message : 'Could not post comment'
+                    toast.error(message)
+                },
+            },
+        )
+    }
+
+    return (
+        <article className="rounded-xl border border-border/60 bg-card p-4 transition-colors hover:border-border sm:p-5">
+            {/* ── Author identity + timestamp ──
+                Single source of authorship. The old card showed the author
+                once in a header strip AND again in a dedicated "Author"
+                footer block — redundant and amateurish. One avatar + name +
+                date row reads cleanly, like any modern social feed. */}
+            <header className="flex items-center gap-3">
+                <Avatar className="size-9 shrink-0">
+                    <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 text-[11px] font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
+                        {authorInitials}
+                    </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">{item.authorName ?? '—'}</p>
+                    {dateLabel ? <p className="text-xs text-muted-foreground">{dateLabel}</p> : null}
                 </div>
+                {item.pinned ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900">
+                        <Pin className="size-3" data-rtl-flip />
+                        {t('home.pinned', { defaultValue: 'Pinned' })}
+                    </span>
+                ) : null}
+            </header>
+
+            {/* ── Title + body ── */}
+            <div className="mt-3 space-y-1.5">
+                <h3 className="font-display text-base font-semibold leading-snug text-foreground">{item.title}</h3>
+                {item.body ? (
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+                ) : null}
+            </div>
+
+            {/* ── Comment affordance ──
+                A single, honest control. The disabled "React — coming soon"
+                button is gone (a button that does nothing reads as
+                unfinished). Tapping the count opens the thread + input. */}
+            <div className="mt-4 border-t border-border/40 pt-3">
+                <button
+                    type="button"
+                    onClick={() => setShowComments((v) => !v)}
+                    aria-expanded={showComments}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                    <MessageCircle className="size-4" />
+                    {t('home.commentsCountOther', { count: commentCount })}
+                </button>
+            </div>
+
+            {/* ── Existing comments (only when expanded) ── */}
+            {showComments && commentCount > 0 ? (
+                <ul className="mt-3 space-y-2.5">
+                    {comments?.map((c) => (
+                        <li key={c.id} className="flex items-start gap-2.5">
+                            <Avatar className="size-7 shrink-0">
+                                <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 text-[10px] font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
+                                    {initialsOf(c.authorName ?? '?')}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1 rounded-2xl bg-muted/50 px-3 py-2">
+                                <p className="text-[11px] font-medium text-foreground">
+                                    {c.authorName ?? '—'}
+                                    <span className="ms-1.5 font-normal tabular-nums text-muted-foreground">
+                                        {formatJoinDate(c.createdAt, locale)}
+                                    </span>
+                                </p>
+                                <p className="mt-0.5 whitespace-pre-line break-words text-sm text-foreground">{c.body}</p>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
             ) : null}
-        </ChartCard>
+
+            {/* ── Add a comment ──
+                Submit on click OR Enter; Shift+Enter inserts a newline.
+                Send button spins while in flight, disabled when empty. */}
+            <div className="mt-3 flex items-center gap-2.5">
+                <Avatar className="size-8 shrink-0">
+                    {currentUserAvatarUrl ? <AvatarImage src={currentUserAvatarUrl} /> : null}
+                    <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 text-[11px] font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
+                        {initialsOf(currentUserName)}
+                    </AvatarFallback>
+                </Avatar>
+                <div className="relative flex-1">
+                    <input
+                        type="text"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                submitComment()
+                            }
+                        }}
+                        placeholder={t('home.addComment')}
+                        disabled={addComment.isPending}
+                        className="w-full rounded-full border border-border/70 bg-background px-4 py-2 pe-10 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-60"
+                    />
+                    <button
+                        type="button"
+                        onClick={submitComment}
+                        disabled={!draft.trim() || addComment.isPending}
+                        aria-label={t('home.addComment')}
+                        className="absolute end-1.5 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent"
+                    >
+                        {addComment.isPending ? (
+                            <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                            <Send className="size-4" data-rtl-flip />
+                        )}
+                    </button>
+                </div>
+            </div>
+        </article>
+    )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Right-sidebar widgets
+// ──────────────────────────────────────────────────────────────────────────
+
+interface AttendanceSidebarCardProps {
+    todayRecord:
+        | {
+              checkIn?: string | null
+              checkOut?: string | null
+              hoursWorked?: number | string | null
+          }
+        | null
+        | undefined
+    isCheckedIn: boolean
+    checkedOutToday: boolean
+    liveTimer: string
+    attendancePunchEnabled: boolean
+    shift: { name?: string | null; startTime?: string | null; endTime?: string | null } | null
+    onCheckIn: () => void
+    onCheckOut: () => void
+    checkInPending: boolean
+    checkOutPending: boolean
+}
+
+function AttendanceSidebarCard({
+    todayRecord,
+    isCheckedIn,
+    checkedOutToday,
+    liveTimer,
+    attendancePunchEnabled,
+    shift,
+    onCheckIn,
+    onCheckOut,
+    checkInPending,
+    checkOutPending,
+}: AttendanceSidebarCardProps) {
+    const { t } = useTranslation()
+    const shiftRange = shift ? formatShiftRange(shift.startTime ?? null, shift.endTime ?? null) : null
+
+    return (
+        <Card className="border-border/70">
+            <CardContent className="space-y-3 p-5 sm:p-6">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <Clock className="size-3.5 text-primary" />
+                    {t('attendance.title')}
+                </div>
+
+                {shift?.name && shiftRange ? (
+                    <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        {shift.name} · {shiftRange}
+                    </div>
+                ) : null}
+
+                {todayRecord?.checkIn ? (
+                    // Time strip — colour-coded for in vs out so the
+                    // employee can read both states at a glance:
+                    //   • In  = emerald + LogIn icon
+                    //   • Out = rose + LogOut icon
+                    //   • Pending out = subtle pulsing dot
+                    // The plain `10:42 am → 10:42 am` rendering previously
+                    // gave no visual cue which time was which, so a same-
+                    // minute check-in / check-out (a real edge case but a
+                    // common test path) looked identical to a single read.
+                    <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 dark:bg-emerald-950/40">
+                            <LogIn className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span className="font-display text-base font-bold tabular-figures text-emerald-700 dark:text-emerald-300">
+                                {formatTime(todayRecord.checkIn)}
+                            </span>
+                        </span>
+                        <ArrowRight className="size-3.5 text-muted-foreground/60 shrink-0" aria-hidden />
+                        {todayRecord.checkOut ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-1 dark:bg-rose-950/40">
+                                <LogOut className="size-3.5 text-rose-600 dark:text-rose-400" />
+                                <span className="font-display text-base font-bold tabular-figures text-rose-700 dark:text-rose-300">
+                                    {formatTime(todayRecord.checkOut)}
+                                </span>
+                            </span>
+                        ) : (
+                            // In-progress chip — shows a live ticker so the
+                            // employee can see how long they've been clocked
+                            // in without the duration crowding the action
+                            // button below. The ticker comes from
+                            // `useLiveDuration`, which updates every second.
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50/60 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                                <span className="relative inline-flex size-2 items-center justify-center">
+                                    <span className="absolute size-2 rounded-full bg-emerald-500 animate-ping opacity-60" />
+                                    <span className="relative size-2 rounded-full bg-emerald-500" />
+                                </span>
+                                <span className="tabular-nums">{liveTimer}</span>
+                            </span>
+                        )}
+                        {todayRecord.hoursWorked && Number(todayRecord.hoursWorked) > 0 ? (
+                            <Badge variant="secondary" className="text-[10px] tabular-figures">
+                                {Number(todayRecord.hoursWorked).toFixed(2)}h
+                            </Badge>
+                        ) : null}
+                    </div>
+                ) : (
+                    <p className="font-display text-base font-semibold text-foreground">{t('home.checkInPrompt')}</p>
+                )}
+
+                {attendancePunchEnabled ? (
+                    // Three-state action area:
+                    //   1. Not yet checked in today → "Check in" button.
+                    //   2. Currently checked in     → "Check out" button + live timer.
+                    //   3. Already checked out      → small "Session complete" hint
+                    //      ABOVE a "Check in again" button. Backend supports
+                    //      multiple sessions per day (lunch out / back in /
+                    //      out again — see recordPunch alternation rules);
+                    //      the home card previously locked on `checkedOutToday`
+                    //      and refused to render a new check-in button, which
+                    //      forced employees to navigate to /me/attendance
+                    //      just to start a second session.
+                    <div className="pt-1 space-y-2">
+                        {checkedOutToday && !isCheckedIn ? (
+                            <span className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                <CheckCircle2 className="size-3.5" />
+                                Session complete
+                                {todayRecord?.hoursWorked && Number(todayRecord.hoursWorked) > 0 ? (
+                                    <span className="tabular-nums opacity-80">
+                                        · {Number(todayRecord.hoursWorked).toFixed(2)}h today
+                                    </span>
+                                ) : null}
+                            </span>
+                        ) : null}
+                        {isCheckedIn ? (
+                            // Check-out button — rose-tinted to match the
+                            // rose "out" chip the click is going to fill in.
+                            // The live timer no longer rides inside the
+                            // label (it's now on the in-progress chip
+                            // above), so the button reads as a clear,
+                            // single-intent action: "end the session".
+                            <Button
+                                onClick={onCheckOut}
+                                loading={checkOutPending}
+                                className="w-full bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500/40 dark:bg-rose-700 dark:hover:bg-rose-800"
+                            >
+                                <LogOut className="size-4" />
+                                {t('attendance.checkOut')}
+                            </Button>
+                        ) : (
+                            <Button
+                                onClick={onCheckIn}
+                                loading={checkInPending}
+                                className="w-full bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500/40 dark:bg-emerald-700 dark:hover:bg-emerald-800"
+                            >
+                                <LogIn className="size-4" />
+                                {/* "Check in" the first time today; "Check in again"
+                                    for a second/third session after a check-out. */}
+                                {checkedOutToday ? t('attendance.checkInAgain', { defaultValue: 'Check in again' }) : t('attendance.checkIn')}
+                            </Button>
+                        )}
+                    </div>
+                ) : null}
+            </CardContent>
+        </Card>
+    )
+}
+
+function ImportantLinksCard() {
+    const { t } = useTranslation()
+    return (
+        <Card className="border-border/70">
+            <CardContent className="p-5 sm:p-6">
+                <h2 className="mb-4 font-display text-base font-semibold text-foreground">
+                    {t('home.importantLinks')}
+                </h2>
+                <CardEmptyState icon={Link2} message={t('home.noLinksAvailable')} />
+            </CardContent>
+        </Card>
+    )
+}
+
+interface OpenTasksCardProps {
+    pendingLeaveCount: number
+    pendingProfileChangeCount: number
+    unread: number
+    openTasksTotal: number
+    onOpenLeave: () => void
+    onOpenProfile: () => void
+    onOpenNotifications: () => void
+}
+
+function OpenTasksCard({
+    pendingLeaveCount,
+    pendingProfileChangeCount,
+    unread,
+    openTasksTotal,
+    onOpenLeave,
+    onOpenProfile,
+    onOpenNotifications,
+}: OpenTasksCardProps) {
+    const { t } = useTranslation()
+
+    return (
+        <Card className="border-border/70">
+            <CardContent className="p-5 sm:p-6">
+                <h2 className="mb-4 font-display text-base font-semibold text-foreground">
+                    {t('home.openTasks')}
+                </h2>
+                {openTasksTotal === 0 ? (
+                    <CardEmptyState icon={Sparkles} message={t('home.noPendingTask')} />
+                ) : (
+                    <ul className="-mx-1 divide-y divide-border/60">
+                        {pendingLeaveCount > 0 ? (
+                            <TaskRow
+                                icon={CalendarDays}
+                                iconClass="text-amber-500"
+                                label={t(pendingLeaveCount === 1 ? 'home.pendingLeaveRequestOne' : 'home.pendingLeaveRequestOther', { count: pendingLeaveCount })}
+                                onClick={onOpenLeave}
+                            />
+                        ) : null}
+                        {pendingProfileChangeCount > 0 ? (
+                            <TaskRow
+                                icon={User}
+                                iconClass="text-sky-500"
+                                label={t(pendingProfileChangeCount === 1 ? 'home.pendingProfileChangeOne' : 'home.pendingProfileChangeOther', { count: pendingProfileChangeCount })}
+                                onClick={onOpenProfile}
+                            />
+                        ) : null}
+                        {unread > 0 ? (
+                            <TaskRow
+                                icon={Bell}
+                                iconClass="text-indigo-500"
+                                label={t(unread === 1 ? 'home.unreadNotificationsOne' : 'home.unreadNotificationsOther', { count: unread })}
+                                onClick={onOpenNotifications}
+                            />
+                        ) : null}
+                    </ul>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+function TaskRow({
+    icon: Icon,
+    iconClass,
+    label,
+    onClick,
+}: {
+    icon: React.ElementType
+    iconClass?: string
+    label: string
+    onClick: () => void
+}) {
+    return (
+        <li>
+            <button
+                type="button"
+                onClick={onClick}
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent/50"
+            >
+                <Icon className={cn('size-4 shrink-0', iconClass)} />
+                <span className="flex-1 text-sm">{label}</span>
+                <ExternalLink className="size-3.5 text-muted-foreground" data-rtl-flip />
+            </button>
+        </li>
+    )
+}
+
+interface UpcomingLeaveLite {
+    id: string
+    startDate: string
+    endDate: string
+    leaveType: string
+    status?: string | null
+}
+
+function WhoIsOutCard({
+    upcomingLeaves,
+    onViewAll,
+}: {
+    upcomingLeaves: UpcomingLeaveLite[]
+    onViewAll: () => void
+}) {
+    const { t } = useTranslation()
+    // Leave | Remote segmented view. Leave is data-backed (the signed-in
+    // employee's own approved/pending leaves); Remote has no portal data
+    // source yet, so it honestly reads zero until one is wired up.
+    const [tab, setTab] = useState<'leave' | 'remote'>('leave')
+
+    // Count this employee's own pending+approved leaves that COVER each of
+    // the next three days. Company-wide "who's out" isn't exposed to the
+    // portal, so the Leave tab reflects the current user's own schedule.
+    const leaveCounts = useMemo(() => {
+        const todayMs = Date.now()
+        const dayMs = 86_400_000
+        const inWindow = (d: Date, leave: UpcomingLeaveLite) => {
+            const start = new Date(leave.startDate).getTime()
+            const end = new Date(leave.endDate).getTime()
+            return d.getTime() >= start && d.getTime() <= end
+        }
+        return [0, 1, 2].map((offset) => {
+            const d = new Date(todayMs + offset * dayMs)
+            d.setHours(12, 0, 0, 0)
+            return upcomingLeaves.filter((l) => inWindow(d, l)).length
+        })
+    }, [upcomingLeaves])
+
+    // No remote-work data source yet — show real zeros rather than a fake count.
+    const counts = tab === 'leave' ? leaveCounts : [0, 0, 0]
+
+    return (
+        <Card className="border-border/70">
+            <CardContent className="p-5 sm:p-6">
+                <div className="mb-3 flex items-center justify-between">
+                    <h2 className="font-display text-base font-semibold text-foreground">
+                        {t('home.whoIsOut', { defaultValue: 'Who is out?' })}
+                    </h2>
+                    <button
+                        type="button"
+                        onClick={onViewAll}
+                        className="text-xs font-medium text-primary hover:underline"
+                    >
+                        {t('home.viewAll')}
+                    </button>
+                </div>
+
+                {/* Leave / Remote segmented control */}
+                <div className="mb-4 inline-flex rounded-lg bg-muted/60 p-0.5">
+                    {(['leave', 'remote'] as const).map((key) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setTab(key)}
+                            aria-pressed={tab === key}
+                            className={cn(
+                                'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                                tab === key
+                                    ? 'bg-card text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            {t(key === 'leave' ? 'home.leaveTab' : 'home.remoteTab', {
+                                defaultValue: key === 'leave' ? 'Leave' : 'Remote',
+                            })}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="space-y-2.5 text-sm">
+                    <WhoIsOutRow label={t('home.today')} count={counts[0]} />
+                    <WhoIsOutRow label={t('home.tomorrow')} count={counts[1]} />
+                    <WhoIsOutRow label={t('home.dayAfterTomorrow')} count={counts[2]} />
+                </div>
+
+                <div className="mt-5 border-t border-border/60 pt-4">
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t('home.myUpcomingLeaves')}
+                    </h3>
+                    {upcomingLeaves.length === 0 ? (
+                        <CardEmptyState icon={CalendarDays} message={t('home.noUpcomingLeaves')} />
+                    ) : (
+                        <ul className="space-y-2">
+                            {upcomingLeaves.map((l) => (
+                                <li key={l.id} className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2 text-xs">
+                                    <span className="font-medium capitalize text-foreground">{l.leaveType}</span>
+                                    <span className="text-muted-foreground">
+                                        {formatDate(l.startDate)} → {formatDate(l.endDate)}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+function WhoIsOutRow({ label, count }: { label: string; count: number }) {
+    return (
+        <div className="flex items-center justify-between">
+            <span className="text-sm text-foreground">
+                {label} <span className="text-muted-foreground">({count})</span>
+            </span>
+            <span className="text-xs text-muted-foreground">—</span>
+        </div>
     )
 }
 
 /**
- * Area chart of the user's last 6 months of net pay.
- * Newest first in the response — we reverse to get chronological order on the X axis.
+ * SVG glyph evoking the reference's plant cluster — kept inline (small) so it
+ * doesn't need a build-time asset import.
  */
-function PayslipTrendChart({ payslips }: { payslips: Payslip[] }) {
-    const last6 = payslips.slice(0, 6).reverse()
-    const data = last6.map((p) => ({
-        label: monthName(p.month).slice(0, 3),
-        net: Number(p.netSalary),
-        gross: Number(p.grossSalary),
-    }))
-
+function LeafCluster({ className }: { className?: string }) {
     return (
-        <ChartCard
-            title="Net pay trend"
-            subtitle={data.length ? `Last ${data.length} payslip${data.length === 1 ? '' : 's'}` : 'No payslips yet'}
-            icon={<TrendingUp className="size-4 text-emerald-500" />}
-            height={220}
+        <svg
+            viewBox="0 0 120 100"
+            fill="currentColor"
+            className={cn('size-32', className)}
+            aria-hidden
         >
-            {data.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Your first payslip will show up here.
-                </div>
-            ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data} margin={{ top: 6, right: 8, left: 8, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="netGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
-                                <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                        <XAxis
-                            dataKey="label"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                        />
-                        <YAxis
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                            tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
-                            width={36}
-                        />
-                        <Tooltip
-                            formatter={((value: unknown) => formatCurrency(value as number)) as any}
-                            labelFormatter={(label) => `${label}`}
-                            contentStyle={{
-                                borderRadius: 8,
-                                border: '1px solid hsl(var(--border))',
-                                fontSize: 12,
-                                background: 'hsl(var(--card) / 0.95)',
-                                backdropFilter: 'blur(8px)',
-                            }}
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="net"
-                            name="Net pay"
-                            stroke="#10b981"
-                            strokeWidth={2}
-                            fill="url(#netGradient)"
-                        />
-                    </AreaChart>
-                </ResponsiveContainer>
-            )}
-        </ChartCard>
-    )
-}
-
-function Legend({ swatch, label, value }: { swatch: string; label: string; value: number }) {
-    return (
-        <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full" style={{ background: swatch }} />
-            {label} <span className="font-semibold tabular-figures text-foreground">{value}</span>
-        </span>
+            <path d="M20 90 C 10 60, 30 40, 50 50 C 35 65, 28 80, 25 95 Z" opacity="0.7" />
+            <path d="M50 90 C 40 55, 60 35, 80 45 C 65 60, 58 80, 55 95 Z" opacity="0.55" />
+            <path d="M80 90 C 75 65, 90 50, 110 60 C 95 70, 88 82, 85 95 Z" opacity="0.7" />
+            <circle cx="40" cy="55" r="3" opacity="0.5" />
+            <circle cx="70" cy="50" r="2.5" opacity="0.5" />
+        </svg>
     )
 }
 

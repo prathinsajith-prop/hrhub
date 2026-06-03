@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { and, desc, eq, isNull, lte, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { announcements, announcementReceipts, employees, teamMembers } from '../../db/schema/index.js'
+import { announcements, announcementReceipts, announcementComments, employees, teamMembers } from '../../db/schema/index.js'
 import { recordActivity } from '../../lib/audit.js'
 
 // Employee-portal read surface for Company Announcements. HR creates/publishes
@@ -16,8 +16,33 @@ import { recordActivity } from '../../lib/audit.js'
  * list. Status flip only (no notification fan-out — that's the admin side's
  * job, fired on manual publish and on its own sweep). Never blocks the read.
  * Mirrors publishDueScheduled/expireDue in the admin service.
+ *
+ * Throttled per tenant. Every employee opening their feed previously fired
+ * two UPDATEs against `announcements`, even though the rows hardly ever
+ * change minute-to-minute. We cache the last sweep timestamp per tenant
+ * in-process and skip the SQL pass entirely when the previous sweep is
+ * fresh. The skip window is 60s — short enough that scheduled announcements
+ * still appear "within a minute" of their publish time, long enough that a
+ * busy tenant doesn't thrash the table on every read.
+ *
+ * In-memory cache is fine here: it's a hot-path optimisation, not a
+ * correctness guarantee. Multiple backend instances will each run the
+ * sweep at most once per 60s; a missed transition recovers on the next
+ * tick. If we later move to multi-region read replicas, this can move to
+ * Redis with the same TTL semantics.
  */
+const SWEEP_TTL_MS = 60_000
+const lastSweptAt = new Map<string, number>()
+
 async function flipDueTransitions(tenantId: string): Promise<void> {
+    const now = Date.now()
+    const previous = lastSweptAt.get(tenantId) ?? 0
+    if (now - previous < SWEEP_TTL_MS) return
+    // Record optimistically — if the SQL pass throws we still want the
+    // throttle in effect, otherwise every concurrent request would
+    // re-fire it. The catch below silences failures so we don't block
+    // the feed; a transient DB blip will be retried in 60s.
+    lastSweptAt.set(tenantId, now)
     try {
         await db.update(announcements)
             .set({ status: 'published' as never, publishedAt: sql`COALESCE(${announcements.publishedAt}, now())`, updatedAt: sql`now()` })
@@ -169,5 +194,65 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
             metadata: { kind: 'announcement', subKind: 'acknowledge', announcementId: id }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.send({ data: { ok: true } })
+    })
+
+    // ── Comments ────────────────────────────────────────────────────────────
+    //
+    // List + post comments on an announcement. The audience gate runs
+    // first so an employee who can't see the announcement can't see its
+    // thread either (and can't seed it with their own reply, which would
+    // leak existence back to legitimate viewers). Soft-deleted rows are
+    // filtered out of the list so moderation hides them without losing
+    // the audit trail in the DB.
+
+    fastify.get('/:id/comments', { ...auth }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const employeeId = request.user.employeeId
+        if (!employeeId || !(await canView(request.user.tenantId, employeeId, id))) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Announcement not found' })
+        }
+        const rows = await db.select().from(announcementComments)
+            .where(and(
+                eq(announcementComments.tenantId, request.user.tenantId),
+                eq(announcementComments.announcementId, id),
+                isNull(announcementComments.deletedAt),
+            ))
+            .orderBy(announcementComments.createdAt)
+        return reply.send({ data: rows })
+    })
+
+    fastify.post('/:id/comments', { ...auth }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const employeeId = request.user.employeeId
+        if (!employeeId || !(await canView(request.user.tenantId, employeeId, id))) {
+            return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Announcement not found' })
+        }
+        const rawBody = (request.body as any)?.body
+        const body = typeof rawBody === 'string' ? rawBody.trim() : ''
+        if (!body) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Comment body is required' })
+        }
+        // Cap comment length so the input field can't be used to seed
+        // multi-megabyte rows. 4 KB is plenty for a thread comment.
+        if (body.length > 4000) {
+            return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Comment is too long (max 4000 characters)' })
+        }
+        const parentIdRaw = (request.body as any)?.parentId
+        const parentId = typeof parentIdRaw === 'string' && parentIdRaw ? parentIdRaw : null
+        const [row] = await db.insert(announcementComments).values({
+            tenantId: request.user.tenantId,
+            announcementId: id,
+            parentId,
+            userId: request.user.id ?? null,
+            authorName: request.user.name ?? null,
+            body,
+        }).returning()
+        const [ann] = await db.select({ title: announcements.title }).from(announcements).where(eq(announcements.id, id)).limit(1)
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'announcement', entityId: id, entityName: ann?.title ?? 'Announcement', action: 'create',
+            metadata: { kind: 'announcement', subKind: 'comment', commentId: row.id }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: row })
     })
 }

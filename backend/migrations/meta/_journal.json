@@ -582,6 +582,27 @@
       "when": 1781971200000,
       "tag": "0082_recognition_points_award_uniq",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1780540800000,
+      "tag": "0083_announcement_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1782057600000,
+      "tag": "0084_list_pagination_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1782144000000,
+      "tag": "0085_employee_goals",
+      "breakpoints": true
     }
   ]
 }

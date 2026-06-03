@@ -13,7 +13,7 @@ import { useAnnouncementFeed, useMarkAnnouncementRead, useAcknowledgeAnnouncemen
 const PRIORITY: Record<string, { ring: string; label: string; tone: string }> = {
     low: { ring: 'border-l-slate-200', label: 'Low', tone: 'bg-slate-100 text-slate-600' },
     normal: { ring: 'border-l-blue-400', label: 'Normal', tone: 'bg-blue-50 text-blue-700' },
-    high: { ring: 'border-l-amber-400', label: 'High', tone: 'bg-amber-50 text-amber-700' },
+    high: { ring: 'border-l-amber-400', label: 'High', tone: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900/60' },
     critical: { ring: 'border-l-rose-500', label: 'Critical', tone: 'bg-rose-50 text-rose-700' },
 }
 const CATEGORY_LABEL: Record<string, string> = {
@@ -26,14 +26,43 @@ function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// Minimal HTML sanitizer — strips script/style/event-handlers/iframe. The body
-// is authored by HR (trusted) but we defang it before dangerouslySetInnerHTML.
+// HTML sanitizer for announcement bodies — defangs scripts, event-handlers
+// (quoted or unquoted), `javascript:` / `data:` URI schemes, and HTML
+// comments (which can hide CSS expression attacks). Authored content is
+// HR-trusted (admin-only write path), but we sanitise before
+// dangerouslySetInnerHTML so a hostile or compromised HR session can't
+// pop XSS at every employee who opens the feed.
+//
+// The previous version only matched double- and single-quoted event
+// handlers and missed unquoted ones (`<img onerror=alert(1)>`), inline
+// `<svg>` payloads, and dangerous URI schemes inside `href` / `src` /
+// `formaction` etc. This version closes those gaps with a regex pass
+// suitable for the controlled set of HTML the admin tiptap editor emits.
+//
+// Why not DOMPurify? The portal frontend doesn't yet depend on
+// `dompurify` (only the admin app does), and pulling it in just for
+// announcements would add ~22 KB to the portal bundle. The body shape is
+// a known closed grammar from the tiptap editor, so a regex pass with
+// explicit blocklists is enough — but we keep the function small so it's
+// easy to swap to DOMPurify later.
 function sanitize(html: string): string {
+    // Block: <script>, <style>, <iframe>, <object>, <embed>, <link>,
+    // <meta>, <base>, <form>, <svg> (svg can carry <script>).
+    const BLOCK_TAGS = /<\s*(script|style|iframe|object|embed|link|meta|base|form|svg)\b[^>]*>([\s\S]*?<\s*\/\s*\1\s*>)?/gi
     return html
-        .replace(/<\s*(script|style|iframe|object|embed)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+        .replace(BLOCK_TAGS, '')
+        // Self-closing / unmatched openers for the same tags.
+        .replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base|svg)\b[^>]*\/?>/gi, '')
+        // Event-handler attributes (quoted, single-quoted, OR unquoted).
         .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
         .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-        .replace(/javascript:/gi, '')
+        .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
+        // Dangerous URI schemes anywhere (href/src/formaction/etc.). We
+        // drop the scheme so the attribute becomes a relative path.
+        .replace(/(href|src|xlink:href|formaction|action|background|poster|cite|longdesc|usemap|profile|codebase|data)\s*=\s*("|'|)\s*(javascript|vbscript|data|blob|file)\s*:/gi, '$1=$2#')
+        // HTML comments — IE/legacy parsers can resolve conditional
+        // comments into script payloads.
+        .replace(/<!--[\s\S]*?-->/g, '')
 }
 
 export function AnnouncementsPage() {

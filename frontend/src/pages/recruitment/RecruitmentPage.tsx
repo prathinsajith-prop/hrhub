@@ -44,7 +44,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog, AddEmployeeDialog, type EmpForm } from '@/components/shared/action-dialogs'
 import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
-import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
 import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
@@ -442,6 +442,8 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
     if (p.email) setEmail(prev => prev || p.email!)
     if (p.phone) setPhone(prev => prev || p.phone!)
     if (p.experienceYears != null) setExperience(prev => prev || String(p.experienceYears))
+    if (p.education.length) setEducationHistory(prev => prev.length ? prev : p.education)
+    if (p.experience.length) setExperienceHistory(prev => prev.length ? prev : p.experience)
     const parsedBlock = buildCandidateParsedNote(p)
     if (parsedBlock) setNotes(prev => prev || parsedBlock)
   }
@@ -548,6 +550,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               />
             </div>
             <div className="space-y-1.5">
+              <Label>Gender</Label>
+              <GenderSelect value={gender} onChange={setGender} />
+            </div>
+            <div className="space-y-1.5">
               <Label>Experience (years)</Label>
               <NumericInput decimal={false} value={experience} onChange={(e) => setExperience(e.target.value)} />
             </div>
@@ -565,7 +571,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Source, recruiter remarks, etc." />
           </div>
 
-          {/* Address · Gender · Experience[] · Education[] */}
+          {/* Address (full width) · Experience[] · Education[] — Gender is up top. */}
           <div className="pt-4 border-t border-border/60">
             <CandidateProfileFields
               address={address}
@@ -577,6 +583,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               experience={experienceHistory}
               onExperienceChange={setExperienceHistory}
               compact
+              showGender={false}
             />
           </div>
         </DialogBody>

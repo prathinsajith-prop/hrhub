@@ -508,9 +508,9 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                                 >
                                     Expiry Date
                                     {expiryRequired ? (
-                                        <span className="ml-0.5 text-destructive">*</span>
+                                        <span className="ms-0.5 text-destructive">*</span>
                                     ) : (
-                                        <span className="ml-1 text-xs font-normal">(optional)</span>
+                                        <span className="ms-1 text-xs font-normal">(optional)</span>
                                     )}
                                 </Label>
                                 <DatePicker
@@ -622,7 +622,7 @@ function UploadDocumentDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                             Cancel
                         </Button>
                         <Button type="submit" loading={upload.isPending}>
-                            <Upload className="mr-1.5 size-3.5" />
+                            <Upload className="me-1.5 size-3.5" />
                             {upload.isPending ? 'Uploading…' : 'Submit'}
                         </Button>
                     </DialogFooter>

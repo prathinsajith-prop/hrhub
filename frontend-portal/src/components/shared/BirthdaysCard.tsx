@@ -29,8 +29,13 @@ export function BirthdaysCard({
     const rows = (data ?? []).filter((b) => b.isToday)
 
     return (
+        // Padding matches the rest of the right-rail siblings
+        // (AttendanceSidebarCard / OpenTasksCard / WhoIsOutCard all use
+        // `p-5 sm:p-6` on the card body with a `mb-3` heading). The card
+        // was previously split into a separate header block with
+        // `px-6 pb-3 pt-5` which broke the vertical rhythm of the rail.
         <Card className={cn('overflow-hidden border-border/70', className)}>
-            <div className="flex flex-row items-center justify-between gap-2 px-6 pb-3 pt-5">
+            <CardContent className="p-5 sm:p-6 space-y-3"><div className="flex flex-row items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 text-sm font-semibold">
                     <Cake className="size-4 text-pink-500" />
                     {title}
@@ -42,7 +47,6 @@ export function BirthdaysCard({
                     </Badge>
                 )}
             </div>
-            <CardContent className="space-y-2 pt-0">
                 {isLoading ? (
                     Array.from({ length: 2 }).map((_, i) => (
                         <Skeleton key={i} className="h-12 w-full rounded-lg" />

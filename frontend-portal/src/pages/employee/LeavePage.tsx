@@ -360,7 +360,7 @@ function NewLeaveDialog({
                     <div className="space-y-1.5">
                         <Label>
                             {t('leave.handoverTo', { defaultValue: 'Handover to' })}
-                            {handoverRequired ? <span className="ml-0.5 text-destructive">*</span> : null}
+                            {handoverRequired ? <span className="ms-0.5 text-destructive">*</span> : null}
                         </Label>
                         {colleagues.length > 0 ? (
                             <Select value={handoverTo} onValueChange={setHandoverTo}>
@@ -371,7 +371,7 @@ function NewLeaveDialog({
                                     {colleagues.map((c) => (
                                         <SelectItem key={c.id} value={c.id}>
                                             {c.firstName} {c.lastName}
-                                            {c.designation ? <span className="ml-1 text-xs text-muted-foreground"> · {c.designation}</span> : null}
+                                            {c.designation ? <span className="ms-1 text-xs text-muted-foreground"> · {c.designation}</span> : null}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

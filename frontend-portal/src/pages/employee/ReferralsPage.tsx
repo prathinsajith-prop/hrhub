@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles, UploadCloud } from 'lucide-react'
+import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles, UploadCloud, CalendarDays } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -18,10 +19,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+import { cn, initialsOf } from '@/lib/utils'
 import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
 import { parseResumeFile, extractResumeImage, type ParsedResume } from '@/lib/resume-parser'
-import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
 import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 
 // Pipeline stage → badge tone. Keys are the seeded recruitment stage keys; we
@@ -34,6 +35,18 @@ const STAGE_TONE: Record<string, string> = {
     offer: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     hired: 'bg-emerald-100 text-emerald-800 ring-emerald-300',
     rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
+}
+
+// Solid dot that sits inside the stage pill — gives the badge a clear status
+// "light" so the pipeline stage reads at a glance, not just by colour wash.
+const STAGE_DOT: Record<string, string> = {
+    received: 'bg-blue-500',
+    screening: 'bg-indigo-500',
+    interview: 'bg-violet-500',
+    assessment: 'bg-amber-500',
+    offer: 'bg-emerald-500',
+    hired: 'bg-emerald-600',
+    rejected: 'bg-rose-500',
 }
 
 const MAX_RESUME_BYTES = 10 * 1024 * 1024 // 10 MB — matches the server limit
@@ -80,7 +93,7 @@ export function ReferralsPage() {
 
             {isLoading ? (
                 <div className="space-y-3">
-                    {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+                    {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
                 </div>
             ) : list.length === 0 ? (
                 <Card>
@@ -100,34 +113,76 @@ export function ReferralsPage() {
                     </CardContent>
                 </Card>
             ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                     {list.map((r) => {
-                        const tone = STAGE_TONE[r.stage ?? ''] ?? 'bg-slate-50 text-slate-600 ring-slate-200'
+                        const stageKey = r.stage ?? ''
+                        const tone = STAGE_TONE[stageKey] ?? 'bg-slate-50 text-slate-600 ring-slate-200'
+                        const dot = STAGE_DOT[stageKey] ?? 'bg-slate-400'
                         return (
-                            <Card key={r.id}>
-                                <CardContent className="flex items-start justify-between gap-3 p-4">
-                                    <div className="min-w-0">
-                                        <p className="truncate text-sm font-semibold">{r.candidateName}</p>
-                                        <p className="truncate text-xs text-muted-foreground">{r.candidateEmail}</p>
-                                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                                            {r.jobNo && (
-                                                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-foreground/70">{r.jobNo}</span>
-                                            )}
-                                            {r.jobTitle && (
-                                                <span className="inline-flex items-center gap-1">
-                                                    <Briefcase className="size-3" /> {r.jobTitle}
+                            <Card
+                                key={r.id}
+                                className="group overflow-hidden border-border/70 transition-all hover:border-primary/40 hover:shadow-sm"
+                            >
+                                <CardContent className="p-4 sm:p-5">
+                                    <div className="flex items-start gap-3.5">
+                                        {/* Candidate avatar — visual anchor + initials fallback */}
+                                        <Avatar className="size-11 shrink-0 border border-border/60">
+                                            <AvatarFallback className="bg-gradient-to-br from-indigo-100 to-sky-100 text-sm font-semibold text-indigo-700 dark:from-indigo-950/60 dark:to-sky-950/40 dark:text-indigo-200">
+                                                {initialsOf(r.candidateName)}
+                                            </AvatarFallback>
+                                        </Avatar>
+
+                                        <div className="min-w-0 flex-1">
+                                            {/* Row 1 — name + email, stage pill on the right */}
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-semibold text-foreground">{r.candidateName}</p>
+                                                    <a
+                                                        href={`mailto:${r.candidateEmail}`}
+                                                        className="block truncate text-xs text-muted-foreground transition-colors hover:text-primary hover:underline"
+                                                    >
+                                                        {r.candidateEmail}
+                                                    </a>
+                                                </div>
+                                                <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium capitalize ring-1 ${tone}`}>
+                                                    <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
+                                                    {humanizeStage(r.stage)}
                                                 </span>
+                                            </div>
+
+                                            {/* Row 2 — the role they're referred for */}
+                                            {(r.jobTitle || r.jobNo) && (
+                                                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                                                    {r.jobNo && (
+                                                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-foreground/70">{r.jobNo}</span>
+                                                    )}
+                                                    {r.jobTitle && (
+                                                        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
+                                                            <Briefcase className="size-3.5 text-muted-foreground" data-rtl-flip /> {r.jobTitle}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
-                                            {r.hasResume && (
-                                                <span className="inline-flex items-center gap-0.5"><Paperclip className="size-3" /> {t('referrals.resume', { defaultValue: 'Resume' })}</span>
-                                            )}
-                                            {r.relationship && <span>· {r.relationship}</span>}
-                                            <span>· {new Date(r.createdAt).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+
+                                            {/* Row 3 — supporting meta, divided from the role above */}
+                                            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
+                                                {r.hasResume && (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <Paperclip className="size-3" data-rtl-flip /> {t('referrals.resume', { defaultValue: 'Resume' })}
+                                                    </span>
+                                                )}
+                                                {r.relationship && (
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <Users className="size-3" /> {r.relationship}
+                                                    </span>
+                                                )}
+                                                <span className="inline-flex items-center gap-1">
+                                                    <CalendarDays className="size-3" />
+                                                    {new Date(r.createdAt).toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ring-1 ${tone}`}>
-                                        {humanizeStage(r.stage)}
-                                    </span>
                                 </CardContent>
                             </Card>
                         )
@@ -280,6 +335,8 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     notes: prev.notes || buildReferralParsedNote(p),
                 }))
                 if (p.experienceYears != null) setExperience((prev) => prev || String(p.experienceYears))
+                if (p.education.length) setEducationHistory((prev) => prev.length ? prev : p.education)
+                if (p.experience.length) setExperienceHistory((prev) => prev.length ? prev : p.experience)
                 const filled = (['name', 'email', 'phone'] as const).filter((k) => p[k])
                 if (p.textLength === 0) {
                     setParsedNote(t('referrals.resumeUnreadable', { defaultValue: 'Couldn’t read text (scanned résumé?) — please fill the fields manually.' }))
@@ -433,6 +490,10 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                             <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder={t('referrals.nationalityPlaceholder', { defaultValue: 'e.g. Indian' })} />
                         </div>
                         <div className="space-y-1.5">
+                            <Label>{t('referrals.gender', { defaultValue: 'Gender' })}</Label>
+                            <GenderSelect value={gender} onChange={setGender} />
+                        </div>
+                        <div className="space-y-1.5">
                             <Label>{t('referrals.experience', { defaultValue: 'Experience (years)' })}</Label>
                             <Input
                                 type="number"
@@ -473,7 +534,8 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                         <Textarea rows={3} value={form.notes} onChange={(e) => set('notes')(e.target.value)} placeholder={t('referrals.notesPlaceholder', { defaultValue: 'A short note for the hiring team…' })} />
                     </div>
 
-                    {/* Extended candidate profile — Address, Gender, Experience[], Education[] */}
+                    {/* Extended candidate profile — Address (full width) · Experience[] · Education[].
+                        Gender is rendered up top beside Nationality. */}
                     <div className="pt-4 border-t border-border/60">
                         <CandidateProfileFields
                             address={address}
@@ -485,6 +547,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                             experience={experienceHistory}
                             onExperienceChange={setExperienceHistory}
                             compact
+                            showGender={false}
                         />
                     </div>
                 </div>

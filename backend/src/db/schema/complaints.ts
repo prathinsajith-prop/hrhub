@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 import { users } from './users.js'
@@ -33,6 +33,7 @@ export const complaints = pgTable('complaints', {
     index('idx_complaints_status').on(t.tenantId, t.status),
     index('idx_complaints_severity').on(t.tenantId, t.severity),
     index('idx_complaints_submitted_tenant').on(t.tenantId, t.submittedByEmployeeId),
+    index('idx_complaints_tenant_created').on(t.tenantId, t.createdAt).where(sql`${t.deletedAt} IS NULL`),
 ])
 
 export const complaintsRelations = relations(complaints, ({ one }) => ({

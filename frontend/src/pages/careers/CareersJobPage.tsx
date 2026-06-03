@@ -320,6 +320,9 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
             experience: prev.experience || (p.experienceYears != null ? String(p.experienceYears) : ''),
             coverNote: prev.coverNote || buildParsedNoteBlock(p),
         }))
+        // Pre-fill the multi-entry history blocks only when the user hasn't added any.
+        if (p.education.length) setEducation(prev => prev.length ? prev : p.education)
+        if (p.experience.length) setExperience(prev => prev.length ? prev : p.experience)
     }
 
     const submit = (e: FormEvent) => {

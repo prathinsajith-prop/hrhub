@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, boolean, bigint, date, timestamp, index } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 import { users } from './users.js'
@@ -43,6 +43,8 @@ export const documents = pgTable('documents', {
     tenantCategoryIdx: index('idx_documents_tenant_category').on(t.tenantId, t.category),
     tenantStatusIdx: index('idx_documents_tenant_status').on(t.tenantId, t.status),
     tenantEmployeeIdx: index('idx_documents_tenant_employee').on(t.tenantId, t.employeeId),
+    // Serves the paginated list: WHERE tenant AND deleted_at IS NULL ORDER BY created_at DESC.
+    tenantCreatedIdx: index('idx_documents_tenant_created').on(t.tenantId, t.createdAt).where(sql`${t.deletedAt} IS NULL`),
 }))
 
 export const documentsRelations = relations(documents, ({ one }) => ({

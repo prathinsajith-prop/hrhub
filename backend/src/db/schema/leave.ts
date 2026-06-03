@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, integer, date, timestamp, index, boolean, numeric, uniqueIndex } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 import { users } from './users.js'
@@ -32,6 +32,7 @@ export const leaveRequests = pgTable('leave_requests', {
     tenantStatusIdx: index('idx_leave_tenant_status').on(t.tenantId, t.status),
     // Employee leave history lookups
     tenantEmployeeIdx: index('idx_leave_tenant_employee').on(t.tenantId, t.employeeId),
+    tenantCreatedIdx: index('idx_leave_requests_tenant_created').on(t.tenantId, t.createdAt).where(sql`${t.deletedAt} IS NULL`),
 }))
 
 export const leaveRequestsRelations = relations(leaveRequests, ({ one }) => ({

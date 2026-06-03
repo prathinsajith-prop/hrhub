@@ -9,6 +9,29 @@
  * imported so they don't bloat the initial bundle.
  */
 
+/** One past role parsed from the résumé's experience section. Shape matches the
+ *  ExperienceEntry the candidate forms persist (dates are YYYY-MM). */
+export interface ParsedExperience {
+    title: string
+    company?: string
+    industry?: string
+    summary?: string
+    startDate?: string
+    endDate?: string
+    current?: boolean
+}
+
+/** One school parsed from the education section. Shape matches EducationEntry. */
+export interface ParsedEducation {
+    school: string
+    degree?: string
+    fieldOfStudy?: string
+    startDate?: string
+    endDate?: string
+    current?: boolean
+    summary?: string
+}
+
 export interface ParsedResume {
     name?: string
     email?: string
@@ -18,6 +41,10 @@ export interface ParsedResume {
     portfolio?: string
     skills: string[]
     experienceYears?: number
+    /** Structured work history parsed from the EXPERIENCE section. */
+    experience: ParsedExperience[]
+    /** Structured schooling parsed from the EDUCATION section. */
+    education: ParsedEducation[]
     /** 0–1 confidence per field key (email, phone, name, skills, …). */
     confidence: Record<string, number>
     /** Length of extracted text — 0 means extraction failed (e.g. scanned PDF). */
@@ -77,9 +104,143 @@ export async function extractResumeText(file: File): Promise<string> {
     }
 }
 
+// ── Section + date helpers (for experience / education extraction) ────────────
+
+const MONTH_MAP: Record<string, string> = {
+    jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+}
+const YEAR = '(?:19|20)\\d{2}'
+const MONTHWORD = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?'
+// A single date token: "Jan 2020", "01/2020", "2020".
+const DATE_TOKEN = `(?:${MONTHWORD}\\s*)?(?:\\d{1,2}[/-])?${YEAR}`
+const PRESENT = '(?:present|current|now|ongoing|to\\s*date|till\\s*date|date)'
+// A start–end range with various dashes / "to". End may be "Present".
+const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:–|—|-|to)\\s*(${PRESENT}|${DATE_TOKEN})`, 'i')
+
+// Section headers we care about, plus the broad set used only to detect where a
+// section ends (a header-like line starting any résumé section).
+const EXPERIENCE_HEADER_RE = /^(?:work\s+|professional\s+|employment\s+|career\s+)?(?:experience|work history|employment(?:\s+history)?|career(?:\s+history)?)\s*:?\s*$/i
+const EDUCATION_HEADER_RE = /^(?:education|academic(?:s|\s+background)?|qualifications?|educational background)\s*:?\s*$/i
+const ANY_HEADER_RE = /^(?:work|professional|employment|career|experience|education|academic|qualifications?|skills?|technical skills|projects?|certifications?|certificates?|summary|profile|objective|about(?:\s+me)?|contact|references?|languages?|interests?|hobbies|awards?|honou?rs?|publications?|volunteer(?:ing)?|activities|achievements?|personal\s+(?:details?|information)|declaration)\b[\s:]*$/i
+
+const SCHOOL_RE = /\b(university|college|institute|academy|school|polytechnic|faculty)\b/i
+const DEGREE_RE = /\b(bachelor'?s?|master'?s?|doctorate|ph\.?d|mba|b\.?sc|m\.?sc|b\.?a|m\.?a|b\.?eng|m\.?eng|b\.?tech|m\.?tech|b\.?com|diploma|associate|hnd|高中|secondary)\b[^,\n]*/i
+const BULLET_RE = /^\s*[•▪◦·*-]\s+/
+
+function tokenToYearMonth(tok: string): string | undefined {
+    const t = tok.trim().toLowerCase()
+    let m = t.match(/(\d{1,2})[/-](\d{4})/)            // MM/YYYY
+    if (m) return `${m[2]}-${m[1].padStart(2, '0')}`
+    m = t.match(/([a-z]{3,9})\.?\s*((?:19|20)\d{2})/)  // Mon YYYY
+    if (m && MONTH_MAP[m[1].slice(0, 3)]) return `${m[2]}-${MONTH_MAP[m[1].slice(0, 3)]}`
+    m = t.match(/\b((?:19|20)\d{2})\b/)                // YYYY only → assume Jan (user can refine)
+    if (m) return `${m[1]}-01`
+    return undefined
+}
+
+/** Pull the lines belonging to one section (header → next header / end). */
+function extractSection(lines: string[], headerRe: RegExp): string[] {
+    const start = lines.findIndex(l => l.trim().length <= 42 && headerRe.test(l.trim()))
+    if (start === -1) return []
+    const block: string[] = []
+    for (let i = start + 1; i < lines.length; i++) {
+        const t = lines[i].trim()
+        if (t.length <= 42 && ANY_HEADER_RE.test(t)) break   // next section
+        block.push(lines[i])
+    }
+    return block
+}
+
+/** Split an "entry header" into title/company on the first recognised separator. */
+function splitTitleCompany(text: string): { title: string; company?: string } {
+    const seps = [' — ', ' – ', ' | ', ' · ', ' at ', ' @ ', ', ', ' - ']
+    for (const sep of seps) {
+        const i = text.indexOf(sep)
+        if (i > 0) return { title: text.slice(0, i).trim(), company: text.slice(i + sep.length).trim() || undefined }
+    }
+    return { title: text.trim() }
+}
+
+/** Date-anchored entry parsing shared by experience + education sections. */
+function parseDatedEntries(block: string[]): Array<{ header: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }> {
+    const out: Array<{ header: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }> = []
+    const summaryFor: string[][] = []
+    for (let i = 0; i < block.length && out.length < 15; i++) {
+        const raw = block[i]
+        const line = raw.trim()
+        if (!line) continue
+        const dm = line.match(DATE_RANGE_RE)
+        if (!dm) continue
+        const startDate = tokenToYearMonth(dm[1])
+        const isPresent = new RegExp(`^${PRESENT}$`, 'i').test(dm[2].trim())
+        const endDate = isPresent ? undefined : tokenToYearMonth(dm[2])
+        // Header = this line minus the date, else the nearest non-bullet line above.
+        let header = line.replace(dm[0], '').replace(/[•|,–—\-(){}\s]+$/g, '').replace(/^[•|,–—\-(){}\s]+/g, '').trim()
+        if (header.length < 2) {
+            for (let j = i - 1; j >= 0 && j >= i - 2; j--) {
+                const prev = block[j].trim()
+                if (prev && !BULLET_RE.test(block[j]) && !DATE_RANGE_RE.test(prev)) { header = prev; break }
+            }
+        }
+        // Summary = following bullet/prose lines until the next dated line.
+        const sum: string[] = []
+        for (let k = i + 1; k < block.length; k++) {
+            if (block[k].match(DATE_RANGE_RE)) break
+            const s = block[k].trim()
+            if (s) sum.push(s.replace(BULLET_RE, '• '))
+        }
+        if (header.length >= 2) {
+            out.push({ header, summary: sum.join('\n').slice(0, 800) || undefined, startDate, endDate, current: isPresent })
+            summaryFor.push(sum)
+        }
+    }
+    return out
+}
+
+function parseExperienceBlock(block: string[]): ParsedExperience[] {
+    return parseDatedEntries(block).map(e => {
+        const { title, company } = splitTitleCompany(e.header)
+        return { title: title.slice(0, 120), company: company?.slice(0, 120), summary: e.summary, startDate: e.startDate, endDate: e.endDate, current: e.current }
+    }).filter(e => e.title.length >= 2)
+}
+
+function parseEducationBlock(block: string[]): ParsedEducation[] {
+    const dated = parseDatedEntries(block)
+    if (dated.length) {
+        return dated.map(e => mapEducation(e.header, e.summary, e.startDate, e.endDate, e.current)).filter(Boolean) as ParsedEducation[]
+    }
+    // No dates — fall back to school-keyword lines (each school = one entry).
+    const out: ParsedEducation[] = []
+    for (const raw of block) {
+        const line = raw.trim()
+        if (line && SCHOOL_RE.test(line) && out.length < 15) {
+            const ed = mapEducation(line)
+            if (ed) out.push(ed)
+        }
+    }
+    return out
+}
+
+function mapEducation(header: string, summary?: string, startDate?: string, endDate?: string, current?: boolean): ParsedEducation | null {
+    // school = the segment with a school keyword; degree/field from a degree phrase.
+    const parts = header.split(/\s+(?:—|–|\||·|,|-| at )\s+/).map(p => p.trim()).filter(Boolean)
+    const school = parts.find(p => SCHOOL_RE.test(p)) ?? parts[0] ?? header
+    const degMatch = header.match(DEGREE_RE)
+    let degree: string | undefined
+    let fieldOfStudy: string | undefined
+    if (degMatch) {
+        degree = degMatch[1]
+        const field = header.slice(degMatch.index! + degMatch[0].length).match(/(?:in|of)\s+([A-Za-z][A-Za-z &/]+)/i)
+        if (field) fieldOfStudy = field[1].trim().replace(/\s+$/, '')
+    }
+    if (!school || school.length < 2) return null
+    return { school: school.slice(0, 160), degree: degree?.slice(0, 80), fieldOfStudy: fieldOfStudy?.slice(0, 120), summary, startDate, endDate, current }
+}
+
 /** Heuristic field extraction from résumé text. */
 export function parseResumeText(text: string): ParsedResume {
-    const out: ParsedResume = { skills: [], confidence: {}, textLength: text.length }
+    const out: ParsedResume = { skills: [], experience: [], education: [], confidence: {}, textLength: text.length }
     if (!text.trim()) return out
 
     const email = text.match(EMAIL_RE)?.[0]
@@ -118,6 +279,38 @@ export function parseResumeText(text: string): ParsedResume {
         return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`, 'i').test(lower)
     })
     if (found.length) { out.skills = found; out.confidence.skills = found.length >= 3 ? 0.85 : 0.6 }
+
+    // Structured experience + education from their sections.
+    const expBlock = extractSection(lines, EXPERIENCE_HEADER_RE)
+    if (expBlock.length) {
+        out.experience = parseExperienceBlock(expBlock)
+        if (out.experience.length) out.confidence.experience = 0.6
+    }
+    const eduBlock = extractSection(lines, EDUCATION_HEADER_RE)
+    if (eduBlock.length) {
+        out.education = parseEducationBlock(eduBlock)
+        if (out.education.length) out.confidence.education = 0.6
+    }
+
+    // If years-of-experience wasn't stated outright, derive it from the work
+    // history span (earliest start → latest end / today).
+    if (out.experienceYears == null && out.experience.length) {
+        const starts = out.experience.map(e => e.startDate).filter(Boolean) as string[]
+        const ends = out.experience.map(e => (e.current ? null : e.endDate)).filter(Boolean) as string[]
+        if (starts.length) {
+            const minStart = starts.sort()[0]
+            const hasCurrent = out.experience.some(e => e.current)
+            const maxEnd = hasCurrent || !ends.length ? null : ends.sort().at(-1)!
+            const startYM = minStart.split('-').map(Number)
+            const endYM = maxEnd ? maxEnd.split('-').map(Number) : null
+            const now = new Date()
+            const months = endYM
+                ? (endYM[0] - startYM[0]) * 12 + (endYM[1] - startYM[1])
+                : (now.getFullYear() - startYM[0]) * 12 + (now.getMonth() + 1 - startYM[1])
+            const years = Math.max(0, Math.round((months / 12) * 10) / 10)
+            if (years > 0 && years < 60) { out.experienceYears = years; out.confidence.experienceYears = 0.5 }
+        }
+    }
 
     return out
 }
