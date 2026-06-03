@@ -325,7 +325,7 @@ export function LoginPage() {
               <Input
                 inputMode="text"
                 autoComplete="one-time-code"
-                placeholder="ABCDE-12345"
+                placeholder="Backup code"
                 value={backupCodeInput}
                 onChange={(e) => setBackupCodeInput(e.target.value.toUpperCase())}
                 onKeyDown={(e) => { if (e.key === 'Enter') onBackupCodeSubmit() }}
@@ -388,7 +388,7 @@ export function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@company.ae"
+                placeholder="Email address"
                 {...register('email')}
                 aria-invalid={!!errors.email}
                 className={cn('pl-9', errors.email && 'border-destructive focus-visible:ring-destructive')}

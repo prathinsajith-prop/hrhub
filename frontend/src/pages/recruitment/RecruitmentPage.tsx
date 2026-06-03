@@ -533,11 +533,11 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label required>Full name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Candidate name" />
             </div>
             <div className="space-y-1.5">
               <Label required>Email</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" />
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
@@ -570,7 +570,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           </div>
           <div className="space-y-1.5">
             <Label>Notes</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Source, recruiter remarks, etc." />
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Notes" />
           </div>
 
           {/* Address (full width) · Experience[] · Education[] — Gender is up top. */}

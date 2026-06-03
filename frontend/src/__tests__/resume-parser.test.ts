@@ -199,6 +199,83 @@ Bachelor of Engineering in Software Engineering — IIT Bombay
         expect(p.education[1].fieldOfStudy).toBe('Software Engineering')
     })
 
+    it('handles "title + company on separate lines above the date"', () => {
+        // Regression: when title and company sit on their own lines (no inline
+        // separator), the parser must collect BOTH and combine them rather than
+        // only grabbing the closer line as the title.
+        const text = `EXPERIENCE
+Senior Software Engineer
+Acme Corporation
+Jan 2020 - Present
+• Built things
+
+Software Engineer
+Beta Technologies LLC
+Jun 2017 – Dec 2019
+• Shipped features
+`
+        const p = parseResumeText(text)
+        expect(p.experience).toHaveLength(2)
+        expect(p.experience[0].title).toBe('Senior Software Engineer')
+        expect(p.experience[0].company).toBe('Acme Corporation')
+        expect(p.experience[1].title).toBe('Software Engineer')
+        expect(p.experience[1].company).toBe('Beta Technologies LLC')
+        // Summary should NOT leak the next entry's title.
+        expect(p.experience[0].summary).not.toContain('Software Engineer\n')
+    })
+
+    it('swaps line order when the closer line carries the title keyword', () => {
+        // Layout: company on top, title on bottom (common in some templates).
+        const text = `EXPERIENCE
+Acme Corporation
+Senior Software Engineer
+Jan 2020 - Present
+`
+        const p = parseResumeText(text)
+        expect(p.experience[0].title).toBe('Senior Software Engineer')
+        expect(p.experience[0].company).toBe('Acme Corporation')
+    })
+
+    it('splits degree + field when only " of " is present (specific field)', () => {
+        // "Bachelor of Computer Science" → degree="Bachelor", field="Computer Science"
+        // — Computer Science is a specific field, not the degree-name word.
+        const text = `EDUCATION
+Bachelor of Computer Science
+Stanford University
+2015 - 2019
+`
+        const p = parseResumeText(text)
+        expect(p.education[0].school).toBe('Stanford University')
+        expect(p.education[0].degree).toBe('Bachelor')
+        expect(p.education[0].fieldOfStudy).toBe('Computer Science')
+    })
+
+    it('keeps "Bachelor of Science" whole when no field word follows', () => {
+        // Science/Arts/Engineering are part of the degree name, not the field —
+        // splitting on "of" would turn "Bachelor of Science" into degree="Bachelor".
+        const text = `EDUCATION
+Master of Science
+MIT
+2019 - 2021
+`
+        const p = parseResumeText(text)
+        expect(p.education[0].degree).toBe('Master of Science')
+        expect(p.education[0].fieldOfStudy).toBeUndefined()
+    })
+
+    it('splits a compact degree prefix from a trailing field name', () => {
+        // "B.Tech Computer Engineering" → degree="B.Tech", field="Computer Engineering".
+        const text = `EDUCATION
+B.Tech Computer Engineering
+IIT Bombay
+2011 - 2015
+`
+        const p = parseResumeText(text)
+        expect(p.education[0].school).toBe('IIT Bombay')
+        expect(p.education[0].degree?.toLowerCase()).toMatch(/^b\.?tech/)
+        expect(p.education[0].fieldOfStudy).toBe('Computer Engineering')
+    })
+
     it('extracts address and nationality from the contact area', () => {
         const text = `Jane Doe
 Software Engineer

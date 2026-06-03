@@ -389,19 +389,19 @@ export function MyProfileContent() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Personal Email</Label>
-                                        <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="personal@example.com" className="h-9 text-sm" />
+                                        <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="Personal email address" className="h-9 text-sm" />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Phone</Label>
-                                        <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: sanitizePhone(e.target.value) }))} placeholder="+971 4 000 0000" className="h-9 text-sm" />
+                                        <Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: sanitizePhone(e.target.value) }))} placeholder="Phone number" className="h-9 text-sm" />
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Mobile</Label>
-                                        <Input value={form.mobileNo} onChange={set('mobileNo')} placeholder="+971 50 000 0000" className="h-9 text-sm" />
+                                        <Input value={form.mobileNo} onChange={set('mobileNo')} placeholder="Mobile number" className="h-9 text-sm" />
                                     </div>
                                     <div className="space-y-1.5 sm:col-span-2">
                                         <Label className="text-xs">Home Country Address</Label>
-                                        <Textarea value={form.homeCountryAddress} onChange={e => setForm(f => ({ ...f, homeCountryAddress: e.target.value }))} placeholder="Street, City, Country" rows={2} className="text-sm resize-none" />
+                                        <Textarea value={form.homeCountryAddress} onChange={e => setForm(f => ({ ...f, homeCountryAddress: e.target.value }))} placeholder="Home country address" rows={2} className="text-sm resize-none" />
                                     </div>
                                 </div>
                                 <p className="text-[11px] font-medium text-muted-foreground pt-1">Emergency Contact</p>
@@ -412,7 +412,7 @@ export function MyProfileContent() {
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className="text-xs">Contact Phone</Label>
-                                        <Input value={form.emergencyContactPhone} onChange={(e) => setForm(f => ({ ...f, emergencyContactPhone: sanitizePhone(e.target.value) }))} placeholder="+971 50 000 0000" className="h-9 text-sm" />
+                                        <Input value={form.emergencyContactPhone} onChange={(e) => setForm(f => ({ ...f, emergencyContactPhone: sanitizePhone(e.target.value) }))} placeholder="Phone number" className="h-9 text-sm" />
                                     </div>
                                 </div>
                             </div>

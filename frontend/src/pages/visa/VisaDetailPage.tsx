@@ -452,7 +452,7 @@ export function VisaDetailPage() {
                                         className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                                         value={costForm.amount || ''}
                                         onChange={e => setCostForm(f => ({ ...f, amount: Number(e.target.value) }))}
-                                        placeholder="0.00"
+                                        placeholder="Amount"
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -468,7 +468,7 @@ export function VisaDetailPage() {
                                     <Input
                                         value={costForm.receiptRef ?? ''}
                                         onChange={e => setCostForm(f => ({ ...f, receiptRef: e.target.value || undefined }))}
-                                        placeholder="INV-001"
+                                        placeholder="Invoice number"
                                     />
                                 </div>
                             </div>
@@ -480,7 +480,7 @@ export function VisaDetailPage() {
                                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                                     value={costForm.description ?? ''}
                                     onChange={e => setCostForm(f => ({ ...f, description: e.target.value || undefined }))}
-                                    placeholder="e.g. GDRFA entry permit fee"
+                                    placeholder="Cost description"
                                 />
                             </div>
                             <div className="flex gap-2 justify-end">
@@ -621,7 +621,7 @@ export function VisaDetailPage() {
                 title="Cancel visa application"
                 description="This will mark the application as cancelled and notify the audit log."
                 label="Reason (optional)"
-                placeholder="e.g. Employee withdrew offer"
+                placeholder="Reason"
                 multiline
                 allowEmpty
                 confirmLabel="Cancel application"
@@ -636,7 +636,7 @@ export function VisaDetailPage() {
                 title={visa.mohreRef ? 'Update stamping reference' : 'Record stamping reference'}
                 description="Enter the MOHRE or GDRFA reference number for this stamping."
                 label="Reference number"
-                placeholder="e.g. MOHRE-2025-XXXX"
+                placeholder="Reference number"
                 defaultValue={visa.mohreRef ?? ''}
                 hint={visa.mohreRef ? `Current: ${visa.mohreRef}` : 'Saved against the visa application and recorded in the activity log.'}
                 confirmLabel={visa.mohreRef ? 'Update reference' : 'Save reference'}

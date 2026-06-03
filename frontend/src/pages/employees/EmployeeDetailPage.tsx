@@ -572,7 +572,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
                       </Label>
                       <NumericInput
                         id={`cs-${c.id}`}
-                        placeholder={isPct ? '0' : '0.00'}
+                        placeholder={isPct ? 'Percentage' : 'Amount'}
                         value={rawValue}
                         onChange={(ev) =>
                           setComponentAmounts((prev) => ({ ...prev, [c.id]: ev.target.value }))
@@ -1967,7 +1967,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Visa Number</Label>
-                        <Input value={visaForm.visaNumber} onChange={e => setVisaForm(f => ({ ...f, visaNumber: e.target.value }))} placeholder="e.g. 201/2024/12345" />
+                        <Input value={visaForm.visaNumber} onChange={e => setVisaForm(f => ({ ...f, visaNumber: e.target.value }))} placeholder="Visa number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Visa Issue Date</Label>
@@ -2003,7 +2003,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Emirates ID</Label>
-                        <Input value={visaForm.emiratesId} onChange={e => setVisaForm(f => ({ ...f, emiratesId: e.target.value }))} placeholder="784-XXXX-XXXXXXX-X" />
+                        <Input value={visaForm.emiratesId} onChange={e => setVisaForm(f => ({ ...f, emiratesId: e.target.value }))} placeholder="Emirates ID number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>EID Expiry</Label>
@@ -2011,7 +2011,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Passport No.</Label>
-                        <Input value={visaForm.passportNo} onChange={e => setVisaForm(f => ({ ...f, passportNo: e.target.value }))} placeholder="e.g. A12345678" />
+                        <Input value={visaForm.passportNo} onChange={e => setVisaForm(f => ({ ...f, passportNo: e.target.value }))} placeholder="Passport number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Passport Expiry</Label>
@@ -2019,7 +2019,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Labour Card No.</Label>
-                        <Input value={visaForm.labourCardNumber} onChange={e => setVisaForm(f => ({ ...f, labourCardNumber: e.target.value }))} placeholder="e.g. 12345678" />
+                        <Input value={visaForm.labourCardNumber} onChange={e => setVisaForm(f => ({ ...f, labourCardNumber: e.target.value }))} placeholder="Labour card number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Labour Card Expiry</Label>
@@ -3367,7 +3367,7 @@ function TerminateDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>Deductions (AED)</Label>
-                <NumericInput decimal value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="0.00" />
+                <NumericInput decimal value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="Amount" />
               </div>
             </div>
 
@@ -3490,7 +3490,7 @@ function DependentFormDialog({
         <div className="flex flex-col gap-4 py-2">
           <div className="space-y-1.5">
             <Label>Full Name *</Label>
-            <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah Johnson" />
+            <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Full name" />
           </div>
 
           <div className="space-y-1.5">
@@ -3523,7 +3523,7 @@ function DependentFormDialog({
             <Label>
               Visa Number <span className="text-muted-foreground font-normal text-xs">(optional)</span>
             </Label>
-            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="784-XXXX" />
+            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="Visa number" />
           </div>
 
           <div className="space-y-1.5">

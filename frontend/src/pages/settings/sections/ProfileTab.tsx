@@ -147,11 +147,11 @@ export function ProfileTab() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5">
                     <div>
                         <Label htmlFor="profile-first-name">{t('settingsDetail.profile.firstName')}</Label>
-                        <Input id="profile-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Jane" />
+                        <Input id="profile-first-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
                     </div>
                     <div>
                         <Label htmlFor="profile-last-name">{t('settingsDetail.profile.lastName')}</Label>
-                        <Input id="profile-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Smith" />
+                        <Input id="profile-last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
                     </div>
                     <div>
                         <Label htmlFor="profile-email">{t('common.email')}</Label>

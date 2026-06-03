@@ -849,7 +849,7 @@ function GiveRecognitionDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                         <Input
                             value={form.title}
                             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                            placeholder="e.g. Delivered the migration ahead of schedule"
+                            placeholder="Headline"
                             maxLength={120}
                         />
                     </div>

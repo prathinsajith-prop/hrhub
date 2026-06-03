@@ -136,7 +136,7 @@ export function TeamFormDialog({ open, onClose, editTeam, lockedDepartmentId, lo
                             id="team-name"
                             value={name}
                             onChange={e => { setName(e.target.value); setErrors(err => ({ ...err, name: '' })) }}
-                            placeholder="e.g. Frontend Squad"
+                            placeholder="Team name"
                             aria-invalid={!!errors.name}
                         />
                     </FormField>

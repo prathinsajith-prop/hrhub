@@ -366,7 +366,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
                         <div className="space-y-1.5">
                             <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
-                            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
+                            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title" />
                         </div>
 
                         <div className="space-y-1.5">
@@ -386,7 +386,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
                         <div className="space-y-1.5">
                             <Label className="flex items-center gap-1.5"><MapPin className="size-3.5 text-muted-foreground" />Location</Label>
-                            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dubai Marina" />
+                            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" />
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
@@ -454,7 +454,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onInputChange={setReqInput}
                             onKeyDown={onReqKeyDown}
                             onAdd={addRequirement}
-                            placeholder="e.g. 3+ years experience · Press Enter to add"
+                            placeholder="Add a requirement · Press Enter"
                         />
 
                         <ChipsField
@@ -467,7 +467,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onInputChange={setSkillInput}
                             onKeyDown={onSkillKeyDown}
                             onAdd={addSkill}
-                            placeholder="e.g. TypeScript, Negotiation · Press Enter to add"
+                            placeholder="Add a skill · Press Enter"
                             chipClassName="bg-sky-100 text-sky-700"
                         />
 
@@ -481,7 +481,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onInputChange={setQualInput}
                             onKeyDown={onQualKeyDown}
                             onAdd={addQualification}
-                            placeholder="e.g. Bachelor's in CS, PMP · Press Enter to add"
+                            placeholder="Add a qualification · Press Enter"
                             chipClassName="bg-emerald-100 text-emerald-700"
                         />
                     </div>
@@ -1121,10 +1121,10 @@ export function AddEmployeeDialog({
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="First Name" required error={errors.firstName}>
-                                    <Input value={form.firstName} onChange={set('firstName')} placeholder="Ahmed" aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
+                                    <Input value={form.firstName} onChange={set('firstName')} placeholder="First name" aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
                                 </FormField>
                                 <FormField label="Last Name" required error={errors.lastName}>
-                                    <Input value={form.lastName} onChange={set('lastName')} placeholder="Al Mansouri" aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
+                                    <Input value={form.lastName} onChange={set('lastName')} placeholder="Last name" aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1163,7 +1163,7 @@ export function AddEmployeeDialog({
                                 </FormField>
                                 <div className="space-y-1.5">
                                     <Label>Passport No</Label>
-                                    <Input value={form.passportNo} onChange={set('passportNo')} placeholder="A12345678" />
+                                    <Input value={form.passportNo} onChange={set('passportNo')} placeholder="Passport number" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1176,7 +1176,7 @@ export function AddEmployeeDialog({
                                     />
                                 </FormField>
                                 <FormField label="Personal Email" error={errors.personalEmail}>
-                                    <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="ahmed@gmail.com" aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
+                                    <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="Email address" aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1210,7 +1210,7 @@ export function AddEmployeeDialog({
                                 </FormField>
                             </div>
                             <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
-                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="Email address" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
                             {/* Department picker - Branch and Division auto-assigned */}
                             <div className="space-y-1.5">
@@ -1308,7 +1308,7 @@ export function AddEmployeeDialog({
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Work Location</Label>
-                                    <Input value={form.workLocation} onChange={set('workLocation')} placeholder="e.g. Dubai HQ" />
+                                    <Input value={form.workLocation} onChange={set('workLocation')} placeholder="Work location" />
                                 </div>
                             </div>
                             {form.contractType === 'probation' && (
@@ -1448,27 +1448,27 @@ export function AddEmployeeDialog({
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label>Account Number</Label>
-                                            <Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" />
+                                            <Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="Account number" />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
                                             <Label>Bank Name</Label>
-                                            <Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" />
+                                            <Input value={form.bankName} onChange={set('bankName')} placeholder="Bank name" />
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label>Branch</Label>
-                                            <Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" />
+                                            <Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="Branch name" />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
                                             <Label>IBAN Number</Label>
-                                            <Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" />
+                                            <Input value={form.iban} onChange={set('iban')} placeholder="IBAN" />
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label>Swift Code</Label>
-                                            <Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" />
+                                            <Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="SWIFT code" />
                                         </div>
                                     </div>
                                 </div>
@@ -1786,7 +1786,7 @@ export function EditEmploymentDialog({
                                 <DatePicker value={form.joinDate} min="1970-01-01" onChange={v => { setForm(f => ({ ...f, joinDate: v ?? '' })); if (errors.joinDate) setErrors(p => { const n = { ...p }; delete n.joinDate; return n }) }} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                             </FormField>
                             <FormField label="Work Email" error={errors.workEmail} hint="Used for login and communications">
-                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="Email address" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
                         </div>
                         <div className="space-y-1.5">
@@ -2158,15 +2158,15 @@ export function EditPayrollDialog({
                             <div className="space-y-3">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="space-y-1.5"><Label>Account Name</Label><Input value={form.accountName} onChange={set('accountName')} placeholder="Account holder name" /></div>
-                                    <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" /></div>
+                                    <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="Account number" /></div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" /></div>
-                                    <div className="space-y-1.5"><Label>Bank Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" /></div>
+                                    <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="Bank name" /></div>
+                                    <div className="space-y-1.5"><Label>Bank Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="Branch name" /></div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" /></div>
-                                    <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" /></div>
+                                    <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="IBAN" /></div>
+                                    <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="SWIFT code" /></div>
                                 </div>
                             </div>
                         )}
@@ -2408,7 +2408,7 @@ export function EditJobDialog({
                             onInputChange={setReqInput}
                             onKeyDown={onEditReqKeyDown}
                             onAdd={addEditRequirement}
-                            placeholder="e.g. 3+ years experience · Press Enter to add"
+                            placeholder="Add a requirement · Press Enter"
                         />
 
                         <ChipsField
@@ -2421,7 +2421,7 @@ export function EditJobDialog({
                             onInputChange={setSkillInput}
                             onKeyDown={onSkillKeyDownEdit}
                             onAdd={addSkillEdit}
-                            placeholder="e.g. TypeScript, Negotiation · Press Enter to add"
+                            placeholder="Add a skill · Press Enter"
                             chipClassName="bg-sky-100 text-sky-700"
                         />
 
@@ -2435,7 +2435,7 @@ export function EditJobDialog({
                             onInputChange={setQualInput}
                             onKeyDown={onQualKeyDownEdit}
                             onAdd={addQualEdit}
-                            placeholder="e.g. Bachelor's in CS, PMP · Press Enter to add"
+                            placeholder="Add a qualification · Press Enter"
                             chipClassName="bg-emerald-100 text-emerald-700"
                         />
                     </div>
@@ -2521,7 +2521,7 @@ export function EditDocumentDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label required>Document Type</Label>
-                            <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="e.g. passport" />
+                            <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="Document type" />
                         </div>
                     </div>
                     <div className="space-y-1.5">

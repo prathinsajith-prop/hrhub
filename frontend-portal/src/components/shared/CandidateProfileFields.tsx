@@ -110,14 +110,14 @@ function ExperienceForm({ draft, onChange }: { draft: ExperienceEntry; onChange:
     return (
         <>
             <FieldShell label="Title" required>
-                <Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} placeholder="e.g. Senior Frontend Engineer" autoFocus />
+                <Input value={draft.title} onChange={(e) => patch({ title: e.target.value })} placeholder="Job title" autoFocus />
             </FieldShell>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FieldShell label="Company" optional>
-                    <Input value={draft.company ?? ''} onChange={(e) => patch({ company: e.target.value })} placeholder="e.g. Acme Corp" />
+                    <Input value={draft.company ?? ''} onChange={(e) => patch({ company: e.target.value })} placeholder="Company name" />
                 </FieldShell>
                 <FieldShell label="Industry" optional>
-                    <Input value={draft.industry ?? ''} onChange={(e) => patch({ industry: e.target.value })} placeholder="e.g. Fintech" />
+                    <Input value={draft.industry ?? ''} onChange={(e) => patch({ industry: e.target.value })} placeholder="Industry" />
                 </FieldShell>
             </div>
             <FieldShell label="Summary" optional>
@@ -141,14 +141,14 @@ function EducationForm({ draft, onChange }: { draft: EducationEntry; onChange: (
     return (
         <>
             <FieldShell label="School" required>
-                <Input value={draft.school} onChange={(e) => patch({ school: e.target.value })} placeholder="e.g. American University of Sharjah" autoFocus />
+                <Input value={draft.school} onChange={(e) => patch({ school: e.target.value })} placeholder="School or university name" autoFocus />
             </FieldShell>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <FieldShell label="Degree" optional>
-                    <Input value={draft.degree ?? ''} onChange={(e) => patch({ degree: e.target.value })} placeholder="e.g. Bachelor's" />
+                    <Input value={draft.degree ?? ''} onChange={(e) => patch({ degree: e.target.value })} placeholder="Degree" />
                 </FieldShell>
                 <FieldShell label="Field of study" optional>
-                    <Input value={draft.fieldOfStudy ?? ''} onChange={(e) => patch({ fieldOfStudy: e.target.value })} placeholder="e.g. Computer Science" />
+                    <Input value={draft.fieldOfStudy ?? ''} onChange={(e) => patch({ fieldOfStudy: e.target.value })} placeholder="Field of study" />
                 </FieldShell>
             </div>
             <FieldShell label="Summary" optional>

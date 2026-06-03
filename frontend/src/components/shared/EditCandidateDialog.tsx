@@ -193,7 +193,7 @@ export function EditCandidateDialog({
                             value={form.notes}
                             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                             rows={4}
-                            placeholder="Recruiter remarks, parsed links, source, etc."
+                            placeholder="Recruiter notes"
                         />
                     </div>
                 </DialogBody>

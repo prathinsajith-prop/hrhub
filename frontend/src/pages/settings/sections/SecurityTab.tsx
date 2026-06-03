@@ -272,7 +272,7 @@ function TwoFactorCard() {
                                     id="regen_token"
                                     inputMode="numeric"
                                     autoComplete="one-time-code"
-                                    placeholder="000000"
+                                    placeholder="6-digit code"
                                     maxLength={6}
                                     value={token}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value.replace(/\D/g, ''))}
@@ -320,7 +320,7 @@ function TwoFactorCard() {
                                     id="totp_token"
                                     inputMode="numeric"
                                     autoComplete="one-time-code"
-                                    placeholder="000000"
+                                    placeholder="6-digit code"
                                     maxLength={6}
                                     value={token}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value.replace(/\D/g, ''))}
@@ -348,7 +348,7 @@ function TwoFactorCard() {
                                     id="disable_token"
                                     inputMode="numeric"
                                     autoComplete="one-time-code"
-                                    placeholder="000000"
+                                    placeholder="6-digit code"
                                     maxLength={6}
                                     value={token}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setToken(e.target.value.replace(/\D/g, ''))}
@@ -435,7 +435,7 @@ function IpAllowlistCard() {
                     )}
                     <div className="flex gap-2">
                         <Input
-                            placeholder="e.g. 192.168.1.0/24"
+                            placeholder="IP range in CIDR notation"
                             value={newEntry}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEntry(e.target.value)}
                             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleAdd() }}

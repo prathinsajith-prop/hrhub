@@ -279,7 +279,7 @@ export interface PhoneInputProps {
     ref?: Ref<HTMLInputElement>
 }
 
-export function PhoneInput({ value = '', onChange, defaultCountry = 'AE', placeholder = '50 123 4567', id, name, disabled, className, invalid, onValidate, ref }: PhoneInputProps) {
+export function PhoneInput({ value = '', onChange, defaultCountry = 'AE', placeholder = 'Phone number', id, name, disabled, className, invalid, onValidate, ref }: PhoneInputProps) {
     // Derive country + national digits from the current value.
     const { iso2, nationalDigits } = useMemo(() => {
         const trimmed = value.trim()

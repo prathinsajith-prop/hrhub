@@ -128,7 +128,7 @@ function LeaveAdjustmentDialog({ employeeId, onClose }: { employeeId: string; on
                             <NumericInput
                                 value={form.year}
                                 onChange={e => { setForm(f => ({ ...f, year: e.target.value })); setErrors(er => ({ ...er, year: '' })) }}
-                                placeholder="2025"
+                                placeholder="Year"
                                 maxDecimals={0}
                             />
                         </FormField>
@@ -247,7 +247,7 @@ function AirTicketDialog({ employeeId, ticket, onClose }: { employeeId: string; 
                             <NumericInput
                                 value={form.year}
                                 onChange={e => { setForm(f => ({ ...f, year: e.target.value })); setErrors(er => ({ ...er, year: '' })) }}
-                                placeholder="2025"
+                                placeholder="Year"
                                 maxDecimals={0}
                             />
                         </FormField>
@@ -274,7 +274,7 @@ function AirTicketDialog({ employeeId, ticket, onClose }: { employeeId: string; 
                             <NumericInput
                                 value={form.amount}
                                 onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                                placeholder="0.00"
+                                placeholder="Amount"
                                 maxDecimals={2}
                             />
                         </FormField>
@@ -378,7 +378,7 @@ function OffsetDialog({ employeeId, offset, onClose }: { employeeId: string; off
                             <NumericInput
                                 value={form.days}
                                 onChange={e => { setForm(f => ({ ...f, days: e.target.value })); setErrors(er => ({ ...er, days: '' })) }}
-                                placeholder="1"
+                                placeholder="Number of days"
                                 maxDecimals={2}
                                 aria-invalid={!!errors.days}
                             />

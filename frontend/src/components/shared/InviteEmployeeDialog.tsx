@@ -294,7 +294,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                         type="text"
                                         value={emailInput}
                                         onChange={e => setEmailInput(e.target.value)}
-                                        placeholder="employee@example.com"
+                                        placeholder="Email address"
                                         className="pl-9"
                                     />
                                 </div>

@@ -83,7 +83,7 @@ export function NewOrganizationDialog({ open, onOpenChange, onSuccess }: Props) 
               id="org-name"
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
-              placeholder="Acme HR LLC"
+              placeholder="Company name"
               required
             />
           </div>

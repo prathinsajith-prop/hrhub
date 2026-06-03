@@ -308,7 +308,7 @@ export function LoginPage() {
                                     inputMode="email"
                                     value={email}
                                     onChange={(e) => onEmailChange(e.target.value)}
-                                    placeholder="you@company.com"
+                                    placeholder="Email address"
                                     autoComplete="email"
                                     autoCapitalize="off"
                                     autoCorrect="off"

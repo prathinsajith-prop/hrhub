@@ -307,7 +307,7 @@ function GoalDialog({
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             maxLength={200}
-                            placeholder={t('goals.titlePlaceholder', { defaultValue: 'e.g. Complete advanced Excel training' }) as string}
+                            placeholder={t('goals.titlePlaceholder', { defaultValue: 'Goal title' }) as string}
                             autoFocus
                         />
                     </div>

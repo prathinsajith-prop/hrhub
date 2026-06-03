@@ -1593,7 +1593,7 @@ function WorkflowDialog({ open, onOpenChange, editing }: { open: boolean; onOpen
                         {sendsEmail && (
                             <div>
                                 <Label>{t('orgSettings.offboardingFlow.workflows.subject')}</Label>
-                                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="{{employeeName}} has initiated offboarding" />
+                                <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Email subject" />
                             </div>
                         )}
                         <div>

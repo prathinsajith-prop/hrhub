@@ -581,7 +581,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                 value={newTitle}
                                 onChange={(e) => setNewTitle(e.target.value)}
                                 aria-label="Title"
-                                placeholder="e.g. Issue laptop"
+                                placeholder="Task title"
                                 className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
                             />
                         </div>
@@ -593,7 +593,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                     value={newOwner}
                                     onChange={(e) => setNewOwner(e.target.value)}
                                     aria-label="Owner"
-                                    placeholder="e.g. IT, HR"
+                                    placeholder="Owner"
                                     className="w-full h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
                                 />
                             </div>
@@ -603,7 +603,7 @@ function StepsTab({ checklist }: { checklist: OnboardingChecklist }) {
                                     decimal={false}
                                     value={newSlaDays}
                                     onChange={(e) => setNewSlaDays(e.target.value)}
-                                    placeholder="e.g. 3"
+                                    placeholder="Number of days"
                                     className="h-9"
                                 />
                             </div>

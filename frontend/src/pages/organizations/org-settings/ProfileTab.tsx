@@ -121,7 +121,7 @@ export function ProfileTab() {
                                 id="company_code"
                                 value={form.companyCode ?? ''}
                                 onChange={e => set('companyCode', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
-                                placeholder="e.g. PROP"
+                                placeholder="Company code"
                                 maxLength={4}
                                 className="font-mono tracking-widest"
                             />
@@ -166,7 +166,7 @@ export function ProfileTab() {
                                 type="tel"
                                 value={form.phone ?? ''}
                                 onChange={e => set('phone', e.target.value)}
-                                placeholder="+971 50 123 4567"
+                                placeholder="Phone number"
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -176,7 +176,7 @@ export function ProfileTab() {
                                 type="email"
                                 value={form.companyEmail ?? ''}
                                 onChange={e => set('companyEmail', e.target.value)}
-                                placeholder="info@company.ae"
+                                placeholder="Email address"
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -186,7 +186,7 @@ export function ProfileTab() {
                                 type="url"
                                 value={form.companyWebsite ?? ''}
                                 onChange={e => set('companyWebsite', e.target.value)}
-                                placeholder="https://company.ae"
+                                placeholder="Website URL"
                             />
                         </div>
                         <div className="space-y-1.5 md:col-span-2">

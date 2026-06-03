@@ -202,7 +202,7 @@ function AddItemDialog({ exitId, open, onOpenChange }: { exitId: string; open: b
                             <Label className="text-xs">
                                 {t('exit.clearancePanel.fieldName', { defaultValue: 'Name' })} <span className="text-rose-500">*</span>
                             </Label>
-                            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Return laptop, Hand-over knowledge base" />
+                            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Item to return" />
                         </div>
                         <div className="space-y-1">
                             <Label className="text-xs">{t('exit.clearancePanel.fieldDescription', { defaultValue: 'Description (optional)' })}</Label>

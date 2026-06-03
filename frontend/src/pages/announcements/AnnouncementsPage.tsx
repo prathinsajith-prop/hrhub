@@ -242,7 +242,7 @@ function AnnouncementDialog({ announcement, open, onOpenChange }: { announcement
                 <DialogBody className="space-y-4">
                     <div className="space-y-1.5">
                         <Label>Title *</Label>
-                        <Input value={form.title} onChange={e => set('title')(e.target.value)} placeholder="e.g. Office closed for Eid" />
+                        <Input value={form.title} onChange={e => set('title')(e.target.value)} placeholder="Announcement title" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -262,7 +262,7 @@ function AnnouncementDialog({ announcement, open, onOpenChange }: { announcement
                     </div>
                     <div className="space-y-1.5">
                         <Label>Message</Label>
-                        <Textarea rows={5} value={form.body} onChange={e => set('body')(e.target.value)} placeholder="Write the announcement…" />
+                        <Textarea rows={5} value={form.body} onChange={e => set('body')(e.target.value)} placeholder="Announcement message…" />
                     </div>
 
                     {/* Audience */}

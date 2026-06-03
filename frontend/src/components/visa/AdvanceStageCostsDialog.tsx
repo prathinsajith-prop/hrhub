@@ -240,7 +240,7 @@ export function AdvanceStageCostsDialog({
                                                 id={`amt-${idx}`}
                                                 type="text"
                                                 inputMode="decimal"
-                                                placeholder="0.00"
+                                                placeholder="Amount"
                                                 value={row.amount}
                                                 onChange={e => {
                                                     const v = e.target.value
@@ -274,7 +274,7 @@ export function AdvanceStageCostsDialog({
                                             <Input
                                                 id={`ref-${idx}`}
                                                 type="text"
-                                                placeholder="INV-001"
+                                                placeholder="Receipt number"
                                                 value={row.receiptRef}
                                                 onChange={e => patch(idx, { receiptRef: e.target.value })}
                                                 disabled={busy}
@@ -288,7 +288,7 @@ export function AdvanceStageCostsDialog({
                                         <Input
                                             id={`desc-${idx}`}
                                             type="text"
-                                            placeholder="e.g. GDRFA entry permit fee"
+                                            placeholder="Cost description"
                                             value={row.description}
                                             onChange={e => patch(idx, { description: e.target.value })}
                                             disabled={busy}

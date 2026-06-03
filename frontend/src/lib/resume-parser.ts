@@ -242,6 +242,52 @@ const STRONG_TITLE_SEP_RE = /(\s[—–|·]\s|\sat\s|\s@\s)/i
 const JOB_TITLE_HINT_RE = /\b(engineer|developer|designer|manager|director|officer|coordinator|analyst|consultant|specialist|architect|administrator|executive|lead|head|chief|founder|owner|partner|associate|assistant|representative|technician|nurse|doctor|accountant|auditor|teacher|professor|instructor|recruiter|intern|trainee)\b/i
 
 /**
+ * Walk back from the date line and combine up to 2 consecutive non-bullet /
+ * non-date / non-header lines into a single "Title — Company" header. Pure
+ * city-country location lines are filtered out so they don't mask the real
+ * title. When two lines are collected, place the one with a job-title keyword
+ * first so splitTitleCompany() splits in the right direction.
+ */
+/** Common company suffixes — used to keep "Engineer, Beta LLC" from looking
+ *  like a "City, Country" location pair. */
+const COMPANY_SUFFIX_RE = /\b(inc\.?|llc|ltd\.?|corp\.?|corporation|co\.?|company|group|gmbh|s\.?a\.?|s\.?r\.?l\.?|b\.?v\.?|plc|holdings?|enterprises?|industries|technologies|systems|services|solutions|consulting|consultants?|associates?|bank|partners?)\b/i
+
+/** True only for lines that are clearly a "City, Country" location and NOT a
+ *  "Title, Company" combo — used to filter out location lines from header
+ *  collection while keeping real title+company comma pairs intact. */
+function isPureCityCountry(line: string): boolean {
+    if (!CITY_COUNTRY_RE.test(line)) return false
+    if (JOB_TITLE_HINT_RE.test(line)) return false
+    if (COMPANY_SUFFIX_RE.test(line)) return false
+    return true
+}
+
+function collectAboveHeader(block: string[], i: number): string {
+    const aboveCandidates: string[] = []
+    for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+        const prev = block[j].trim()
+        if (!prev) continue
+        if (BULLET_RE.test(block[j]) || DATE_RANGE_RE.test(prev) || SINCE_RE.test(prev) || classifyHeader(prev)) break
+        // Stop at contact-area lines — they belong to the document header,
+        // not to this entry. (Only relevant in the global-fallback pass when
+        // section headers were missing.)
+        if (EMAIL_RE.test(prev) || URL_RE.test(prev)) break
+        if (PHONE_RE.test(prev) && prev.replace(/[^\d+]/g, '').length >= 8) break
+        aboveCandidates.push(prev)   // closest first
+    }
+    const filtered = aboveCandidates.filter(l => !isPureCityCountry(l) && !LABEL_PREFIX_RE.test(l))
+    // Reading order (topmost first), then keep the closest 2.
+    const ordered = filtered.reverse().slice(-2)
+    if (ordered.length === 0) return ''
+    if (ordered.length === 1) return ordered[0]
+    const [a, b] = ordered
+    // If only the closer line (b) has a job-title hint, the layout was
+    // "Company\nTitle\nDates" — swap so the title comes first.
+    if (JOB_TITLE_HINT_RE.test(b) && !JOB_TITLE_HINT_RE.test(a)) return `${b} — ${a}`
+    return `${a} — ${b}`
+}
+
+/**
  * Pick whichever candidate looks more like a true "Title — Company" entry header.
  * Date-line content often turns out to be "City, Country | Dates"; the line
  * above is then the real title/company. We use cheap signals (separator, job
@@ -296,29 +342,27 @@ function parseDatedEntries(block: string[]): DatedEntry[] {
         }
         // Header candidate 1: this line minus the date phrase.
         const inlineHeader = line.replace(matchedSlice, '').replace(/[•|,–—\-(){}\s]+$/g, '').replace(/^[•|,–—\-(){}\s]+/g, '').trim()
-        // Header candidate 2: nearest non-bullet, non-date line above (résumés
-        // often put the title on one line and "Location | Dates" on the next).
-        let aboveHeader = ''
-        for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
-            const prev = block[j].trim()
-            if (prev && !BULLET_RE.test(block[j]) && !DATE_RANGE_RE.test(prev) && !SINCE_RE.test(prev) && !classifyHeader(prev)) {
-                aboveHeader = prev
-                break
-            }
-        }
+        // Header candidate 2: nearest 1–2 non-bullet, non-date lines above —
+        // combined into "Title — Company" when both are present (modern résumés
+        // commonly put title on one line and company on the next).
+        const aboveHeader = collectAboveHeader(block, i)
         // Pick whichever looks more like a real entry header. A "title — company"
         // line scores higher than a plain "City, Country" location line: the
         // separators "—", "–", "|", "·", " at " are distinctive title markers
         // (commas alone are inconclusive — they appear in addresses too).
         const header = pickBetterHeader(inlineHeader, aboveHeader)
         // Summary = following bullet/prose lines until the next dated line.
-        // Also stop one line BEFORE the next date — that line is the next
-        // entry's header (when dates sit on their own line), not summary.
+        // Stop one line before the next date (that line is the next entry's
+        // header), AND stop on a non-bullet line whose 2nd-next is a date
+        // (catches the "Title\nCompany\nDates" layout that would otherwise eat
+        // both lines into the previous summary).
         const sum: string[] = []
         for (let k = i + 1; k < block.length; k++) {
             if (block[k].match(DATE_RANGE_RE) || block[k].match(SINCE_RE)) break
-            const next = block[k + 1]
-            if (next && (next.match(DATE_RANGE_RE) || next.match(SINCE_RE))) break
+            const next1 = block[k + 1]
+            if (next1 && (next1.match(DATE_RANGE_RE) || next1.match(SINCE_RE))) break
+            const next2 = block[k + 2]
+            if (!BULLET_RE.test(block[k]) && next2 && (next2.match(DATE_RANGE_RE) || next2.match(SINCE_RE))) break
             const s = block[k].trim()
             if (s) sum.push(s.replace(BULLET_RE, '• '))
             if (sum.length > 8) break   // cap summary length
@@ -364,21 +408,59 @@ function mapEducation(header: string, summary?: string, startDate?: string, endD
     let degree: string | undefined
     let fieldOfStudy: string | undefined
     if (degMatch) {
-        const fullDegree = degMatch[0].trim()
-        // Split on " in " — degree phrases like "Master of Science in Computer
-        // Science" should become degree="Master of Science", field="Computer
-        // Science". When no " in " is present, the whole match is the degree
-        // (e.g. "MBA", "Bachelor of Engineering").
-        const split = fullDegree.split(/\s+in\s+/i)
-        if (split.length >= 2 && split[0].length >= 2) {
-            degree = split[0].trim()
-            fieldOfStudy = split.slice(1).join(' in ').trim().replace(/[\s,;.]+$/, '')
-        } else {
-            degree = fullDegree
-        }
+        const parsed = splitDegreeAndField(degMatch[0].trim())
+        degree = parsed.degree
+        fieldOfStudy = parsed.fieldOfStudy
     }
     if (!school || school.length < 2) return null
     return { school: school.slice(0, 160), degree: degree?.slice(0, 80), fieldOfStudy: fieldOfStudy?.slice(0, 120), summary, startDate, endDate, current }
+}
+
+/** Generic disciplines that are part of the degree NAME, not the field — used
+ *  to keep "Bachelor of Science" intact while still splitting "Bachelor of
+ *  Computer Science" into degree + field. */
+const GENERIC_DISCIPLINE_RE = /^(science|arts|engineering|commerce|education|laws?|philosophy|medicine|pharmacy|architecture|business|administration|technology|management|theology|divinity|fine\s+arts|liberal\s+arts|applied\s+science|computer\s+applications?)\b/i
+/** Compact degree abbreviations — when the full degree text starts with one,
+ *  any words after it are the field of study (e.g. "B.Tech Computer Science"). */
+const COMPACT_DEGREE_PREFIX_RE = /^(b\.?sc\.?|m\.?sc\.?|b\.?a\.?|m\.?a\.?|b\.?e\.?|m\.?e\.?|b\.?eng\.?|m\.?eng\.?|b\.?tech\.?|m\.?tech\.?|b\.?com\.?|m\.?com\.?|b\.?ed\.?|m\.?ed\.?|llb|llm|bds|mds|md|mbbs|mba|emba|bca|mca|bba|hnd|hsc|ssc)\b/i
+
+const cleanField = (s: string) => s.replace(/[\s,;.]+$/, '').slice(0, 120)
+
+/**
+ * Split a degree phrase into degree + field of study.
+ *
+ * Three strategies, tried in order:
+ *   1. " in X" → cleanest split ("Master of Science in Computer Science").
+ *   2. " of X" → split only if X is a SPECIFIC field, not a generic discipline
+ *      word ("Science" / "Arts" / "Engineering" are part of the degree name).
+ *   3. Compact prefix ("B.Tech", "MBA", …) directly followed by a field name
+ *      with no separator ("B.Tech Computer Science", "BSc Mathematics").
+ */
+function splitDegreeAndField(full: string): { degree: string; fieldOfStudy?: string } {
+    const inIdx = full.search(/\s+in\s+/i)
+    if (inIdx > 0) {
+        const before = full.slice(0, inIdx).trim()
+        const after = full.slice(inIdx).replace(/^\s+in\s+/i, '').trim()
+        if (before.length >= 2 && after.length >= 2) {
+            return { degree: before, fieldOfStudy: cleanField(after) }
+        }
+    }
+    const ofIdx = full.search(/\s+of\s+/i)
+    if (ofIdx > 0) {
+        const before = full.slice(0, ofIdx).trim()
+        const after = full.slice(ofIdx).replace(/^\s+of\s+/i, '').trim()
+        if (before.length >= 2 && after.length >= 2 && !GENERIC_DISCIPLINE_RE.test(after)) {
+            return { degree: before, fieldOfStudy: cleanField(after) }
+        }
+    }
+    const compactMatch = full.match(COMPACT_DEGREE_PREFIX_RE)
+    if (compactMatch) {
+        const after = full.slice(compactMatch[0].length).replace(/^[\s,-]+/, '').trim()
+        if (after.length >= 2 && !DEGREE_RE.test(after)) {
+            return { degree: compactMatch[0].trim(), fieldOfStudy: cleanField(after) }
+        }
+    }
+    return { degree: full }
 }
 
 /**

@@ -437,7 +437,7 @@ export function ShiftsTab() {
                                                 type="number"
                                                 min={0}
                                                 max={720}
-                                                placeholder="15"
+                                                placeholder="Minutes"
                                                 value={form.marginBefore}
                                                 onChange={e => setForm(f => ({ ...f, marginBefore: e.target.value }))}
                                                 className="w-24"
@@ -449,7 +449,7 @@ export function ShiftsTab() {
                                                 type="number"
                                                 min={0}
                                                 max={720}
-                                                placeholder="30"
+                                                placeholder="Minutes"
                                                 value={form.marginAfter}
                                                 onChange={e => setForm(f => ({ ...f, marginAfter: e.target.value }))}
                                                 className="w-24"
@@ -694,7 +694,7 @@ function ShiftColorPicker({
                                     setCustomHex(next)
                                     if (HEX_RE.test(next)) onChange(next.toLowerCase())
                                 }}
-                                placeholder="#0ea5e9"
+                                placeholder="Hex colour (#RRGGBB)"
                                 maxLength={7}
                                 className="h-8 font-mono text-xs uppercase"
                             />

@@ -825,11 +825,11 @@ function GratuityCalculator() {
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Basic Monthly Salary (AED)</Label>
-          <NumericInput maxDecimals={2} placeholder="e.g. 10,000" value={basic} onChange={e => setBasic(e.target.value)} />
+          <NumericInput maxDecimals={2} placeholder="Amount" value={basic} onChange={e => setBasic(e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label>Years of Service</Label>
-          <NumericInput maxDecimals={1} placeholder="e.g. 3" value={years} onChange={e => setYears(e.target.value)} />
+          <NumericInput maxDecimals={1} placeholder="Number of years" value={years} onChange={e => setYears(e.target.value)} />
         </div>
       </div>
 
@@ -2185,7 +2185,7 @@ function AddAdjustmentDialog({
                   const raw = e.target.value
                   setAmount(raw === '' ? '' : Number(raw))
                 }}
-                placeholder="0.00"
+                placeholder="Amount"
                 maxDecimals={2}
               />
             </div>
@@ -2196,7 +2196,7 @@ function AddAdjustmentDialog({
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Q2 sales commission"
+                placeholder="Description"
               />
             </div>
           </TabsContent>

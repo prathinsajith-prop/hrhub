@@ -171,7 +171,7 @@ export function SecurityTab() {
                         )}
                         <div className="flex gap-2">
                             <Input
-                                placeholder="e.g. 192.168.1.0/24"
+                                placeholder="IP range in CIDR notation"
                                 value={newEntry}
                                 onChange={e => setNewEntry(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') handleAddIp() }}

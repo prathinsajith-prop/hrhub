@@ -264,7 +264,7 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
             <Input
                 value={(value as string) ?? ''}
                 onChange={(e) => onChange(e.target.value)}
-                placeholder="Type the response…"
+                placeholder="Response"
                 className="text-sm"
             />
         )
@@ -275,7 +275,7 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
                 rows={3}
                 value={(value as string) ?? ''}
                 onChange={(e) => onChange(e.target.value)}
-                placeholder="Type the response…"
+                placeholder="Response…"
                 className="text-sm"
             />
         )

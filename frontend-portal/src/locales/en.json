@@ -120,7 +120,7 @@
             "private": "Just the recipient"
         },
         "headline": "Headline",
-        "headlinePh": "e.g. Outstanding client save",
+        "headlinePh": "Headline",
         "message": "Message",
         "messagePh": "Say what they did and why it mattered…",
         "send": "Send",
@@ -185,9 +185,9 @@
         "emptyDesc": "Refer a candidate for an open role to get started.",
         "stageRemoved": "Removed",
         "removeResume": "Remove résumé",
-        "candidateNamePlaceholder": "Jane Doe",
-        "candidateEmailPlaceholder": "jane@example.com",
-        "candidatePhonePlaceholder": "+971…",
+        "candidateNamePlaceholder": "Candidate name",
+        "candidateEmailPlaceholder": "Email address",
+        "candidatePhonePlaceholder": "Phone number",
         "parsedLabel": "Parsed",
         "parsedSkills": "Skills",
         "parsedLinkedin": "LinkedIn",
@@ -206,7 +206,7 @@
         "expectedSalary": "Expected salary (AED)",
         "experience": "Experience (years)",
         "nationality": "Nationality",
-        "nationalityPlaceholder": "e.g. Indian"
+        "nationalityPlaceholder": "Nationality"
     },
     "mode": {
         "employee": "Employee",
@@ -323,7 +323,7 @@
         "fieldDescription": "Description",
         "fieldCategory": "Category",
         "fieldTargetDate": "Target date",
-        "titlePlaceholder": "e.g. Complete advanced Excel training",
+        "titlePlaceholder": "Goal title",
         "descPlaceholder": "What does success look like?",
         "status": {
             "active": "Active",
@@ -417,7 +417,7 @@
         "cancelConfirmYes": "Yes, cancel",
         "cancelConfirmKeep": "Keep request",
         "noColleaguesHandover": "No colleagues in your department: handover not required.",
-        "handoverNotesPlaceholder": "e.g. follow up with the Acme deal on Tuesday",
+        "handoverNotesPlaceholder": "Handover notes",
         "handoverNotifyNote": "Your handover person will be notified once HR approves this request.",
         "endBeforeStart": "End date can't be before the start date",
         "handoverRequired": "Please pick a colleague to hand over to"

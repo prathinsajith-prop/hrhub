@@ -238,7 +238,7 @@ function StageDialog({
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
                             maxLength={100}
-                            placeholder="e.g. Reference check"
+                            placeholder="Stage name"
                             onKeyDown={(e) => { if (e.key === 'Enter' && canSave) { e.preventDefault(); handleSave() } }}
                         />
                     </div>

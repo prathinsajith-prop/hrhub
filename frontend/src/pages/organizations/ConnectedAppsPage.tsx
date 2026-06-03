@@ -398,7 +398,7 @@ export function ConnectedAppsPage() {
                             <Label htmlFor="app-name">{t('apps.name')} *</Label>
                             <Input
                                 id="app-name"
-                                placeholder="e.g. My ERP Integration"
+                                placeholder="Integration name"
                                 value={form.name}
                                 onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                                 required

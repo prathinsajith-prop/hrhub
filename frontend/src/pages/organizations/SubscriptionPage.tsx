@@ -260,7 +260,7 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         <Input
                             value={form.companySize}
                             onChange={e => setForm(f => ({ ...f, companySize: e.target.value }))}
-                            placeholder="e.g. 200–500 employees"
+                            placeholder="Company size"
                         />
                     </div>
                     <div className="space-y-1.5">
@@ -269,7 +269,7 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
                             rows={4}
                             aria-label="Tell us about your needs"
                             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                            placeholder="Number of entities, payroll complexity, integrations…"
+                            placeholder="Tell us about your needs"
                             value={form.message}
                             onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
                         />

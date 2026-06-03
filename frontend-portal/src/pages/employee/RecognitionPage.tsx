@@ -303,7 +303,7 @@ function GiveDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
 
                     <div className="space-y-1.5">
                         <Label>{t('recognition.headline', { defaultValue: 'Headline' })}</Label>
-                        <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder={t('recognition.headlinePh', { defaultValue: 'e.g. Outstanding client save' })} />
+                        <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder={t('recognition.headlinePh', { defaultValue: 'Headline' })} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>{t('recognition.message', { defaultValue: 'Message' })}</Label>

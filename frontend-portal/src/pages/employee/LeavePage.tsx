@@ -405,7 +405,7 @@ function NewLeaveDialog({
                             maxLength={500}
                             rows={2}
                             placeholder={t('leave.handoverNotesPlaceholder', {
-                                defaultValue: 'e.g. follow up with the Acme deal on Tuesday',
+                                defaultValue: 'Handover notes',
                             })}
                         />
                         {handoverTo ? (

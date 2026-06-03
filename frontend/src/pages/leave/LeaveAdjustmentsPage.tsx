@@ -135,7 +135,7 @@ function LeaveAdjustmentDialog({ onClose }: { onClose: () => void }) {
                             <NumericInput
                                 value={form.year}
                                 onChange={e => { setForm(f => ({ ...f, year: e.target.value })); setErrors(er => ({ ...er, year: '' })) }}
-                                placeholder="2025"
+                                placeholder="Year"
                                 maxDecimals={0}
                             />
                         </FormField>
@@ -263,7 +263,7 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
                             <NumericInput
                                 value={form.year}
                                 onChange={e => { setForm(f => ({ ...f, year: e.target.value })); setErrors(er => ({ ...er, year: '' })) }}
-                                placeholder="2025"
+                                placeholder="Year"
                                 maxDecimals={0}
                             />
                         </FormField>
@@ -290,7 +290,7 @@ function AirTicketDialog({ ticket, onClose }: { ticket?: AirTicket; onClose: () 
                             <NumericInput
                                 value={form.amount}
                                 onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                                placeholder="0.00"
+                                placeholder="Amount"
                                 maxDecimals={2}
                             />
                         </FormField>
@@ -403,7 +403,7 @@ function OffsetDialog({ offset, onClose }: { offset?: LeaveOffset; onClose: () =
                             <NumericInput
                                 value={form.days}
                                 onChange={e => { setForm(f => ({ ...f, days: e.target.value })); setErrors(er => ({ ...er, days: '' })) }}
-                                placeholder="1"
+                                placeholder="Days"
                                 maxDecimals={2}
                                 aria-invalid={!!errors.days}
                             />

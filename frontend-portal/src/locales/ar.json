@@ -120,7 +120,7 @@
             "private": "المستلِم فقط"
         },
         "headline": "العنوان",
-        "headlinePh": "مثال: إنقاذ استثنائي لعميل",
+        "headlinePh": "العنوان",
         "message": "الرسالة",
         "messagePh": "اذكر ما قاموا به ولماذا كان مهمًا…",
         "send": "إرسال",
@@ -185,9 +185,9 @@
         "emptyDesc": "أحِل مرشّحًا لوظيفة شاغرة للبدء.",
         "stageRemoved": "مُزال",
         "removeResume": "إزالة السيرة الذاتية",
-        "candidateNamePlaceholder": "مثال: سارة أحمد",
-        "candidateEmailPlaceholder": "name@example.com",
-        "candidatePhonePlaceholder": "+971…",
+        "candidateNamePlaceholder": "اسم المرشّح",
+        "candidateEmailPlaceholder": "البريد الإلكتروني",
+        "candidatePhonePlaceholder": "رقم الهاتف",
         "parsedLabel": "مُستخرج",
         "parsedSkills": "المهارات",
         "parsedLinkedin": "لينكدإن",
@@ -206,7 +206,7 @@
         "expectedSalary": "الراتب المتوقع (درهم)",
         "experience": "الخبرة (بالسنوات)",
         "nationality": "الجنسية",
-        "nationalityPlaceholder": "مثال: هندي"
+        "nationalityPlaceholder": "الجنسية"
     },
     "mode": {
         "employee": "موظف",
@@ -323,7 +323,7 @@
         "fieldDescription": "الوصف",
         "fieldCategory": "الفئة",
         "fieldTargetDate": "التاريخ المستهدف",
-        "titlePlaceholder": "مثال: إكمال تدريب Excel المتقدم",
+        "titlePlaceholder": "عنوان الهدف",
         "descPlaceholder": "كيف يبدو النجاح؟",
         "status": {
             "active": "نشط",
@@ -417,7 +417,7 @@
         "cancelConfirmYes": "نعم، ألغِ",
         "cancelConfirmKeep": "الإبقاء على الطلب",
         "noColleaguesHandover": "لا يوجد زملاء في إدارتك: التسليم غير مطلوب.",
-        "handoverNotesPlaceholder": "مثال: متابعة صفقة Acme يوم الثلاثاء",
+        "handoverNotesPlaceholder": "ملاحظات التسليم",
         "handoverNotifyNote": "سيتم إشعار الشخص المسؤول عن التسليم بمجرد موافقة الموارد البشرية على هذا الطلب.",
         "endBeforeStart": "لا يمكن أن يكون تاريخ الانتهاء قبل تاريخ البدء",
         "handoverRequired": "يرجى اختيار زميل لتسليم المهام إليه"

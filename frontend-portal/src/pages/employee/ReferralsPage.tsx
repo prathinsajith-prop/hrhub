@@ -451,17 +451,17 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 
                     <div className="space-y-1.5">
                         <Label>{t('referrals.candidateName', { defaultValue: 'Candidate name' })} <span className="text-destructive">*</span></Label>
-                        <Input value={form.candidateName} onChange={(e) => set('candidateName')(e.target.value)} placeholder={t('referrals.candidateNamePlaceholder', { defaultValue: 'Jane Doe' })} />
+                        <Input value={form.candidateName} onChange={(e) => set('candidateName')(e.target.value)} placeholder={t('referrals.candidateNamePlaceholder', { defaultValue: 'Candidate name' })} />
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>{t('referrals.candidateEmail', { defaultValue: 'Email' })} <span className="text-destructive">*</span></Label>
-                            <Input type="email" value={form.candidateEmail} onChange={(e) => set('candidateEmail')(e.target.value)} placeholder={t('referrals.candidateEmailPlaceholder', { defaultValue: 'jane@example.com' })} aria-invalid={form.candidateEmail.length > 0 && !emailValid} />
+                            <Input type="email" value={form.candidateEmail} onChange={(e) => set('candidateEmail')(e.target.value)} placeholder={t('referrals.candidateEmailPlaceholder', { defaultValue: 'Email address' })} aria-invalid={form.candidateEmail.length > 0 && !emailValid} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>{t('referrals.candidatePhone', { defaultValue: 'Phone' })}</Label>
-                            <Input value={form.candidatePhone} onChange={(e) => set('candidatePhone')(e.target.value)} placeholder={t('referrals.candidatePhonePlaceholder', { defaultValue: '+971…' })} />
+                            <Input value={form.candidatePhone} onChange={(e) => set('candidatePhone')(e.target.value)} placeholder={t('referrals.candidatePhonePlaceholder', { defaultValue: 'Phone number' })} />
                         </div>
                     </div>
 
@@ -486,7 +486,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>{t('referrals.nationality', { defaultValue: 'Nationality' })}</Label>
-                            <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder={t('referrals.nationalityPlaceholder', { defaultValue: 'e.g. Indian' })} />
+                            <Input value={nationality} onChange={(e) => setNationality(e.target.value)} placeholder={t('referrals.nationalityPlaceholder', { defaultValue: 'Nationality' })} />
                         </div>
                         <div className="space-y-1.5">
                             <Label>{t('referrals.gender', { defaultValue: 'Gender' })}</Label>

@@ -299,7 +299,7 @@ function AssetFormDialog({
                                 maxDecimals={2}
                                 value={form.purchaseCost ?? ''}
                                 onChange={e => set('purchaseCost', e.target.value || null)}
-                                placeholder="0.00"
+                                placeholder="Purchase cost"
                             />
                         </div>
                         <div className="col-span-2 space-y-1.5">

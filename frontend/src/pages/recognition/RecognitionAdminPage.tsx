@@ -259,14 +259,14 @@ function CategoryDialog({ category, open, onOpenChange }: { category: Recognitio
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>Label *</Label>
-                            <Input value={form.label} onChange={e => onLabelChange(e.target.value)} placeholder="e.g. Above and Beyond" />
+                            <Input value={form.label} onChange={e => onLabelChange(e.target.value)} placeholder="Category name" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Key *</Label>
                             <Input
                                 value={form.key}
                                 onChange={e => { setKeyTouched(true); set('key')(slugify(e.target.value)) }}
-                                placeholder="above_and_beyond"
+                                placeholder="Category key"
                                 className="font-mono text-sm"
                                 disabled={isEdit}
                             />
@@ -285,7 +285,7 @@ function CategoryDialog({ category, open, onOpenChange }: { category: Recognitio
                     <div className="grid gap-3 sm:grid-cols-3">
                         <div className="space-y-1.5">
                             <Label>Icon</Label>
-                            <Input value={form.icon ?? ''} onChange={e => set('icon')(e.target.value)} placeholder="⭐ or icon name" />
+                            <Input value={form.icon ?? ''} onChange={e => set('icon')(e.target.value)} placeholder="Emoji or icon name" />
                             <p className="text-[10px] text-muted-foreground">Emoji or short label.</p>
                         </div>
                         <div className="space-y-1.5">
@@ -503,14 +503,14 @@ function BadgeDialog({ badge, categories, open, onOpenChange }: { badge: Recogni
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>Label *</Label>
-                            <Input value={form.label} onChange={e => onLabelChange(e.target.value)} placeholder="e.g. Gold Star" />
+                            <Input value={form.label} onChange={e => onLabelChange(e.target.value)} placeholder="Badge name" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Key *</Label>
                             <Input
                                 value={form.key}
                                 onChange={e => { setKeyTouched(true); set('key')(slugify(e.target.value)) }}
-                                placeholder="gold_star"
+                                placeholder="Badge key"
                                 className="font-mono text-sm"
                                 disabled={isEdit}
                             />
@@ -554,7 +554,7 @@ function BadgeDialog({ badge, categories, open, onOpenChange }: { badge: Recogni
                     <div className="grid gap-3 sm:grid-cols-3">
                         <div className="space-y-1.5">
                             <Label>Icon</Label>
-                            <Input value={form.icon ?? ''} onChange={e => set('icon')(e.target.value)} placeholder="award" />
+                            <Input value={form.icon ?? ''} onChange={e => set('icon')(e.target.value)} placeholder="Icon name" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Color</Label>
