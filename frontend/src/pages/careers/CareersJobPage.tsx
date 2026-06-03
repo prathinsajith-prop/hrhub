@@ -317,9 +317,11 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
             name: prev.name || p.name || '',
             email: prev.email || p.email || '',
             phone: prev.phone || p.phone || '',
+            nationality: prev.nationality || p.nationality || '',
             experience: prev.experience || (p.experienceYears != null ? String(p.experienceYears) : ''),
             coverNote: prev.coverNote || buildParsedNoteBlock(p),
         }))
+        if (p.address) setAddress(prev => prev || p.address!)
         // Pre-fill the multi-entry history blocks only when the user hasn't added any.
         if (p.education.length) setEducation(prev => prev.length ? prev : p.education)
         if (p.experience.length) setExperience(prev => prev.length ? prev : p.experience)

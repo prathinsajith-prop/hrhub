@@ -16,10 +16,10 @@ import { useAnnouncementFeed, useMarkAnnouncementRead, useAcknowledgeAnnouncemen
 // the previous bespoke amber-on-amber / slate washes did not.
 type BadgeVariant = 'secondary' | 'info' | 'warning' | 'destructive'
 const PRIORITY: Record<string, { ring: string; label: string; variant: BadgeVariant }> = {
-    low: { ring: 'border-l-slate-200', label: 'Low', variant: 'secondary' },
-    normal: { ring: 'border-l-blue-400', label: 'Normal', variant: 'info' },
-    high: { ring: 'border-l-amber-400', label: 'High', variant: 'warning' },
-    critical: { ring: 'border-l-rose-500', label: 'Critical', variant: 'destructive' },
+    low: { ring: 'border-s-slate-200', label: 'Low', variant: 'secondary' },
+    normal: { ring: 'border-s-blue-400', label: 'Normal', variant: 'info' },
+    high: { ring: 'border-s-amber-400', label: 'High', variant: 'warning' },
+    critical: { ring: 'border-s-rose-500', label: 'Critical', variant: 'destructive' },
 }
 const CATEGORY_LABEL: Record<string, string> = {
     general: 'General', hr_policy: 'HR Policy', holiday: 'Holiday', event: 'Event', org_news: 'Org News',
@@ -155,7 +155,7 @@ function AnnouncementCard({ a, onMarkRead, onAck, ackPending }: {
     function toggleExpand() { setExpanded((v) => !v); ensureRead() }
 
     return (
-        <Card className={cn('border-l-4 transition-shadow', p.ring, a.pinned && 'ring-1 ring-primary/15', unread && 'shadow-sm')}>
+        <Card className={cn('border-s-4 transition-shadow', p.ring, a.pinned && 'ring-1 ring-primary/15', unread && 'shadow-sm')}>
             <CardContent className="p-4">
                 <div className="flex items-start gap-2">
                     {unread && <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label={t('announcements.unread', { defaultValue: 'Unread' })} />}

@@ -123,3 +123,139 @@ describe('parseResumeText — experience & education sections', () => {
         expect(Array.isArray(p.education)).toBe(true)
     })
 })
+
+const ALT_HEADERS = `Aisha Khan
+aisha@example.com
+
+WORK HISTORY
+Product Manager | Globex
+2021 - Present
+
+EDUCATIONAL QUALIFICATIONS
+MBA in Finance — Harvard Business School
+2019 - 2021
+
+B.E. in Computer Engineering, IIT Delhi
+2014 - 2018
+`
+
+describe('parseResumeText — header variants', () => {
+    it('recognises "Work History" as an experience header', () => {
+        const p = parseResumeText(ALT_HEADERS)
+        expect(p.experience.length).toBeGreaterThanOrEqual(1)
+        expect(p.experience[0].title).toBe('Product Manager')
+        expect(p.experience[0].company).toBe('Globex')
+        expect(p.experience[0].current).toBe(true)
+    })
+
+    it('recognises "Educational Qualifications" + degree variants (MBA, B.E.)', () => {
+        const p = parseResumeText(ALT_HEADERS)
+        expect(p.education.length).toBe(2)
+        expect(p.education[0].school).toContain('Harvard Business School')
+        expect(p.education[0].degree?.toLowerCase()).toContain('mba')
+        expect(p.education[1].school).toContain('IIT Delhi')
+        expect(p.education[1].degree?.toLowerCase()).toMatch(/b\.?e/)
+    })
+
+    it('treats "Since YYYY" as an open-ended (current) range', () => {
+        const p = parseResumeText('EXPERIENCE\nLead Engineer — Acme\nSince 2022\nBuilt the platform.\n')
+        expect(p.experience[0]?.current).toBe(true)
+        expect(p.experience[0]?.startDate).toBe('2022-01')
+    })
+
+    it('picks the title line above when the date-line is just location info', () => {
+        // Common UAE-resume layout: "Title — Company" on one line, then
+        // "City, Country | Dates" on the next. The parser must prefer the line
+        // above for title/company, not the location text from the date line.
+        const text = `EXPERIENCE
+Senior Software Engineer — Acme Corp
+Dubai, UAE | Jan 2021 - Present
+• Built things
+
+Software Engineer | Beta LLC
+Abu Dhabi, UAE | Jun 2017 – Dec 2020
+• Shipped stuff
+`
+        const p = parseResumeText(text)
+        expect(p.experience).toHaveLength(2)
+        expect(p.experience[0].title).toBe('Senior Software Engineer')
+        expect(p.experience[0].company).toBe('Acme Corp')
+        expect(p.experience[1].title).toBe('Software Engineer')
+        expect(p.experience[1].company).toBe('Beta LLC')
+    })
+
+    it('splits degree + field of study on " in "', () => {
+        const text = `EDUCATION
+Master of Science in Computer Science — Stanford University
+2015 - 2017
+
+Bachelor of Engineering in Software Engineering — IIT Bombay
+2011 - 2015
+`
+        const p = parseResumeText(text)
+        expect(p.education[0].degree).toBe('Master of Science')
+        expect(p.education[0].fieldOfStudy).toBe('Computer Science')
+        expect(p.education[1].degree).toBe('Bachelor of Engineering')
+        expect(p.education[1].fieldOfStudy).toBe('Software Engineering')
+    })
+
+    it('extracts address and nationality from the contact area', () => {
+        const text = `Jane Doe
+Software Engineer
+Dubai, United Arab Emirates
+Nationality: Indian
+jane@example.com
++971 50 123 4567
+`
+        const p = parseResumeText(text)
+        expect(p.address).toBe('Dubai, United Arab Emirates')
+        expect(p.nationality).toBe('Indian')
+    })
+
+    it('does not pick "Nationality:" / "Summary:" labelled lines as address', () => {
+        // Regression: "Summary: 6 years building scalable web apps" once matched
+        // the address keyword "building"; the labelled-line filter blocks it.
+        const text = `Jane Doe
+jane@example.com
+Nationality: United Arab Emirates
+Summary: 6 years of experience building scalable web applications.
+`
+        const p = parseResumeText(text)
+        expect(p.nationality).toBe('United Arab Emirates')
+        expect(p.address).toBeUndefined()
+    })
+
+    it('finds the portfolio URL even when LinkedIn/GitHub come first', () => {
+        // Regression: the parser previously checked only the FIRST URL in the
+        // text. With LinkedIn first, the actual portfolio URL was silently dropped.
+        const text = `Jane Doe
+jane@example.com
+LinkedIn: https://www.linkedin.com/in/janedoe
+GitHub: https://github.com/janedoe
+Portfolio: https://janedoe.dev
+`
+        const p = parseResumeText(text)
+        expect(p.linkedin).toContain('linkedin.com/in/janedoe')
+        expect(p.github).toContain('github.com/janedoe')
+        expect(p.portfolio).toBe('https://janedoe.dev')
+    })
+
+    it('falls back to a global date scan when headers are missing', () => {
+        // No "EXPERIENCE" / "EDUCATION" markers at all — section detection should
+        // miss, then the global fallback should bucket entries by school/degree.
+        const noHeaders = `Bob Roe
+bob@example.com
+
+Senior Developer at Initech
+Jan 2020 - Present
+
+B.Sc Computer Science — MIT
+2015 - 2019
+`
+        const p = parseResumeText(noHeaders)
+        expect(p.experience.length).toBeGreaterThanOrEqual(1)
+        expect(p.experience[0].title).toBe('Senior Developer')
+        expect(p.education.length).toBeGreaterThanOrEqual(1)
+        expect(p.education[0].school).toContain('MIT')
+    })
+})

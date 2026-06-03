@@ -332,6 +332,8 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     notes: prev.notes || buildReferralParsedNote(p, t),
                 }))
                 if (p.experienceYears != null) setExperience((prev) => prev || String(p.experienceYears))
+                if (p.nationality) setNationality((prev) => prev || p.nationality!)
+                if (p.address) setAddress((prev) => prev || p.address!)
                 if (p.education.length) setEducationHistory((prev) => prev.length ? prev : p.education)
                 if (p.experience.length) setExperienceHistory((prev) => prev.length ? prev : p.experience)
                 const filled = (['name', 'email', 'phone'] as const).filter((k) => p[k])

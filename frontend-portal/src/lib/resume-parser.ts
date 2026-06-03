@@ -39,6 +39,10 @@ export interface ParsedResume {
     linkedin?: string
     github?: string
     portfolio?: string
+    /** A location line found near the contact block (e.g. "Dubai, United Arab Emirates"). */
+    address?: string
+    /** Nationality / citizenship if stated explicitly (e.g. "Nationality: Indian"). */
+    nationality?: string
     skills: string[]
     experienceYears?: number
     /** Structured work history parsed from the EXPERIENCE section. */
@@ -73,6 +77,12 @@ const GITHUB_RE = /(?:https?:\/\/)?(?:www\.)?github\.com\/[A-Za-z0-9_-]+\/?/i
 const URL_RE = /\bhttps?:\/\/[^\s)]+/i
 const EXPERIENCE_RE = /(\d{1,2}(?:\.\d+)?)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)?/i
 
+// PDF text items in pdfjs are returned in reading order with positional metadata
+// but NO inherent newlines. We reconstruct line breaks from the transform matrix
+// (item[5] = y-position) and the `hasEOL` flag where pdfjs sets it. Without this,
+// the entire page collapses into one line and section detection fails.
+type PdfTextItem = { str?: string; hasEOL?: boolean; transform?: number[] }
+
 /** Extract plain text from a résumé file. Returns '' if it can't (e.g. scanned image PDF). */
 export async function extractResumeText(file: File): Promise<string> {
     const name = file.name.toLowerCase()
@@ -87,7 +97,7 @@ export async function extractResumeText(file: File): Promise<string> {
             for (let i = 1; i <= doc.numPages; i++) {
                 const page = await doc.getPage(i)
                 const content = await page.getTextContent()
-                text += (content.items as Array<{ str?: string }>).map(it => it.str ?? '').join(' ') + '\n'
+                text += pdfItemsToText(content.items as PdfTextItem[]) + '\n'
             }
             return text
         }
@@ -104,6 +114,31 @@ export async function extractResumeText(file: File): Promise<string> {
     }
 }
 
+/**
+ * Convert pdfjs text items to plain text WITH line breaks.
+ * pdfjs gives one TextItem per glyph run; line breaks must be inferred from the
+ * y-coordinate (transform[5]) since adjacent runs on the same line share a y.
+ * Falls back to the `hasEOL` flag when available (newer pdfjs versions).
+ */
+function pdfItemsToText(items: PdfTextItem[]): string {
+    let out = ''
+    let lastY: number | null = null
+    for (const it of items) {
+        const str = it.str ?? ''
+        const y = Array.isArray(it.transform) ? it.transform[5] : null
+        // New line if y dropped (PDF y grows upward; reading goes top → bottom).
+        if (lastY !== null && y !== null && Math.abs(y - lastY) > 1.5) {
+            if (out && !out.endsWith('\n')) out += '\n'
+        } else if (str && out && !out.endsWith(' ') && !out.endsWith('\n')) {
+            out += ' '
+        }
+        out += str
+        if (it.hasEOL && !out.endsWith('\n')) out += '\n'
+        if (y !== null) lastY = y
+    }
+    return out
+}
+
 // ── Section + date helpers (for experience / education extraction) ────────────
 
 const MONTH_MAP: Record<string, string> = {
@@ -116,17 +151,31 @@ const MONTHWORD = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]
 const DATE_TOKEN = `(?:${MONTHWORD}\\s*)?(?:\\d{1,2}[/-])?${YEAR}`
 const PRESENT = '(?:present|current|now|ongoing|to\\s*date|till\\s*date|date)'
 // A start–end range with various dashes / "to". End may be "Present".
-const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:–|—|-|to)\\s*(${PRESENT}|${DATE_TOKEN})`, 'i')
+const DATE_RANGE_RE = new RegExp(`(${DATE_TOKEN})\\s*(?:–|—|-|to|until|–|‐|‑|‒|−)\\s*(${PRESENT}|${DATE_TOKEN})`, 'i')
+// "Since YYYY" / "From YYYY" → open-ended range.
+const SINCE_RE = new RegExp(`(?:since|from)\\s+(${DATE_TOKEN})`, 'i')
 
-// Section headers we care about, plus the broad set used only to detect where a
-// section ends (a header-like line starting any résumé section).
-const EXPERIENCE_HEADER_RE = /^(?:work\s+|professional\s+|employment\s+|career\s+)?(?:experience|work history|employment(?:\s+history)?|career(?:\s+history)?)\s*:?\s*$/i
-const EDUCATION_HEADER_RE = /^(?:education|academic(?:s|\s+background)?|qualifications?|educational background)\s*:?\s*$/i
-const ANY_HEADER_RE = /^(?:work|professional|employment|career|experience|education|academic|qualifications?|skills?|technical skills|projects?|certifications?|certificates?|summary|profile|objective|about(?:\s+me)?|contact|references?|languages?|interests?|hobbies|awards?|honou?rs?|publications?|volunteer(?:ing)?|activities|achievements?|personal\s+(?:details?|information)|declaration)\b[\s:]*$/i
+// Map a header line to a known section name. Order matters — first match wins.
+const SECTION_PATTERNS: Array<{ name: 'experience' | 'education' | 'skills' | 'other'; re: RegExp }> = [
+    { name: 'experience', re: /^(?:work\s+|professional\s+|employment\s+|career\s+|relevant\s+|other\s+|previous\s+|all\s+|recent\s+)?(?:experience|work\s+history|employment(?:\s+history)?|career(?:\s+history|\s+summary)?|professional\s+background|professional\s+experience)\b[\s:]*$/i },
+    { name: 'education', re: /^(?:education(?:al)?(?:\s+(?:history|background|qualifications?|details?))?|academic(?:s|\s+(?:history|background|qualifications?))?|qualifications?|schooling|studies|scholastics)\b[\s:]*$/i },
+    { name: 'skills', re: /^(?:(?:technical|core|key|professional|soft)\s+)?(?:skills?|competenc(?:ies|es)|expertise|proficienc(?:ies|y))\b[\s:]*$/i },
+    { name: 'other', re: /^(?:projects?|certifications?|certificates?|summary|profile|objective|about(?:\s+me)?|contact|references?|languages?|interests?|hobbies|awards?|honou?rs?|publications?|volunteer(?:ing)?|activities|achievements?|personal\s+(?:details?|information)|declaration|trainings?|courses?|memberships?)\b[\s:]*$/i },
+]
 
-const SCHOOL_RE = /\b(university|college|institute|academy|school|polytechnic|faculty)\b/i
-const DEGREE_RE = /\b(bachelor'?s?|master'?s?|doctorate|ph\.?d|mba|b\.?sc|m\.?sc|b\.?a|m\.?a|b\.?eng|m\.?eng|b\.?tech|m\.?tech|b\.?com|diploma|associate|hnd|高中|secondary)\b[^,\n]*/i
-const BULLET_RE = /^\s*[•▪◦·*-]\s+/
+const NATIONALITY_RE = /\b(?:nationality|citizenship|nationalit[éy])\s*[:\-–—]\s*([A-Za-z][A-Za-z -]{2,40})/i
+// Address signal words: street types + UAE/GCC cities (primary market) + a few
+// regional capitals. Excludes generic words like "building", "tower", "area",
+// "zone" that frequently appear in non-address sentences ("building scalable
+// apps", "comfort zone"). Address detection is conservative on purpose — false
+// positives are visible and annoying to clear.
+const ADDRESS_KEYWORD_RE = /\b(street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|p\.?\s*o\.?\s*box|po\s*box|villa|emirates?|united\s+arab\s+emirates|uae|dubai|abu\s*dhabi|sharjah|ajman|fujairah|ras\s*al\s*khaimah|umm\s*al\s*quwain|al\s*ain|riyadh|jeddah|mecca|medina|doha|kuwait\s*city|manama|muscat|amman|beirut|cairo|alexandria)\b/i
+// City + Country shape: "Dubai, United Arab Emirates" / "Mumbai, India" / "New York, USA".
+const CITY_COUNTRY_RE = /^[A-Z][A-Za-z][A-Za-z .'-]{0,60},\s*[A-Z][A-Za-z][A-Za-z .'-]{1,60}$/
+
+const SCHOOL_RE = /\b(university|college|institute|academy|school|polytechnic|faculty|conservatory|seminary|gymnasium)\b/i
+const DEGREE_RE = /\b(bachelor'?s?|master'?s?|doctorate|ph\.?d\.?|d\.?phil\.?|mba|emba|b\.?sc\.?|m\.?sc\.?|b\.?a\.?|m\.?a\.?|b\.?e\.?|m\.?e\.?|b\.?eng\.?|m\.?eng\.?|b\.?tech\.?|m\.?tech\.?|b\.?com\.?|m\.?com\.?|b\.?ed\.?|m\.?ed\.?|llb|llm|bds|mds|md|mbbs|diploma|certificate|associate|hnd|hsc|ssc|high\s+school|secondary\s+school|12th|10th|高中|secondary)\b[^,\n]*/i
+const BULLET_RE = /^\s*[•▪◦·∙*‧‣⁃→►●◆-]\s+/
 
 function tokenToYearMonth(tok: string): string | undefined {
     const t = tok.trim().toLowerCase()
@@ -139,14 +188,38 @@ function tokenToYearMonth(tok: string): string | undefined {
     return undefined
 }
 
-/** Pull the lines belonging to one section (header → next header / end). */
-function extractSection(lines: string[], headerRe: RegExp): string[] {
-    const start = lines.findIndex(l => l.trim().length <= 42 && headerRe.test(l.trim()))
+/**
+ * Classify a line as a section header. Returns the section name or null. We
+ * accept anything that looks header-like: short (≤80 chars), or ALL-CAPS, or
+ * ends with a colon. This is intentionally generous so headers smashed into
+ * adjacent text in poorly-extracted PDFs still get recognised.
+ */
+function classifyHeader(line: string): 'experience' | 'education' | 'skills' | 'other' | null {
+    const trimmed = line.trim().replace(/^[•▪◦·*\-\s]+/, '').replace(/[\s:•]+$/, '')
+    if (!trimmed) return null
+    const looksHeader =
+        trimmed.length <= 80 &&
+        // Headers don't contain dates, emails, or URLs.
+        !DATE_RANGE_RE.test(trimmed) &&
+        !EMAIL_RE.test(trimmed) &&
+        !URL_RE.test(trimmed)
+    if (!looksHeader) return null
+    for (const p of SECTION_PATTERNS) {
+        if (p.re.test(trimmed)) return p.name
+    }
+    return null
+}
+
+/** Pull the lines belonging to one section (header → next recognised header / end). */
+function extractSection(lines: string[], section: 'experience' | 'education'): string[] {
+    let start = -1
+    for (let i = 0; i < lines.length; i++) {
+        if (classifyHeader(lines[i]) === section) { start = i; break }
+    }
     if (start === -1) return []
     const block: string[] = []
     for (let i = start + 1; i < lines.length; i++) {
-        const t = lines[i].trim()
-        if (t.length <= 42 && ANY_HEADER_RE.test(t)) break   // next section
+        if (classifyHeader(lines[i])) break   // any recognised section ends the block
         block.push(lines[i])
     }
     return block
@@ -162,37 +235,96 @@ function splitTitleCompany(text: string): { title: string; company?: string } {
     return { title: text.trim() }
 }
 
+/** Strong title separators — present in "Senior Engineer — Acme Corp" but not
+ *  in "Dubai, United Arab Emirates". Used to score competing header candidates. */
+const STRONG_TITLE_SEP_RE = /(\s[—–|·]\s|\sat\s|\s@\s)/i
+/** Heuristic words that signal a job-title line (engineer, manager, etc.). */
+const JOB_TITLE_HINT_RE = /\b(engineer|developer|designer|manager|director|officer|coordinator|analyst|consultant|specialist|architect|administrator|executive|lead|head|chief|founder|owner|partner|associate|assistant|representative|technician|nurse|doctor|accountant|auditor|teacher|professor|instructor|recruiter|intern|trainee)\b/i
+
+/**
+ * Pick whichever candidate looks more like a true "Title — Company" entry header.
+ * Date-line content often turns out to be "City, Country | Dates"; the line
+ * above is then the real title/company. We use cheap signals (separator, job
+ * title keyword, length) to compare.
+ */
+function pickBetterHeader(inlineHeader: string, aboveHeader: string): string {
+    const score = (s: string): number => {
+        if (!s || s.length < 2) return -1
+        let n = 0
+        if (STRONG_TITLE_SEP_RE.test(s)) n += 3
+        if (JOB_TITLE_HINT_RE.test(s)) n += 2
+        if (s.length >= 12) n += 1
+        return n
+    }
+    const a = score(inlineHeader)
+    const b = score(aboveHeader)
+    if (b > a) return aboveHeader
+    return inlineHeader || aboveHeader
+}
+
+interface DatedEntry {
+    header: string
+    summary?: string
+    startDate?: string
+    endDate?: string
+    current?: boolean
+}
+
 /** Date-anchored entry parsing shared by experience + education sections. */
-function parseDatedEntries(block: string[]): Array<{ header: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }> {
-    const out: Array<{ header: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }> = []
-    const summaryFor: string[][] = []
-    for (let i = 0; i < block.length && out.length < 15; i++) {
+function parseDatedEntries(block: string[]): DatedEntry[] {
+    const out: DatedEntry[] = []
+    for (let i = 0; i < block.length && out.length < 20; i++) {
         const raw = block[i]
         const line = raw.trim()
         if (!line) continue
-        const dm = line.match(DATE_RANGE_RE)
-        if (!dm) continue
-        const startDate = tokenToYearMonth(dm[1])
-        const isPresent = new RegExp(`^${PRESENT}$`, 'i').test(dm[2].trim())
-        const endDate = isPresent ? undefined : tokenToYearMonth(dm[2])
-        // Header = this line minus the date, else the nearest non-bullet line above.
-        let header = line.replace(dm[0], '').replace(/[•|,–—\-(){}\s]+$/g, '').replace(/^[•|,–—\-(){}\s]+/g, '').trim()
-        if (header.length < 2) {
-            for (let j = i - 1; j >= 0 && j >= i - 2; j--) {
-                const prev = block[j].trim()
-                if (prev && !BULLET_RE.test(block[j]) && !DATE_RANGE_RE.test(prev)) { header = prev; break }
+        const range = line.match(DATE_RANGE_RE)
+        const since = !range ? line.match(SINCE_RE) : null
+        if (!range && !since) continue
+        let startDate: string | undefined
+        let endDate: string | undefined
+        let isPresent: boolean
+        let matchedSlice: string
+        if (range) {
+            startDate = tokenToYearMonth(range[1])
+            isPresent = new RegExp(`^${PRESENT}$`, 'i').test(range[2].trim())
+            endDate = isPresent ? undefined : tokenToYearMonth(range[2])
+            matchedSlice = range[0]
+        } else {
+            startDate = tokenToYearMonth(since![1])
+            isPresent = true
+            matchedSlice = since![0]
+        }
+        // Header candidate 1: this line minus the date phrase.
+        const inlineHeader = line.replace(matchedSlice, '').replace(/[•|,–—\-(){}\s]+$/g, '').replace(/^[•|,–—\-(){}\s]+/g, '').trim()
+        // Header candidate 2: nearest non-bullet, non-date line above (résumés
+        // often put the title on one line and "Location | Dates" on the next).
+        let aboveHeader = ''
+        for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
+            const prev = block[j].trim()
+            if (prev && !BULLET_RE.test(block[j]) && !DATE_RANGE_RE.test(prev) && !SINCE_RE.test(prev) && !classifyHeader(prev)) {
+                aboveHeader = prev
+                break
             }
         }
+        // Pick whichever looks more like a real entry header. A "title — company"
+        // line scores higher than a plain "City, Country" location line: the
+        // separators "—", "–", "|", "·", " at " are distinctive title markers
+        // (commas alone are inconclusive — they appear in addresses too).
+        const header = pickBetterHeader(inlineHeader, aboveHeader)
         // Summary = following bullet/prose lines until the next dated line.
+        // Also stop one line BEFORE the next date — that line is the next
+        // entry's header (when dates sit on their own line), not summary.
         const sum: string[] = []
         for (let k = i + 1; k < block.length; k++) {
-            if (block[k].match(DATE_RANGE_RE)) break
+            if (block[k].match(DATE_RANGE_RE) || block[k].match(SINCE_RE)) break
+            const next = block[k + 1]
+            if (next && (next.match(DATE_RANGE_RE) || next.match(SINCE_RE))) break
             const s = block[k].trim()
             if (s) sum.push(s.replace(BULLET_RE, '• '))
+            if (sum.length > 8) break   // cap summary length
         }
         if (header.length >= 2) {
             out.push({ header, summary: sum.join('\n').slice(0, 800) || undefined, startDate, endDate, current: isPresent })
-            summaryFor.push(sum)
         }
     }
     return out
@@ -207,14 +339,14 @@ function parseExperienceBlock(block: string[]): ParsedExperience[] {
 
 function parseEducationBlock(block: string[]): ParsedEducation[] {
     const dated = parseDatedEntries(block)
-    if (dated.length) {
-        return dated.map(e => mapEducation(e.header, e.summary, e.startDate, e.endDate, e.current)).filter(Boolean) as ParsedEducation[]
-    }
-    // No dates — fall back to school-keyword lines (each school = one entry).
+    const fromDates = dated.map(e => mapEducation(e.header, e.summary, e.startDate, e.endDate, e.current)).filter(Boolean) as ParsedEducation[]
+    if (fromDates.length) return fromDates
+    // No dates — fall back to school-keyword OR degree-keyword lines.
     const out: ParsedEducation[] = []
     for (const raw of block) {
         const line = raw.trim()
-        if (line && SCHOOL_RE.test(line) && out.length < 15) {
+        if (!line || out.length >= 15) continue
+        if (SCHOOL_RE.test(line) || DEGREE_RE.test(line)) {
             const ed = mapEducation(line)
             if (ed) out.push(ed)
         }
@@ -225,17 +357,93 @@ function parseEducationBlock(block: string[]): ParsedEducation[] {
 function mapEducation(header: string, summary?: string, startDate?: string, endDate?: string, current?: boolean): ParsedEducation | null {
     // school = the segment with a school keyword; degree/field from a degree phrase.
     const parts = header.split(/\s+(?:—|–|\||·|,|-| at )\s+/).map(p => p.trim()).filter(Boolean)
-    const school = parts.find(p => SCHOOL_RE.test(p)) ?? parts[0] ?? header
-    const degMatch = header.match(DEGREE_RE)
+    const schoolPart = parts.find(p => SCHOOL_RE.test(p))
+    const degreePart = parts.find(p => DEGREE_RE.test(p))
+    const school = schoolPart ?? parts.find(p => !DEGREE_RE.test(p)) ?? parts[0] ?? header
+    const degMatch = (degreePart ?? header).match(DEGREE_RE)
     let degree: string | undefined
     let fieldOfStudy: string | undefined
     if (degMatch) {
-        degree = degMatch[1]
-        const field = header.slice(degMatch.index! + degMatch[0].length).match(/(?:in|of)\s+([A-Za-z][A-Za-z &/]+)/i)
-        if (field) fieldOfStudy = field[1].trim().replace(/\s+$/, '')
+        const fullDegree = degMatch[0].trim()
+        // Split on " in " — degree phrases like "Master of Science in Computer
+        // Science" should become degree="Master of Science", field="Computer
+        // Science". When no " in " is present, the whole match is the degree
+        // (e.g. "MBA", "Bachelor of Engineering").
+        const split = fullDegree.split(/\s+in\s+/i)
+        if (split.length >= 2 && split[0].length >= 2) {
+            degree = split[0].trim()
+            fieldOfStudy = split.slice(1).join(' in ').trim().replace(/[\s,;.]+$/, '')
+        } else {
+            degree = fullDegree
+        }
     }
     if (!school || school.length < 2) return null
     return { school: school.slice(0, 160), degree: degree?.slice(0, 80), fieldOfStudy: fieldOfStudy?.slice(0, 120), summary, startDate, endDate, current }
+}
+
+/**
+ * Global date-range fallback. When section detection misses (smashed PDF text,
+ * unusual headers), scan the full document line-by-line for every date range
+ * and bucket each entry as education vs. experience based on nearby keywords.
+ * Conservative: only used when the structured section parser returns empty.
+ */
+function fallbackScanEntries(lines: string[]): { experience: ParsedExperience[]; education: ParsedEducation[] } {
+    const dated = parseDatedEntries(lines)
+    const experience: ParsedExperience[] = []
+    const education: ParsedEducation[] = []
+    for (const e of dated) {
+        // Classify by the entry's header only — the summary may bleed the next
+        // entry's header when dated lines aren't separated by blank lines, so
+        // including it here would misclassify experience as education and vice-versa.
+        const looksEducation = SCHOOL_RE.test(e.header) || DEGREE_RE.test(e.header)
+        if (looksEducation) {
+            const ed = mapEducation(e.header, e.summary, e.startDate, e.endDate, e.current)
+            if (ed) education.push(ed)
+        } else {
+            const { title, company } = splitTitleCompany(e.header)
+            if (title.length >= 2) {
+                experience.push({ title: title.slice(0, 120), company: company?.slice(0, 120), summary: e.summary, startDate: e.startDate, endDate: e.endDate, current: e.current })
+            }
+        }
+    }
+    return { experience, education }
+}
+
+/** Lines that look like labelled prose (`Summary: …`, `Skills: …`) — never an address. */
+const LABEL_PREFIX_RE = /^(nationality|citizenship|nationalit[éy]|summary|profile|objective|about(?:\s+me)?|skills?|experience|expertise|languages?|interests?|hobbies|references?|declaration|career\s+objective|key\s+strengths?|achievements?)\s*[:-]/i
+/** Explicit prefixes that lead an address line — stripped before returning. */
+const ADDRESS_PREFIX_RE = /^(address|location|residence|residing\s+(?:at|in))\s*[:-]\s*/i
+
+/**
+ * Find an address line in the résumé's contact area (top of the document).
+ * Strategy: scan the first 20 non-empty lines and pick the one that either
+ * contains an address keyword (Street, P.O. Box, city name) or matches the
+ * "City, Country" shape. Skip lines that are clearly something else
+ * (name-only, email, phone, links, "Nationality:", "Summary:", section headers).
+ */
+function findAddress(lines: string[]): string | undefined {
+    for (let i = 0; i < Math.min(lines.length, 20); i++) {
+        let line = lines[i].trim()
+        if (!line || line.length < 4 || line.length > 160) continue
+        if (EMAIL_RE.test(line)) continue
+        if (URL_RE.test(line)) continue
+        if (PHONE_RE.test(line) && line.replace(/[^\d+]/g, '').length >= 8) continue
+        if (classifyHeader(line)) continue
+        if (DATE_RANGE_RE.test(line) || SINCE_RE.test(line)) continue
+        // Labelled prose (Nationality:, Summary:, Skills:, …) belongs to other
+        // fields — never treat as address even if a city word appears in it.
+        if (LABEL_PREFIX_RE.test(line)) continue
+        // Pure "First Last" 2–4 word name → not an address.
+        if (/^[A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){1,3}$/.test(line) && !/,/.test(line)) continue
+        // Strip explicit "Address:" / "Location:" prefix if present.
+        line = line.replace(ADDRESS_PREFIX_RE, '')
+        const hasKeyword = ADDRESS_KEYWORD_RE.test(line)
+        const isCityCountry = CITY_COUNTRY_RE.test(line)
+        if (hasKeyword || isCityCountry) {
+            return line.replace(/^[•|–—\-\s]+/, '').replace(/[•|–—\-\s]+$/, '').slice(0, 200)
+        }
+    }
+    return undefined
 }
 
 /** Heuristic field extraction from résumé text. */
@@ -256,11 +464,24 @@ export function parseResumeText(text: string): ParsedResume {
     if (linkedin) { out.linkedin = linkedin.startsWith('http') ? linkedin : `https://${linkedin}`; out.confidence.linkedin = 0.95 }
     const github = text.match(GITHUB_RE)?.[0]
     if (github) { out.github = github.startsWith('http') ? github : `https://${github}`; out.confidence.github = 0.9 }
-    const url = text.match(URL_RE)?.[0]
-    if (url && !/linkedin|github/i.test(url)) { out.portfolio = url; out.confidence.portfolio = 0.6 }
+    // Portfolio: first http(s) URL that isn't LinkedIn/GitHub. Scan ALL URLs, not
+    // just the first — when LinkedIn appears before the portfolio, the old code
+    // would skip the portfolio entirely.
+    const urls = text.match(/\bhttps?:\/\/[^\s)]+/gi) ?? []
+    const portfolio = urls.find(u => !/linkedin|github/i.test(u))
+    if (portfolio) { out.portfolio = portfolio; out.confidence.portfolio = 0.6 }
 
     const exp = text.match(EXPERIENCE_RE)
     if (exp) { out.experienceYears = Number(exp[1]); out.confidence.experienceYears = 0.7 }
+
+    const nat = text.match(NATIONALITY_RE)
+    if (nat) {
+        const value = nat[1].trim().replace(/[,;.]+$/, '')
+        if (value && value.length <= 40 && !/\d|@|http/i.test(value)) {
+            out.nationality = value
+            out.confidence.nationality = 0.85
+        }
+    }
 
     // Name: first non-empty line that looks like a person's name (2–4 words,
     // letters only, no email/digits/section keywords). Résumés almost always
@@ -272,6 +493,13 @@ export function parseResumeText(text: string): ParsedResume {
         if (line.length <= 40 && NAME_RE.test(line) && !BAD.test(line)) { out.name = line; out.confidence.name = 0.75; break }
     }
 
+    // Address: scan the contact area (first ~15 lines) for a line that either
+    // contains an address keyword (Street / P.O. Box / known UAE city) or has
+    // a "City, Country" shape. Skip lines that already match higher-confidence
+    // fields (name, email, phone, links) so we don't double-count.
+    out.address = findAddress(lines)
+    if (out.address) out.confidence.address = ADDRESS_KEYWORD_RE.test(out.address) ? 0.75 : 0.55
+
     // Skills: dictionary match (word-boundary, case-insensitive).
     const lower = text.toLowerCase()
     const found = SKILL_DICTIONARY.filter(s => {
@@ -281,15 +509,30 @@ export function parseResumeText(text: string): ParsedResume {
     if (found.length) { out.skills = found; out.confidence.skills = found.length >= 3 ? 0.85 : 0.6 }
 
     // Structured experience + education from their sections.
-    const expBlock = extractSection(lines, EXPERIENCE_HEADER_RE)
+    const expBlock = extractSection(lines, 'experience')
     if (expBlock.length) {
         out.experience = parseExperienceBlock(expBlock)
-        if (out.experience.length) out.confidence.experience = 0.6
+        if (out.experience.length) out.confidence.experience = 0.7
     }
-    const eduBlock = extractSection(lines, EDUCATION_HEADER_RE)
+    const eduBlock = extractSection(lines, 'education')
     if (eduBlock.length) {
         out.education = parseEducationBlock(eduBlock)
-        if (out.education.length) out.confidence.education = 0.6
+        if (out.education.length) out.confidence.education = 0.7
+    }
+
+    // Fallback: if neither section yielded entries (likely a poorly-structured
+    // résumé or one where headers were never detected), do a global date-range
+    // scan and bucket entries by school/degree keywords. Lower confidence.
+    if (!out.experience.length && !out.education.length) {
+        const fb = fallbackScanEntries(lines)
+        if (fb.experience.length) { out.experience = fb.experience; out.confidence.experience = 0.4 }
+        if (fb.education.length) { out.education = fb.education; out.confidence.education = 0.4 }
+    } else if (!out.experience.length) {
+        const fb = fallbackScanEntries(lines)
+        if (fb.experience.length) { out.experience = fb.experience; out.confidence.experience = 0.4 }
+    } else if (!out.education.length) {
+        const fb = fallbackScanEntries(lines)
+        if (fb.education.length) { out.education = fb.education; out.confidence.education = 0.4 }
     }
 
     // If years-of-experience wasn't stated outright, derive it from the work

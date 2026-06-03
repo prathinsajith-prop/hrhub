@@ -441,6 +441,8 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
     if (p.name) setName(prev => prev || p.name!)
     if (p.email) setEmail(prev => prev || p.email!)
     if (p.phone) setPhone(prev => prev || p.phone!)
+    if (p.nationality) setNationality(prev => prev || p.nationality!)
+    if (p.address) setAddress(prev => prev || p.address!)
     if (p.experienceYears != null) setExperience(prev => prev || String(p.experienceYears))
     if (p.education.length) setEducationHistory(prev => prev.length ? prev : p.education)
     if (p.experience.length) setExperienceHistory(prev => prev.length ? prev : p.experience)
