@@ -37,9 +37,15 @@ export interface ApplyInput {
     email: string
     phone?: string
     nationality?: string
+    address?: string
+    gender?: '' | 'male' | 'female' | 'other' | 'prefer_not_to_say'
     experience?: string
     expectedSalary?: string
     coverNote?: string
+    /** Schools attended — sent JSON-stringified through multipart. */
+    educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
+    /** Past roles — sent JSON-stringified through multipart. */
+    experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
     resume: File
     /** Candidate photo auto-extracted from the résumé (optional). */
     photo?: Blob | null
@@ -129,9 +135,18 @@ export function useApplyToJob(companyCode: string, jobId: string) {
             fd.append('email', input.email)
             if (input.phone) fd.append('phone', input.phone)
             if (input.nationality) fd.append('nationality', input.nationality)
+            if (input.address) fd.append('address', input.address)
+            if (input.gender) fd.append('gender', input.gender)
             if (input.experience) fd.append('experience', input.experience)
             if (input.expectedSalary) fd.append('expectedSalary', input.expectedSalary)
             if (input.coverNote) fd.append('coverNote', input.coverNote)
+            // Arrays travel as JSON strings — multipart values are strings only.
+            if (input.educationHistory && input.educationHistory.length > 0) {
+                fd.append('educationHistory', JSON.stringify(input.educationHistory))
+            }
+            if (input.experienceHistory && input.experienceHistory.length > 0) {
+                fd.append('experienceHistory', JSON.stringify(input.experienceHistory))
+            }
             fd.append('resume', input.resume)
             if (input.photo) fd.append('photo', input.photo, 'photo.jpg')
             return publicApi.upload<{ data: { id: string } }>(`/public/careers/${enc(companyCode)}/jobs/${enc(jobId)}/apply`, fd)

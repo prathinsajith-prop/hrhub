@@ -45,11 +45,22 @@ export const jobApplications = pgTable('job_applications', {
     email: text('email').notNull(),
     phone: text('phone'),
     nationality: text('nationality'),
+    // Migration 0081 — keep in sync with backend/src/db/schema/recruitment.ts.
+    address: text('address'),
+    gender: text('gender').$type<'male' | 'female' | 'other' | 'prefer_not_to_say' | null>(),
     stage: text('stage').notNull().default('received'),
     score: integer('score').default(0),
     experience: integer('experience'),
     expectedSalary: numeric('expected_salary', { precision: 12, scale: 2 }),
     currentSalary: numeric('current_salary', { precision: 12, scale: 2 }),
+    /** Schools attended (jsonb string[] of structured entries). */
+    educationHistory: jsonb('education_history')
+        .$type<Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>>()
+        .notNull().default([]),
+    /** Past job roles (jsonb string[] of structured entries). */
+    experienceHistory: jsonb('experience_history')
+        .$type<Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>>()
+        .notNull().default([]),
     resumeUrl: text('resume_url'),
     // Candidate photo (S3 key) — auto-extracted from the résumé on referral/apply.
     avatarUrl: text('avatar_url'),

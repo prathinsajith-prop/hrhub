@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/primitives'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { useUpdateApplication } from '@/hooks/useRecruitment'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
+import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import type { EducationEntry, ExperienceEntry, Gender } from '@/components/shared/MultiEntryField'
 import type { Candidate } from '@/types'
 
 /**
@@ -31,11 +33,15 @@ export function EditCandidateDialog({
         email: '',
         phone: '',
         nationality: '',
+        address: '',
+        gender: '' as '' | Gender,
         experience: '',
         currentSalary: '',
         expectedSalary: '',
         score: '',
     })
+    const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
+    const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
 
     // Reset the form whenever a different candidate is loaded into the dialog.
     useEffect(() => {
@@ -46,17 +52,27 @@ export function EditCandidateDialog({
         const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
         const num = (v: unknown): string =>
             v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '' : String(v)
+        const c = candidate as unknown as {
+            address?: string | null
+            gender?: Gender | null
+            educationHistory?: EducationEntry[] | null
+            experienceHistory?: ExperienceEntry[] | null
+        }
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setForm({
             name: str(candidate.name),
             email: str(candidate.email),
             phone: str(candidate.phone),
             nationality: str(candidate.nationality),
+            address: str(c.address),
+            gender: (c.gender ?? '') as '' | Gender,
             experience: num(candidate.experience),
             currentSalary: num(candidate.currentSalary),
             expectedSalary: num(candidate.expectedSalary),
             score: num(candidate.score),
         })
+        setEducationHistory(Array.isArray(c.educationHistory) ? c.educationHistory : [])
+        setExperienceHistory(Array.isArray(c.experienceHistory) ? c.experienceHistory : [])
     }, [candidate?.id, candidate])
 
     if (!candidate) return null
@@ -71,6 +87,11 @@ export function EditCandidateDialog({
             email: trimmedEmail,
             phone: form.phone.trim(),
             nationality: form.nationality.trim(),
+            address: form.address.trim(),
+            // Send gender only when set — empty string would fail enum validation.
+            ...(form.gender ? { gender: form.gender } : {}),
+            educationHistory,
+            experienceHistory,
         }
         if (form.experience !== '') payload.experience = Number(form.experience)
         if (form.currentSalary !== '') payload.currentSalary = Number(form.currentSalary)
@@ -102,7 +123,7 @@ export function EditCandidateDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[640px]">
+            <DialogContent size="lg">
                 <DialogHeader>
                     <DialogTitle>Edit Candidate</DialogTitle>
                 </DialogHeader>
@@ -150,6 +171,21 @@ export function EditCandidateDialog({
                             <Label>Expected Salary (AED)</Label>
                             <NumericInput value={form.expectedSalary} onChange={(e) => setForm((f) => ({ ...f, expectedSalary: e.target.value }))} />
                         </div>
+                    </div>
+
+                    {/* Address · Gender · Experience[] · Education[] */}
+                    <div className="pt-4 border-t border-border/60">
+                        <CandidateProfileFields
+                            address={form.address}
+                            onAddressChange={(v) => setForm((f) => ({ ...f, address: v }))}
+                            gender={form.gender}
+                            onGenderChange={(v) => setForm((f) => ({ ...f, gender: v }))}
+                            education={educationHistory}
+                            onEducationChange={setEducationHistory}
+                            experience={experienceHistory}
+                            onExperienceChange={setExperienceHistory}
+                            compact
+                        />
                     </div>
                 </DialogBody>
                 <DialogFooter>

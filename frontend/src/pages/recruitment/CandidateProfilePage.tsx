@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
     ArrowLeft, Mail, Phone, Globe, Briefcase, DollarSign, Star,
     XCircle, UserPlus, Save, Edit2, FileText, Upload, CheckCircle2,
-    Clock, ChevronRight,
+    Clock, ChevronRight, User, MapPin, GraduationCap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -345,6 +345,18 @@ export function CandidateProfilePage() {
                                     <span className="text-muted-foreground">{t('recruitment.candidateProfile.experience', { count: candidate.experience })}</span>
                                 </div>
                             )}
+                            {candidate.gender && (
+                                <div className="flex items-center gap-2 text-sm">
+                                    <User className="size-3.5 text-muted-foreground shrink-0" />
+                                    <span className="text-muted-foreground capitalize">{candidate.gender.replace(/_/g, ' ')}</span>
+                                </div>
+                            )}
+                            {candidate.address && (
+                                <div className="flex items-start gap-2 text-sm">
+                                    <MapPin className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                    <span className="text-muted-foreground whitespace-pre-line">{candidate.address}</span>
+                                </div>
+                            )}
 
                             {(candidate.expectedSalary || candidate.currentSalary || candidate.score !== undefined) && (
                                 <div className="border-t border-border pt-3 space-y-2.5">
@@ -424,6 +436,70 @@ export function CandidateProfilePage() {
                             </Label>
                         </CardContent>
                     </Card>
+
+                    {/* Experience timeline — past roles captured at apply time */}
+                    {candidate.experienceHistory && candidate.experienceHistory.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-1.5">
+                                    <Briefcase className="size-3.5 text-sky-600" />
+                                    {t('recruitment.candidateProfile.experienceHistory', { defaultValue: 'Experience' })}
+                                    <span className="ml-auto text-[10px] font-normal text-muted-foreground">{candidate.experienceHistory.length}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <ol className="space-y-3 border-l-2 border-border/60 pl-4">
+                                    {candidate.experienceHistory.map((e, i) => (
+                                        <li key={`exp-${i}`} className="relative">
+                                            <span aria-hidden className="absolute -left-[19px] top-1.5 grid size-3 place-items-center rounded-full bg-sky-500 ring-2 ring-background" />
+                                            <p className="text-sm font-semibold text-foreground">{e.title}</p>
+                                            {(e.company || e.industry) && (
+                                                <p className="text-[12px] text-muted-foreground">{[e.company, e.industry].filter(Boolean).join(' · ')}</p>
+                                            )}
+                                            {(e.startDate || e.endDate || e.current) && (
+                                                <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 tabular-figures">
+                                                    <Clock className="size-3 opacity-70" />{formatMonth(e.startDate)} – {e.current ? 'Present' : formatMonth(e.endDate)}
+                                                </p>
+                                            )}
+                                            {e.summary && <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{e.summary}</p>}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Education timeline */}
+                    {candidate.educationHistory && candidate.educationHistory.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-1.5">
+                                    <GraduationCap className="size-3.5 text-emerald-600" />
+                                    {t('recruitment.candidateProfile.educationHistory', { defaultValue: 'Education' })}
+                                    <span className="ml-auto text-[10px] font-normal text-muted-foreground">{candidate.educationHistory.length}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <ol className="space-y-3 border-l-2 border-border/60 pl-4">
+                                    {candidate.educationHistory.map((e, i) => (
+                                        <li key={`edu-${i}`} className="relative">
+                                            <span aria-hidden className="absolute -left-[19px] top-1.5 grid size-3 place-items-center rounded-full bg-emerald-500 ring-2 ring-background" />
+                                            <p className="text-sm font-semibold text-foreground">{e.school}</p>
+                                            {(e.degree || e.fieldOfStudy) && (
+                                                <p className="text-[12px] text-muted-foreground">{[e.degree, e.fieldOfStudy].filter(Boolean).join(' · ')}</p>
+                                            )}
+                                            {(e.startDate || e.endDate || e.current) && (
+                                                <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 tabular-figures">
+                                                    <Clock className="size-3 opacity-70" />{formatMonth(e.startDate)} – {e.current ? 'Present' : formatMonth(e.endDate)}
+                                                </p>
+                                            )}
+                                            {e.summary && <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{e.summary}</p>}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Actions */}
                     {!isRejected && (
@@ -733,4 +809,17 @@ function StatCard({ label, value, icon }: { label: string; value: string; icon: 
             <p className="text-sm font-semibold tabular-nums truncate">{value}</p>
         </Card>
     )
+}
+
+/**
+ * "YYYY-MM" → "Jan 2024". Returns empty string when value is missing so we can
+ * still render "— Present" for current roles where only an end is set.
+ */
+function formatMonth(value: string | null | undefined): string {
+    if (!value) return ''
+    const [y, m] = value.split('-')
+    if (!y) return ''
+    if (!m) return y
+    const month = new Date(Number(y), Number(m) - 1, 1).toLocaleString('en', { month: 'short' })
+    return `${month} ${y}`
 }

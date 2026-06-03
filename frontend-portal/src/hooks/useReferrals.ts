@@ -36,6 +36,13 @@ export interface SubmitReferralBody {
     candidatePhone?: string
     relationship?: string
     notes?: string
+    // Extended candidate profile (migration 0081) — same shape as the public
+    // careers apply form so HR sees one consistent candidate record regardless
+    // of source.
+    address?: string
+    gender?: '' | 'male' | 'female' | 'other' | 'prefer_not_to_say'
+    educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
+    experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
     resume?: File | null
     /** Candidate photo auto-extracted from the résumé (optional). */
     photo?: Blob | null
@@ -80,6 +87,15 @@ export function useSubmitReferral() {
             if (body.candidatePhone) fd.append('candidatePhone', body.candidatePhone)
             if (body.relationship) fd.append('relationship', body.relationship)
             if (body.notes) fd.append('notes', body.notes)
+            if (body.address) fd.append('address', body.address)
+            if (body.gender) fd.append('gender', body.gender)
+            // Arrays travel as JSON strings — multipart values are strings only.
+            if (body.educationHistory && body.educationHistory.length > 0) {
+                fd.append('educationHistory', JSON.stringify(body.educationHistory))
+            }
+            if (body.experienceHistory && body.experienceHistory.length > 0) {
+                fd.append('experienceHistory', JSON.stringify(body.experienceHistory))
+            }
             if (body.resume) fd.append('resume', body.resume)
             if (body.photo) fd.append('photo', body.photo, 'photo.jpg')
             return api.upload<{ data: MyReferral }>('/referrals', fd).then((r) => r.data)

@@ -44,6 +44,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog, AddEmployeeDialog, type EmpForm } from '@/components/shared/action-dialogs'
 import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
+import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
 import { searchDepartments, searchNationalities } from '@/lib/filters/filter-loaders'
@@ -408,9 +410,13 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [nationality, setNationality] = useState('')
+  const [address, setAddress] = useState('')
+  const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
   const [experience, setExperience] = useState('')
   const [expectedSalary, setExpectedSalary] = useState('')
   const [notes, setNotes] = useState('')
+  const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
+  const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [photo, setPhoto] = useState<Blob | null>(null)
   const createApp = useCreateApplication()
@@ -419,7 +425,9 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
 
   const reset = () => {
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
+    setAddress(''); setGender('')
     setExperience(''); setExpectedSalary(''); setNotes(''); setResumeFile(null); setPhoto(null)
+    setEducationHistory([]); setExperienceHistory([])
   }
 
   // Pre-fill empty fields from the parsed résumé; never overwrite what's typed.
@@ -442,9 +450,13 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           email: email.trim(),
           phone: phone.trim() || undefined,
           nationality: nationality.trim() || undefined,
+          address: address.trim() || undefined,
+          gender: gender || undefined,
           experience: experience ? Number(experience) : undefined,
           expectedSalary: expectedSalary ? Number(expectedSalary) : undefined,
           notes: notes.trim() || undefined,
+          educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
+          experienceHistory: experienceHistory.length > 0 ? experienceHistory : undefined,
         },
       })
       const newId = (result as { data?: { id?: string } })?.data?.id
@@ -475,7 +487,7 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
-      <DialogContent size="md">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Add Candidate</DialogTitle>
         </DialogHeader>
@@ -538,6 +550,21 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           <div className="space-y-1.5">
             <Label>Notes</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Source, recruiter remarks, etc." />
+          </div>
+
+          {/* Address · Gender · Experience[] · Education[] */}
+          <div className="pt-4 border-t border-border/60">
+            <CandidateProfileFields
+              address={address}
+              onAddressChange={setAddress}
+              gender={gender}
+              onGenderChange={setGender}
+              education={educationHistory}
+              onEducationChange={setEducationHistory}
+              experience={experienceHistory}
+              onExperienceChange={setExperienceHistory}
+              compact
+            />
           </div>
         </DialogBody>
         <DialogFooter>

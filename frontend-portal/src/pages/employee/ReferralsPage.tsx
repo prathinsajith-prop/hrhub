@@ -21,6 +21,8 @@ import {
 import { cn } from '@/lib/utils'
 import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
 import { parseResumeFile, extractResumeImage } from '@/lib/resume-parser'
+import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 
 // Pipeline stage → badge tone. Keys are the seeded recruitment stage keys; we
 // degrade gracefully (slate) for any custom/unknown stage.
@@ -227,10 +229,17 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const [parsedNote, setParsedNote] = useState<string | null>(null)
     const [dragging, setDragging] = useState(false)
     const [form, setForm] = useState({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
+    // Extended candidate profile (matches public apply form + admin candidate
+    // dialogs). All optional — referrer adds what they know.
+    const [address, setAddress] = useState('')
+    const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
+    const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
+    const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
 
     const reset = () => {
         setForm({ candidateName: '', candidateEmail: '', candidatePhone: '', relationship: '', notes: '' })
         setJob(null); setResume(null); setPhoto(null); setParsedNote(null)
+        setAddress(''); setGender(''); setEducationHistory([]); setExperienceHistory([])
         if (fileRef.current) fileRef.current.value = ''
     }
     const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -283,6 +292,10 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                 candidatePhone: form.candidatePhone.trim() || undefined,
                 relationship: form.relationship.trim() || undefined,
                 notes: form.notes.trim() || undefined,
+                address: address.trim() || undefined,
+                gender: gender || undefined,
+                educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
+                experienceHistory: experienceHistory.length > 0 ? experienceHistory : undefined,
                 resume,
                 photo,
             },
@@ -301,7 +314,8 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 
     return (
         <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-            <DialogContent className="sm:max-w-md">
+            {/* Wider dialog now that we collect address/gender/education/experience */}
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{t('referrals.dialogTitle', { defaultValue: 'Refer a candidate' })}</DialogTitle>
                 </DialogHeader>
@@ -398,6 +412,21 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     <div className="space-y-1.5">
                         <Label>{t('referrals.notes', { defaultValue: 'Why are you referring them?' })}</Label>
                         <Textarea rows={3} value={form.notes} onChange={(e) => set('notes')(e.target.value)} placeholder={t('referrals.notesPlaceholder', { defaultValue: 'A short note for the hiring team…' })} />
+                    </div>
+
+                    {/* Extended candidate profile — Address, Gender, Experience[], Education[] */}
+                    <div className="pt-4 border-t border-border/60">
+                        <CandidateProfileFields
+                            address={address}
+                            onAddressChange={setAddress}
+                            gender={gender}
+                            onGenderChange={setGender}
+                            education={educationHistory}
+                            onEducationChange={setEducationHistory}
+                            experience={experienceHistory}
+                            onExperienceChange={setExperienceHistory}
+                            compact
+                        />
                     </div>
                 </div>
 

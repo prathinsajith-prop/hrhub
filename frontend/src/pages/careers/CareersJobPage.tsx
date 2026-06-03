@@ -3,10 +3,10 @@
  * Two-column on desktop: the posting (left) and a sticky apply panel (right);
  * stacks on mobile. Resume is required (drag-and-drop or click).
  */
-import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useState, useRef, useMemo, useEffect, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, MapPin, Building2, CalendarDays, Banknote, Users, CheckCircle2, Sparkles, GraduationCap, Clock, Hash, Briefcase, Info } from 'lucide-react'
+import { ArrowLeft, MapPin, Building2, CalendarDays, Banknote, Users, CheckCircle2, Sparkles, GraduationCap, Clock, Hash, Briefcase, Info, ImagePlus, Trash2 } from 'lucide-react'
 import { usePublicJob, useApplyToJob, type ApplyInput } from '@/hooks/usePublicCareers'
 import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,8 @@ import { PUBLIC_ROUTES } from '@/lib/routes'
 import { PublicShell, CareersError } from './careersShared'
 import { formatSalaryRange } from './careersHelpers'
 import { JobTypeBadge, WorkplaceBadge, TagChip, formatPostedAgo } from '@/components/shared/JobBadges'
+import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
+import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 
 export function CareersJobPage() {
     const { companyCode = '', jobId = '' } = useParams<{ companyCode: string; jobId: string }>()
@@ -286,9 +288,22 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
     const { t } = useTranslation()
     const apply = useApplyToJob(companyCode, jobId)
     const [form, setForm] = useState({ name: '', email: '', phone: '', nationality: '', experience: '', expectedSalary: '', coverNote: '' })
+    // Additional profile fields — kept as separate state to keep the submit
+    // payload assembly explicit (multipart upload).
+    const [address, setAddress] = useState('')
+    const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
+    const [education, setEducation] = useState<EducationEntry[]>([])
+    const [experience, setExperience] = useState<ExperienceEntry[]>([])
     const [file, setFile] = useState<File | null>(null)
     const [photo, setPhoto] = useState<Blob | null>(null)
     const [done, setDone] = useState(false)
+    // The submitted candidate photo defaults to the image auto-extracted from the
+    // résumé; an explicit upload takes priority. `photoLocked` ensures a résumé
+    // re-parse never overrides the candidate's manual upload/removal.
+    const photoLocked = useRef(false)
+    const onResumePhoto = (p: Blob | null) => { if (!photoLocked.current) setPhoto(p) }
+    const onPickPhoto = (f: File | null) => { photoLocked.current = true; setPhoto(f) }
+    const onRemovePhoto = () => { photoLocked.current = true; setPhoto(null) }
 
     const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
         setForm(prev => ({ ...prev, [k]: e.target.value }))
@@ -307,7 +322,15 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
     const submit = (e: FormEvent) => {
         e.preventDefault()
         if (!form.name.trim() || !form.email.trim() || !file) return toast.error(t('careers.apply.missingFields'))
-        const input: ApplyInput = { ...form, resume: file, photo }
+        const input: ApplyInput = {
+            ...form,
+            address: address.trim() || undefined,
+            gender: gender || undefined,
+            educationHistory: education.length > 0 ? education : undefined,
+            experienceHistory: experience.length > 0 ? experience : undefined,
+            resume: file,
+            photo,
+        }
         apply.mutate(input, {
             onSuccess: () => setDone(true),
             onError: (err) => {
@@ -340,7 +363,7 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
             <div className="mt-4 space-y-3.5">
                 {/* Résumé first — upload to auto-fill the fields below */}
                 <Field label={t('careers.apply.resume')} required>
-                    <ResumeUpload file={file} onFile={setFile} onParsed={handleParsed} onPhoto={setPhoto} />
+                    <ResumeUpload file={file} onFile={setFile} onParsed={handleParsed} onPhoto={onResumePhoto} />
                 </Field>
 
                 <div className="relative flex items-center gap-3 py-0.5">
@@ -352,9 +375,15 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
                 <Field label={t('careers.apply.name')} required>
                     <Input value={form.name} onChange={set('name')} autoComplete="name" required />
                 </Field>
-                <Field label={t('careers.apply.email')} required>
-                    <Input type="email" value={form.email} onChange={set('email')} autoComplete="email" required />
-                </Field>
+                {/* Email + Gender side-by-side (Gender on the right) */}
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label={t('careers.apply.email')} required>
+                        <Input type="email" value={form.email} onChange={set('email')} autoComplete="email" required />
+                    </Field>
+                    <Field label={t('careers.apply.gender', { defaultValue: 'Gender' })}>
+                        <GenderSelect value={gender} onChange={setGender} />
+                    </Field>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label={t('careers.apply.phone')}>
                         <Input value={form.phone} onChange={set('phone')} autoComplete="tel" inputMode="tel" />
@@ -373,6 +402,25 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
                         <NumericInput decimal={false} value={form.expectedSalary} onChange={set('expectedSalary')} />
                     </Field>
                 </div>
+                <Field label={t('careers.apply.photo', { defaultValue: 'Photo (optional)' })}>
+                    <PhotoField photo={photo} onPick={onPickPhoto} onRemove={onRemovePhoto} t={t} />
+                </Field>
+
+                {/* ── Extended profile — Address, Gender, Experience, Education ── */}
+                <div className="pt-4 border-t border-border/60">
+                    <CandidateProfileFields
+                        address={address}
+                        onAddressChange={setAddress}
+                        gender={gender}
+                        onGenderChange={setGender}
+                        showGender={false}
+                        education={education}
+                        onEducationChange={setEducation}
+                        experience={experience}
+                        onExperienceChange={setExperience}
+                    />
+                </div>
+
                 <Field label={t('careers.apply.coverNote')}>
                     <Textarea rows={3} value={form.coverNote} onChange={set('coverNote')} placeholder={t('careers.apply.coverNotePlaceholder')} className="resize-none" />
                 </Field>
@@ -391,5 +439,60 @@ function Field({ label, required, children }: { label: string; required?: boolea
             <Label className="text-xs">{label}{required && <span className="text-destructive"> *</span>}</Label>
             <div className="mt-1.5">{children}</div>
         </div>
+    )
+}
+
+/**
+ * Optional candidate photo. Shows the effective photo (manual upload OR the
+ * image auto-extracted from the résumé) as a circular preview with replace /
+ * remove; otherwise a compact image drop zone. Image-only, ≤2 MB.
+ */
+function PhotoField({ photo, onPick, onRemove, t }: {
+    photo: Blob | null
+    onPick: (f: File | null) => void
+    onRemove: () => void
+    t: ReturnType<typeof useTranslation>['t']
+}) {
+    const inputRef = useRef<HTMLInputElement>(null)
+    const [dragging, setDragging] = useState(false)
+    const url = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo])
+    useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
+
+    function pick(f: File | null | undefined) {
+        if (!f) return
+        if (!f.type.startsWith('image/')) return toast.error(t('careers.apply.photoInvalid', { defaultValue: 'Please choose an image file.' }))
+        if (f.size > 2 * 1024 * 1024) return toast.error(t('careers.apply.photoTooLarge', { defaultValue: 'Image must be under 2 MB.' }))
+        onPick(f)
+    }
+
+    return (
+        <>
+            <input ref={inputRef} type="file" accept="image/*" className="sr-only" onChange={e => { pick(e.target.files?.[0]); e.target.value = '' }} />
+            {url ? (
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 p-2.5">
+                    <img src={url} alt="" className="size-12 shrink-0 rounded-full object-cover ring-1 ring-border" />
+                    <span className="flex-1 truncate text-xs text-muted-foreground">{t('careers.apply.photoAttached', { defaultValue: 'Photo attached' })}</span>
+                    <button type="button" onClick={() => inputRef.current?.click()} className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">{t('careers.apply.photoReplace', { defaultValue: 'Replace' })}</button>
+                    <button type="button" onClick={onRemove} aria-label={t('careers.apply.photoRemove', { defaultValue: 'Remove photo' })} className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 className="size-4" />
+                    </button>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={e => { e.preventDefault(); setDragging(false); pick(e.dataTransfer.files?.[0]) }}
+                    className={cn(
+                        'flex w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-4 text-center text-sm transition-colors',
+                        dragging ? 'border-primary bg-primary/5' : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-accent/40',
+                    )}
+                >
+                    <span className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground"><ImagePlus className="size-4" /></span>
+                    {t('careers.apply.photoChoose', { defaultValue: 'Choose a photo or drag and drop' })}
+                </button>
+            )}
+        </>
     )
 }

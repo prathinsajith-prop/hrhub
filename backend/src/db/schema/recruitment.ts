@@ -59,14 +59,30 @@ export const jobApplications = pgTable('job_applications', {
     email: text('email').notNull(),
     phone: text('phone'),
     nationality: text('nationality'),
+    // Address + gender added with migration 0081 for richer applicant profiles.
+    address: text('address'),
+    gender: text('gender').$type<'male' | 'female' | 'other' | 'prefer_not_to_say' | null>(),
     // Stage keys are per-tenant — admins can add/rename them in Organization
     // Settings → Recruitment Stages. Typed as plain string so user-defined
     // keys are accepted; the seven default keys are seeded for every tenant.
     stage: text('stage').notNull().default('received'),
     score: integer('score').default(0),
+    /** Total years of experience (integer). The detailed role-by-role history
+     *  lives in `experienceHistory` (jsonb) — keep both, they answer different
+     *  questions (years for filtering vs entries for the profile timeline). */
     experience: integer('experience'),
     expectedSalary: numeric('expected_salary', { precision: 12, scale: 2 }),
     currentSalary: numeric('current_salary', { precision: 12, scale: 2 }),
+    /** Schools/degrees attended. Each entry: { school, degree?, fieldOfStudy?,
+     *  startDate?, endDate?, current?, summary? }. */
+    educationHistory: jsonb('education_history')
+        .$type<Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>>()
+        .notNull().default([]),
+    /** Past job roles. Each entry: { title, company?, industry?, summary?,
+     *  startDate?, endDate?, current? }. */
+    experienceHistory: jsonb('experience_history')
+        .$type<Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>>()
+        .notNull().default([]),
     resumeUrl: text('resume_url'),
     // Candidate photo (S3 key) — auto-extracted from the résumé on apply, or
     // uploaded manually. Served as a presigned `avatar` URL by the service.

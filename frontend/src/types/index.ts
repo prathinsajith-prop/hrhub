@@ -227,6 +227,12 @@ export interface Candidate {
   expectedSalary?: number
   notes?: string
   resumeUrl?: string | null
+  // Extended profile fields (migration 0081). Optional so older candidates
+  // without them keep working unchanged.
+  address?: string | null
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
+  educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
+  experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
   // Origin of the candidate. 'direct' = added by HR · 'careers' = applied via the
   // public careers portal · 'referral' = submitted by an employee via the portal.
   source?: 'direct' | 'referral' | 'careers'

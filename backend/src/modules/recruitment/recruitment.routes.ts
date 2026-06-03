@@ -633,10 +633,44 @@ export default async function (fastify: any): Promise<void> {
                     email: { type: 'string', format: 'email' },
                     phone: { type: 'string' },
                     nationality: { type: 'string' },
+                    address: { type: 'string' },
+                    gender: { type: 'string', enum: ['male', 'female', 'other', 'prefer_not_to_say'] },
                     experience: { type: 'integer', minimum: 0 },
                     expectedSalary: { type: 'number', minimum: 0 },
                     currentSalary: { type: 'number', minimum: 0 },
                     notes: { type: 'string' },
+                    educationHistory: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['school'],
+                            properties: {
+                                school: { type: 'string', minLength: 1 },
+                                degree: { type: 'string' },
+                                fieldOfStudy: { type: 'string' },
+                                startDate: { type: 'string' },
+                                endDate: { type: 'string' },
+                                current: { type: 'boolean' },
+                                summary: { type: 'string' },
+                            },
+                        },
+                    },
+                    experienceHistory: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['title'],
+                            properties: {
+                                title: { type: 'string', minLength: 1 },
+                                company: { type: 'string' },
+                                industry: { type: 'string' },
+                                summary: { type: 'string' },
+                                startDate: { type: 'string' },
+                                endDate: { type: 'string' },
+                                current: { type: 'boolean' },
+                            },
+                        },
+                    },
                 },
                 additionalProperties: false,
             },
@@ -747,6 +781,10 @@ export default async function (fastify: any): Promise<void> {
                     experience: { type: 'number' },
                     nationality: { type: 'string' },
                     phone: { type: 'string' },
+                    address: { type: 'string' },
+                    gender: { type: 'string', enum: ['male', 'female', 'other', 'prefer_not_to_say'] },
+                    educationHistory: { type: 'array' },
+                    experienceHistory: { type: 'array' },
                 },
             },
         },
@@ -758,11 +796,15 @@ export default async function (fastify: any): Promise<void> {
             ...(b.email !== undefined && { email: b.email as string }),
             ...(b.phone !== undefined && { phone: b.phone as string }),
             ...(b.nationality !== undefined && { nationality: b.nationality as string }),
+            ...(b.address !== undefined && { address: b.address as string }),
+            ...(b.gender !== undefined && { gender: b.gender as never }),
             ...(b.experience !== undefined && { experience: Number(b.experience) }),
             ...(b.expectedSalary !== undefined && { expectedSalary: String(b.expectedSalary) }),
             ...(b.currentSalary !== undefined && { currentSalary: String(b.currentSalary) }),
             ...(b.notes !== undefined && { notes: b.notes as string }),
             ...(b.score !== undefined && { score: Number(b.score) }),
+            ...(b.educationHistory !== undefined && { educationHistory: b.educationHistory as never }),
+            ...(b.experienceHistory !== undefined && { experienceHistory: b.experienceHistory as never }),
         } as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'application', entityId: id, entityName: (updated as any).name ?? 'Candidate', action: 'update', ipAddress: (request as any).ip, userAgent: request.headers['user-agent'] }).catch(() => { })
@@ -1268,14 +1310,38 @@ export default async function (fastify: any): Promise<void> {
         const salRaw = fields.expectedSalary?.trim()
         const salNum = salRaw ? Number(salRaw) : NaN
         try {
+            // address/gender are simple strings. educationHistory + experienceHistory
+            // arrive as JSON-stringified arrays (multipart only supports string
+            // values); parse defensively and reject malformed payloads silently
+            // (an HR review on the admin side can still capture the candidate).
+            const safeArray = <T,>(raw: string | undefined, validate: (v: any) => v is T): T[] => {
+                if (!raw) return []
+                try {
+                    const parsed = JSON.parse(raw)
+                    if (!Array.isArray(parsed)) return []
+                    return parsed.filter(validate)
+                } catch {
+                    return []
+                }
+            }
+            const eduHistory = safeArray<{ school: string }>(fields.educationHistory, (v: any): v is { school: string } => v && typeof v === 'object' && typeof v.school === 'string' && v.school.trim().length > 0)
+            const expHistory = safeArray<{ title: string }>(fields.experienceHistory, (v: any): v is { title: string } => v && typeof v === 'object' && typeof v.title === 'string' && v.title.trim().length > 0)
+            const validGenders = ['male', 'female', 'other', 'prefer_not_to_say']
+            const genderRaw = fields.gender?.trim() ?? ''
+            const gender = validGenders.includes(genderRaw) ? genderRaw : null
+
             application = await createApplication(tenant.id, jobId, {
                 name,
                 email,
                 phone: fields.phone?.trim() || null,
                 nationality: fields.nationality?.trim() || null,
+                address: fields.address?.trim() || null,
+                gender: gender as never,
                 experience: Number.isFinite(expNum) && Number.isInteger(expNum) && expNum >= 0 ? expNum : null,
                 expectedSalary: Number.isFinite(salNum) && salNum >= 0 ? salNum.toFixed(2) : null,
                 notes: fields.coverNote?.trim() || null,
+                educationHistory: eduHistory as never,
+                experienceHistory: expHistory as never,
                 source: 'careers',
                 stage: 'received',
             } as never)

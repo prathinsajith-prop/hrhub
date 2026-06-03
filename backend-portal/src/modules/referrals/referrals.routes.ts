@@ -144,6 +144,28 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
         const candidatePhone = fields.candidatePhone?.trim() || null
         const relationship = fields.relationship?.trim() || null
         const notes = fields.notes?.trim() || null
+        // Extended candidate profile fields (migration 0081). Multipart values are
+        // strings only, so arrays arrive JSON-stringified; parse defensively so a
+        // malformed payload never blocks the referral submission.
+        const address = fields.address?.trim() || null
+        const validGenders = ['male', 'female', 'other', 'prefer_not_to_say']
+        const genderRaw = fields.gender?.trim() ?? ''
+        const gender = validGenders.includes(genderRaw) ? (genderRaw as 'male' | 'female' | 'other' | 'prefer_not_to_say') : null
+        const safeArray = <T,>(raw: string | undefined, valid: (v: any) => v is T): T[] => {
+            if (!raw) return []
+            try {
+                const parsed = JSON.parse(raw)
+                return Array.isArray(parsed) ? parsed.filter(valid) : []
+            } catch { return [] }
+        }
+        const educationHistory = safeArray<{ school: string }>(
+            fields.educationHistory as string | undefined,
+            (v: any): v is { school: string } => v && typeof v === 'object' && typeof v.school === 'string' && v.school.trim().length > 0,
+        )
+        const experienceHistory = safeArray<{ title: string }>(
+            fields.experienceHistory as string | undefined,
+            (v: any): v is { title: string } => v && typeof v === 'object' && typeof v.title === 'string' && v.title.trim().length > 0,
+        )
         if (!jobId) return reply.code(400).send(e400('A job is required'))
         if (!candidateName) return reply.code(400).send(e400('Candidate name is required'))
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(candidateEmail)) {
@@ -224,6 +246,10 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                     name: candidateName,
                     email: candidateEmail,
                     phone: candidatePhone,
+                    address,
+                    gender,
+                    educationHistory,
+                    experienceHistory,
                     notes,
                     resumeUrl,
                     avatarUrl,
