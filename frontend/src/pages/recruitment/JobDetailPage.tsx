@@ -580,36 +580,47 @@ export function JobDetailPage() {
                           <button
                             type="button"
                             onClick={() => navigate(`/recruitment/candidates/${rc.applicationId}`)}
-                            className="w-full text-start rounded-lg border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3"
+                            className="w-full text-start rounded-xl border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3.5"
                           >
                             <div className="flex items-start gap-3">
-                              <Avatar className="size-9 shrink-0 border border-border/60">
+                              <Avatar className="size-10 shrink-0 border border-border/60">
                                 {rc.avatar && <img src={rc.avatar} alt={rc.name} className="object-cover" />}
                                 <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">{getInitials(rc.name)}</AvatarFallback>
                               </Avatar>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm font-semibold text-foreground truncate">{rc.name}</p>
-                                  <MatchScoreBadge score={rc.overall} className="ms-auto" />
+                                {/* Identity left, match score pinned top-right — the
+                                    score never wraps under the name now. */}
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-foreground truncate">{rc.name}</p>
+                                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                      {rc.email}
+                                      {rc.experience != null && rc.experience > 0 && (
+                                        <span> · {t('recruitment.jobDetail.experienceYears', { count: rc.experience })}</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                  <MatchScoreBadge score={rc.overall} className="shrink-0" />
                                 </div>
-                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                                  {rc.email}
-                                  {rc.experience != null && rc.experience > 0 && (
-                                    <span> · {t('recruitment.jobDetail.experienceYears', { count: rc.experience })}</span>
-                                  )}
-                                </p>
+
                                 {(rc.matchedSkills.length > 0 || rc.missingSkills.length > 0) && (
-                                  <div className="mt-2">
+                                  <div className="mt-2.5 border-t border-border/40 pt-2.5">
                                     <MatchSkillChips matched={rc.matchedSkills} missing={rc.missingSkills} />
                                   </div>
                                 )}
                                 {rc.strengths.length > 0 && (
-                                  <p className="text-[11px] text-muted-foreground/90 mt-2">{rc.strengths.join(' · ')}</p>
+                                  <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                                    <Sparkles className="size-3 shrink-0 mt-0.5 text-violet-500" />
+                                    <span>{rc.strengths.join(' · ')}</span>
+                                  </p>
                                 )}
                                 {rc.appliedJobs.length > 0 && (
-                                  <p className="text-[11px] text-muted-foreground/70 mt-1.5">
-                                    {t('recruitment.recommendations.alsoAppliedTo', { defaultValue: 'Also applied to:' })}{' '}
-                                    {rc.appliedJobs.map(j => j.title).join(', ')}
+                                  <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
+                                    <Briefcase className="size-3 shrink-0 mt-0.5" />
+                                    <span>
+                                      {t('recruitment.recommendations.alsoAppliedTo', { defaultValue: 'Also applied to:' })}{' '}
+                                      {rc.appliedJobs.map(j => j.title).join(', ')}
+                                    </span>
                                   </p>
                                 )}
                               </div>

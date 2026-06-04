@@ -414,6 +414,8 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
                             placeholder={t('careers.apply.nationality')}
                         />
                     </Field>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <Field label={t('careers.apply.experience')}>
                         <NumericInput decimal={false} value={form.experience} onChange={set('experience')} />
                     </Field>

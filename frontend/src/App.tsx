@@ -195,6 +195,7 @@ export default function App() {
               <Route path="employees" element={<RoleRoute routeKey="employees"><EmployeesPage /></RoleRoute>} />
               <Route path="employees/:id" element={<RoleRoute routeKey="employees/:id"><EmployeeDetailPage /></RoleRoute>} />
               <Route path="recruitment" element={<RoleRoute routeKey="recruitment"><RecruitmentPage /></RoleRoute>} />
+              <Route path="recruitment/jobs" element={<RoleRoute routeKey="recruitment"><RecruitmentPage /></RoleRoute>} />
               <Route path="recruitment/jobs/:id" element={<RoleRoute routeKey="recruitment"><JobDetailPage /></RoleRoute>} />
               <Route path="recruitment/candidates" element={<Navigate to="/recruitment" replace />} />
               <Route path="recruitment/candidates/:id" element={<RoleRoute routeKey="recruitment/candidates/:id"><CandidateProfilePage /></RoleRoute>} />

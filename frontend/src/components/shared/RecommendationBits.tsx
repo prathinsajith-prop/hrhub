@@ -54,32 +54,39 @@ export function MatchSkillChips({
     const missingShown = missing.slice(0, max)
     const missingOverflow = missing.length - missingShown.length
 
+    // Fixed-width label column so the two rows' chips align on the same left
+    // edge — much easier to scan "matched vs missing" at a glance than ragged
+    // rows where MATCHED/MISSING push the chips to different start positions.
     return (
         <div className="space-y-1.5">
             {matchedShown.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                <div className="flex items-start gap-2">
+                    <span className="w-14 shrink-0 pt-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-600/70 dark:text-emerald-400/70">
                         {t('recruitment.recommendations.matched', { defaultValue: 'Matched' })}
                     </span>
-                    {matchedShown.map((s, i) => (
-                        <TagChip key={`m-${i}-${s}`} tone="emerald">{s}</TagChip>
-                    ))}
-                    {matchedOverflow > 0 && (
-                        <span className="text-[11px] text-muted-foreground">+{matchedOverflow}</span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {matchedShown.map((s, i) => (
+                            <TagChip key={`m-${i}-${s}`} tone="emerald">{s}</TagChip>
+                        ))}
+                        {matchedOverflow > 0 && (
+                            <span className="text-[11px] font-medium text-muted-foreground">+{matchedOverflow}</span>
+                        )}
+                    </div>
                 </div>
             )}
             {missingShown.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                <div className="flex items-start gap-2">
+                    <span className="w-14 shrink-0 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
                         {t('recruitment.recommendations.missing', { defaultValue: 'Missing' })}
                     </span>
-                    {missingShown.map((s, i) => (
-                        <TagChip key={`x-${i}-${s}`} tone="slate" className="opacity-80">{s}</TagChip>
-                    ))}
-                    {missingOverflow > 0 && (
-                        <span className="text-[11px] text-muted-foreground">+{missingOverflow}</span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {missingShown.map((s, i) => (
+                            <TagChip key={`x-${i}-${s}`} tone="slate" className="opacity-80">{s}</TagChip>
+                        ))}
+                        {missingOverflow > 0 && (
+                            <span className="text-[11px] font-medium text-muted-foreground">+{missingOverflow}</span>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

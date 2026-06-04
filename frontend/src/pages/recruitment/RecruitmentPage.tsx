@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo, useState, memo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
 import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, Upload } from 'lucide-react'
@@ -780,6 +780,7 @@ const CandidateListRow = memo(function CandidateListRow({
 export function RecruitmentPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Real-time: subscribe to all recruitment WS events for this tenant
   useRecruitmentSocket()
@@ -814,7 +815,13 @@ export function RecruitmentPage() {
     }
     return map
   }, [kanbanStagesList])
-  const [activeTab, setActiveTab] = useState('pipeline')
+  // Tab state is URL-driven: /recruitment/jobs lands on Job Listings, /recruitment
+  // on Candidate Pipeline. Lets users deep-link / share the Jobs view and keeps
+  // back-button behaviour intact.
+  const activeTab = location.pathname.startsWith('/recruitment/jobs') ? 'jobs' : 'pipeline'
+  const setActiveTab = (id: string) => {
+    navigate(id === 'jobs' ? '/recruitment/jobs' : '/recruitment', { replace: false })
+  }
   const [pipelineView, setPipelineView] = useState<'kanban' | 'list'>('kanban')
   const [listStageFilter, setListStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
