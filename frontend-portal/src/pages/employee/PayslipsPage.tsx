@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Printer, Receipt } from 'lucide-react'
+import { Landmark, Printer, Receipt } from 'lucide-react'
 
 import { useMyPayslips, usePayslipDetail } from '@/hooks/usePayslips'
 import { useMyEmployee } from '@/hooks/useMe'
@@ -11,6 +11,7 @@ import { GlassCard } from '@/components/shared/GlassCard'
 import { BankDetailsCard } from '@/components/shared/BankDetailsCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,7 +36,10 @@ function runStatusBadge(status: string, t: TFunction): RunStatusBadge {
         case 'processing':
             return { variant: 'secondary', label: t('payslips.runStatus.processing', { defaultValue: 'Processing' }) }
         case 'approved':
-            return { variant: 'secondary', label: t('payslips.runStatus.approved', { defaultValue: 'Approved' }) }
+            // Green, matching how every other portal surface (Leave, Home,
+            // member details) renders an "Approved" status — grey read as
+            // unfinished/neutral, which isn't what an approval is.
+            return { variant: 'success', label: t('payslips.runStatus.approved', { defaultValue: 'Approved' }) }
         case 'wps_submitted':
             return {
                 variant: 'secondary',
@@ -53,57 +57,73 @@ export function EmployeePayslipsPage() {
     const { data, isLoading } = useMyPayslips()
     const { data: employee } = useMyEmployee()
     const [selectedId, setSelectedId] = useState<string | null>(null)
+    // Payslip history is the page's primary purpose, so it's the default tab;
+    // Bank details (the account these payments land in) sits alongside it.
+    const [tab, setTab] = useState<'history' | 'bank'>('history')
 
     return (
         <div className="space-y-6">
             <PageHeader title={t('payslips.title')} />
 
-            {/* Bank details belong here next to the payslips — that's the
-                account these payments land in. Editing routes through the
-                manager-approval flow. */}
-            {employee ? <BankDetailsCard employee={employee} /> : null}
+            <Tabs value={tab} onValueChange={(v) => setTab(v as 'history' | 'bank')} className="space-y-5">
+                <TabsList variant="underline">
+                    <TabsTrigger value="history">
+                        <Receipt className="size-3.5" /> {t('payslips.tabHistory', { defaultValue: 'Payslip history' })}
+                    </TabsTrigger>
+                    <TabsTrigger value="bank">
+                        <Landmark className="size-3.5" /> {t('payslips.tabBank', { defaultValue: 'Bank details' })}
+                    </TabsTrigger>
+                </TabsList>
 
-            {isLoading ? (
-                <div className="space-y-3">
-                    <Skeleton className="h-20" />
-                    <Skeleton className="h-20" />
-                </div>
-            ) : !data?.length ? (
-                <EmptyState icon={<Receipt className="size-8" />} title={t('payslips.noPayslips')} />
-            ) : (
-                <div className="space-y-2.5">
-                    {data.map((p) => {
-                        const status = runStatusBadge(p.runStatus, t)
-                        return (
-                            <Card key={p.id} className="border-border/70 transition-colors hover:border-primary/30">
-                                <CardContent className="flex items-center justify-between gap-3 p-4">
-                                    <div className="min-w-0">
-                                        <div className="font-display text-base font-semibold">
-                                            {monthName(p.month)} {p.year}
+                {/* ── Payslip history ── */}
+                <TabsContent value="history" className="space-y-2.5 focus-visible:outline-none">
+                    {isLoading ? (
+                        <div className="space-y-3">
+                            <Skeleton className="h-20" />
+                            <Skeleton className="h-20" />
+                        </div>
+                    ) : !data?.length ? (
+                        <EmptyState icon={<Receipt className="size-8" />} title={t('payslips.noPayslips')} />
+                    ) : (
+                        data.map((p) => {
+                            const status = runStatusBadge(p.runStatus, t)
+                            return (
+                                <Card key={p.id} className="border-border/70 transition-colors hover:border-primary/30">
+                                    <CardContent className="flex items-center justify-between gap-3 p-4">
+                                        <div className="min-w-0">
+                                            <div className="font-display text-base font-semibold">
+                                                {monthName(p.month)} {p.year}
+                                            </div>
+                                            <Badge variant={status.variant} className="mt-1.5">
+                                                {status.label}
+                                            </Badge>
                                         </div>
-                                        <Badge variant={status.variant} className="mt-1.5">
-                                            {status.label}
-                                        </Badge>
-                                    </div>
-                                    <div className="text-end">
-                                        <div className="font-display text-lg font-bold tabular-figures">
-                                            {formatCurrency(p.netSalary)}
+                                        <div className="text-end">
+                                            <div className="font-display text-lg font-bold tabular-figures">
+                                                {formatCurrency(p.netSalary)}
+                                            </div>
+                                            <Button
+                                                variant="link"
+                                                size="sm"
+                                                className="h-auto p-0 text-xs"
+                                                onClick={() => setSelectedId(p.id)}
+                                            >
+                                                {t('payslips.view')}
+                                            </Button>
                                         </div>
-                                        <Button
-                                            variant="link"
-                                            size="sm"
-                                            className="h-auto p-0 text-xs"
-                                            onClick={() => setSelectedId(p.id)}
-                                        >
-                                            {t('payslips.view')}
-                                        </Button>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )
-                    })}
-                </div>
-            )}
+                                    </CardContent>
+                                </Card>
+                            )
+                        })
+                    )}
+                </TabsContent>
+
+                {/* ── Bank details — the account these payments land in.
+                    Editing routes through the manager-approval flow. ── */}
+                <TabsContent value="bank" className="focus-visible:outline-none">
+                    {employee ? <BankDetailsCard employee={employee} /> : <Skeleton className="h-40" />}
+                </TabsContent>
+            </Tabs>
 
             <PayslipDialog id={selectedId} onClose={() => setSelectedId(null)} />
         </div>

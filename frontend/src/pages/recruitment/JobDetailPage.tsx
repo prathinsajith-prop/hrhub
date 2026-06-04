@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { RichTextDisplay } from '@/components/ui/rich-text-display'
@@ -12,6 +12,7 @@ import { MatchScoreBadge, MatchSkillChips } from '@/components/shared/Recommenda
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsList, TabsTrigger, TabsContent, TabsBadge } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
@@ -61,6 +62,13 @@ export function JobDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [stageFilter, setStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<'all' | 'direct' | 'referral' | 'careers'>('all')
+  // Candidates card has two lenses: real applicants for this role, and
+  // talent-pool matches surfaced by the recommendation engine. Null means
+  // "not yet decided" — the auto-pick effect below resolves it once both
+  // queries finish loading (lands on Recommended when there are zero
+  // applicants but matches exist; Applicants otherwise). After the first
+  // resolution the value stays user-controlled.
+  const [tab, setTab] = useState<'applicants' | 'recommended' | null>(null)
 
   const { data: jobData, isLoading: jobLoading } = useJob(id)
   const { data: appsData, isLoading: appsLoading } = useApplications({ jobId: id, limit: 200 })
@@ -107,6 +115,20 @@ export function JobDetailPage() {
     ),
     [allCandidates, stageFilter, sourceFilter],
   )
+
+  // Counts surfaced on the tab triggers. Applicants uses the server total so
+  // a 200-row fetch cap can never disagree with the badge.
+  const recCount = recsData?.data?.length ?? 0
+
+  // Auto-pick the default tab once both queries finish: lands on Recommended
+  // when this role has zero applicants but the talent pool has matches —
+  // otherwise Applicants (the common case). Only runs while `tab === null`,
+  // so a user click is never overridden by a late-arriving query.
+  useEffect(() => {
+    if (tab !== null) return
+    if (appsLoading || recsLoading) return
+    setTab(applicationCount === 0 && recCount > 0 ? 'recommended' : 'applicants')
+  }, [tab, appsLoading, recsLoading, applicationCount, recCount])
 
   const columns = useMemo<ColumnDef<Candidate>[]>(() => [
     {
@@ -459,212 +481,226 @@ export function JobDetailPage() {
           </div>
 
           <div className="lg:col-span-2">
-            <Card>
-              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-sm font-semibold">{t('recruitment.jobDetail.candidates')}</CardTitle>
-                  {allCandidates.length > 0 && (
-                    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium tabular-nums">
-                      {allCandidates.length}
-                    </span>
-                  )}
+            {/* Single Candidates card with two lenses — applied + recommended.
+                Why one card not two: the previous stacked layout doubled the
+                vertical real estate even when one panel was empty (Recommended
+                usually is on a fresh role). Tabs collapse that footprint while
+                keeping both lists one click away; per-tab badges tell users
+                whether the other tab is worth clicking. The applicant-specific
+                Stage / Source filter rails live INSIDE the Applicants tab —
+                they were never relevant to recommendations. */}
+            <Tabs
+              value={tab ?? 'applicants'}
+              onValueChange={(v) => setTab(v as 'applicants' | 'recommended')}
+            >
+              <Card>
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
+                  {/* Tabs use the shared design system defaults — segmented
+                      control on a muted rail. TabsBadge picks up active/inactive
+                      styling automatically via the trigger's data-state. */}
+                  <TabsList>
+                    <TabsTrigger value="applicants">
+                      <Users />
+                      {t('recruitment.jobDetail.applicants', { defaultValue: 'Applicants' })}
+                      <TabsBadge>{applicationCount}</TabsBadge>
+                    </TabsTrigger>
+                    <TabsTrigger value="recommended">
+                      <Wand2 />
+                      {t('recruitment.jobDetail.recommended', { defaultValue: 'Recommended' })}
+                      <TabsBadge>{recCount}</TabsBadge>
+                    </TabsTrigger>
+                  </TabsList>
+                  <Button size="sm" variant="outline" onClick={() => navigate('/recruitment')}>
+                    <Users className="size-3.5 mr-1.5" />
+                    {t('recruitment.jobDetail.pipeline')}
+                  </Button>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => navigate('/recruitment')}>
-                  <Users className="size-3.5 mr-1.5" />
-                  {t('recruitment.jobDetail.pipeline')}
-                </Button>
-              </div>
 
-              {allCandidates.length > 0 && (
-                  <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/10 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setStageFilter('all')}
-                      className={cn(
-                        'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
-                        stageFilter === 'all'
-                          ? 'bg-foreground text-background border-foreground'
-                          : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
-                      )}
-                    >
-                      {t('recruitment.jobDetail.allCount', { count: allCandidates.length })}
-                    </button>
-                    {allStages.map(s => {
-                      const count = stageCounts[s.stageKey] ?? 0
-                      if (count === 0) return null
-                      const color = resolveStageColor(s.colorKey)
-                      const isActive = stageFilter === s.stageKey
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setStageFilter(isActive ? 'all' : s.stageKey)}
-                          className={cn(
-                            'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
-                            isActive ? color.badgeClass : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
-                          )}
-                        >
-                          {s.label} · {count}
-                        </button>
-                      )
-                    })}
-                  </div>
-              )}
-
-              {allCandidates.length > 0 && (
-                <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/5 flex-wrap">
-                  <span className="text-[11px] font-medium text-muted-foreground/70 mr-0.5">{t('recruitment.jobDetail.source', { defaultValue: 'Source' })}</span>
-                  {SOURCE_FILTERS.map(sf => {
-                    const count = sf.key === 'all' ? allCandidates.length : sourceCounts[sf.key]
-                    const isActive = sourceFilter === sf.key
-                    // Hide a zero-count source pill — unless it's the active filter,
-                    // so the user can always toggle the current source back off.
-                    if (sf.key !== 'all' && count === 0 && !isActive) return null
-                    return (
+                {/* ── Applicants tab ─────────────────────────────────────── */}
+                <TabsContent value="applicants" className="mt-0 focus-visible:outline-none">
+                  {allCandidates.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/10 flex-wrap">
                       <button
-                        key={sf.key}
                         type="button"
-                        onClick={() => setSourceFilter(isActive ? 'all' : sf.key)}
+                        onClick={() => setStageFilter('all')}
                         className={cn(
                           'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
-                          isActive ? sf.activeClass : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                          stageFilter === 'all'
+                            ? 'bg-foreground text-background border-foreground'
+                            : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
                         )}
                       >
-                        {t(sf.labelKey)} · {count}
+                        {t('recruitment.jobDetail.allCount', { count: allCandidates.length })}
                       </button>
-                    )
-                  })}
-                </div>
-              )}
-
-              <CardContent className="p-0">
-                {appsLoading ? (
-                  <div className="p-4 space-y-2">
-                    {[1, 2, 3].map(i => <Skeleton key={`skeleton-${i}`} className="h-14 rounded-lg" />)}
-                  </div>
-                ) : allCandidates.length === 0 ? (
-                  <EmptyState
-                    icon={Users}
-                    title={t('recruitment.jobDetail.noCandidatesYet')}
-                    description={t('recruitment.jobDetail.candidatesWillAppear')}
-                    size="lg"
-                  />
-                ) : candidates.length === 0 ? (
-                  <EmptyState
-                    icon={AlertCircle}
-                    title={t('recruitment.jobDetail.noCandidatesInStage')}
-                    action={(
-                      <button
-                        type="button"
-                        onClick={() => { setStageFilter('all'); setSourceFilter('all') }}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        {t('recruitment.jobDetail.showAll')}
-                      </button>
-                    )}
-                  />
-                ) : (
-                  <div className="p-3">
-                    <DataTable
-                      columns={columns}
-                      data={candidates}
-                      pageSize={10}
-                      getRowId={(c) => c.id}
-                      onRowClick={(c) => navigate(`/recruitment/candidates/${c.id}`)}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ── Recommended candidates (talent-pool matching) ── */}
-            <Card className="mt-4">
-              <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                  <Wand2 className="size-3.5 text-violet-500" />
-                  {t('recruitment.recommendations.candidatesTitle', { defaultValue: 'Recommended candidates' })}
-                  {(recsData?.data?.length ?? 0) > 0 && (
-                    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium tabular-nums ml-auto">
-                      {recsData?.data.length}
-                    </span>
+                      {allStages.map((s) => {
+                        const count = stageCounts[s.stageKey] ?? 0
+                        if (count === 0) return null
+                        const color = resolveStageColor(s.colorKey)
+                        const isActive = stageFilter === s.stageKey
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setStageFilter(isActive ? 'all' : s.stageKey)}
+                            className={cn(
+                              'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                              isActive ? color.badgeClass : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                            )}
+                          >
+                            {s.label} · {count}
+                          </button>
+                        )
+                      })}
+                    </div>
                   )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                {recsLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map(i => <Skeleton key={`rec-skeleton-${i}`} className="h-24 rounded-lg" />)}
-                  </div>
-                ) : (recsData?.data?.length ?? 0) === 0 ? (
-                  <p className="text-xs text-muted-foreground italic py-2">
-                    {t('recruitment.recommendations.candidatesEmpty', { defaultValue: 'No strong matches in the talent pool yet' })}
-                  </p>
-                ) : (
-                  <>
-                    <ul className="space-y-2.5">
-                      {recsData!.data.map((rc) => (
-                        <li key={rc.applicationId}>
+
+                  {allCandidates.length > 0 && (
+                    <div className="flex items-center gap-1.5 px-4 py-2.5 border-b bg-muted/5 flex-wrap">
+                      <span className="text-[11px] font-medium text-muted-foreground/70 mr-0.5">{t('recruitment.jobDetail.source', { defaultValue: 'Source' })}</span>
+                      {SOURCE_FILTERS.map((sf) => {
+                        const count = sf.key === 'all' ? allCandidates.length : sourceCounts[sf.key]
+                        const isActive = sourceFilter === sf.key
+                        // Hide a zero-count source pill — unless it's the active filter,
+                        // so the user can always toggle the current source back off.
+                        if (sf.key !== 'all' && count === 0 && !isActive) return null
+                        return (
+                          <button
+                            key={sf.key}
+                            type="button"
+                            onClick={() => setSourceFilter(isActive ? 'all' : sf.key)}
+                            className={cn(
+                              'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors',
+                              isActive ? sf.activeClass : 'bg-background text-muted-foreground border-border hover:border-foreground/40',
+                            )}
+                          >
+                            {t(sf.labelKey)} · {count}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  <CardContent className="p-0">
+                    {appsLoading ? (
+                      <div className="p-4 space-y-2">
+                        {[1, 2, 3].map((i) => <Skeleton key={`skeleton-${i}`} className="h-14 rounded-lg" />)}
+                      </div>
+                    ) : allCandidates.length === 0 ? (
+                      <EmptyState
+                        icon={Users}
+                        title={t('recruitment.jobDetail.noCandidatesYet')}
+                        description={t('recruitment.jobDetail.candidatesWillAppear')}
+                        size="lg"
+                      />
+                    ) : candidates.length === 0 ? (
+                      <EmptyState
+                        icon={AlertCircle}
+                        title={t('recruitment.jobDetail.noCandidatesInStage')}
+                        action={(
                           <button
                             type="button"
-                            onClick={() => navigate(`/recruitment/candidates/${rc.applicationId}`)}
-                            className="w-full text-start rounded-xl border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3.5"
+                            onClick={() => { setStageFilter('all'); setSourceFilter('all') }}
+                            className="text-xs text-primary hover:underline"
                           >
-                            <div className="flex items-start gap-3">
-                              <Avatar className="size-10 shrink-0 border border-border/60">
-                                {rc.avatar && <img src={rc.avatar} alt={rc.name} className="object-cover" />}
-                                <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">{getInitials(rc.name)}</AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0 flex-1">
-                                {/* Identity left, match score pinned top-right — the
-                                    score never wraps under the name now. */}
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-semibold text-foreground truncate">{rc.name}</p>
-                                    <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                                      {rc.email}
-                                      {rc.experience != null && rc.experience > 0 && (
-                                        <span> · {t('recruitment.jobDetail.experienceYears', { count: rc.experience })}</span>
-                                      )}
-                                    </p>
-                                  </div>
-                                  <MatchScoreBadge score={rc.overall} className="shrink-0" />
-                                </div>
-
-                                {(rc.matchedSkills.length > 0 || rc.missingSkills.length > 0) && (
-                                  <div className="mt-2.5 border-t border-border/40 pt-2.5">
-                                    <MatchSkillChips matched={rc.matchedSkills} missing={rc.missingSkills} />
-                                  </div>
-                                )}
-                                {rc.strengths.length > 0 && (
-                                  <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                                    <Sparkles className="size-3 shrink-0 mt-0.5 text-violet-500" />
-                                    <span>{rc.strengths.join(' · ')}</span>
-                                  </p>
-                                )}
-                                {rc.appliedJobs.length > 0 && (
-                                  <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
-                                    <Briefcase className="size-3 shrink-0 mt-0.5" />
-                                    <span>
-                                      {t('recruitment.recommendations.alsoAppliedTo', { defaultValue: 'Also applied to:' })}{' '}
-                                      {rc.appliedJobs.map(j => j.title).join(', ')}
-                                    </span>
-                                  </p>
-                                )}
-                              </div>
-                            </div>
+                            {t('recruitment.jobDetail.showAll')}
                           </button>
-                        </li>
-                      ))}
-                    </ul>
-                    {recsData!.capped && (
-                      <p className="text-[11px] text-muted-foreground/60 mt-3">
-                        {t('recruitment.recommendations.cappedNote', { defaultValue: 'Scored the most recent {{count}} candidates', count: recsData!.scanned })}
-                      </p>
+                        )}
+                      />
+                    ) : (
+                      <div className="p-3">
+                        <DataTable
+                          columns={columns}
+                          data={candidates}
+                          pageSize={10}
+                          getRowId={(c) => c.id}
+                          onRowClick={(c) => navigate(`/recruitment/candidates/${c.id}`)}
+                        />
+                      </div>
                     )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </TabsContent>
+
+                {/* ── Recommended tab — talent-pool matching ──────────────── */}
+                <TabsContent value="recommended" className="mt-0 focus-visible:outline-none">
+                  <CardContent className="px-4 py-4">
+                    {recsLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((i) => <Skeleton key={`rec-skeleton-${i}`} className="h-24 rounded-lg" />)}
+                      </div>
+                    ) : recCount === 0 ? (
+                      <EmptyState
+                        icon={Wand2}
+                        title={t('recruitment.recommendations.candidatesEmpty', { defaultValue: 'No strong matches in the talent pool yet' })}
+                        description={t('recruitment.recommendations.candidatesEmptyDesc', { defaultValue: 'Recommendations appear when other candidates in the pool match this role’s skills, qualifications, and location.' })}
+                      />
+                    ) : (
+                      <>
+                        <ul className="space-y-2.5">
+                          {recsData!.data.map((rc) => (
+                            <li key={rc.applicationId}>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/recruitment/candidates/${rc.applicationId}`)}
+                                className="w-full text-start rounded-xl border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3.5"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <Avatar className="size-10 shrink-0 border border-border/60">
+                                    {rc.avatar && <img src={rc.avatar} alt={rc.name} className="object-cover" />}
+                                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">{getInitials(rc.name)}</AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0 flex-1">
+                                    {/* Identity left, match score pinned top-right — the
+                                        score never wraps under the name now. */}
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-foreground truncate">{rc.name}</p>
+                                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                          {rc.email}
+                                          {rc.experience != null && rc.experience > 0 && (
+                                            <span> · {t('recruitment.jobDetail.experienceYears', { count: rc.experience })}</span>
+                                          )}
+                                        </p>
+                                      </div>
+                                      <MatchScoreBadge score={rc.overall} className="shrink-0" />
+                                    </div>
+
+                                    {(rc.matchedSkills.length > 0 || rc.missingSkills.length > 0) && (
+                                      <div className="mt-2.5 border-t border-border/40 pt-2.5">
+                                        <MatchSkillChips matched={rc.matchedSkills} missing={rc.missingSkills} />
+                                      </div>
+                                    )}
+                                    {rc.strengths.length > 0 && (
+                                      <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                                        <Sparkles className="size-3 shrink-0 mt-0.5 text-violet-500" />
+                                        <span>{rc.strengths.join(' · ')}</span>
+                                      </p>
+                                    )}
+                                    {rc.appliedJobs.length > 0 && (
+                                      <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
+                                        <Briefcase className="size-3 shrink-0 mt-0.5" />
+                                        <span>
+                                          {t('recruitment.recommendations.alsoAppliedTo', { defaultValue: 'Also applied to:' })}{' '}
+                                          {rc.appliedJobs.map((j) => j.title).join(', ')}
+                                        </span>
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        {recsData!.capped && (
+                          <p className="text-[11px] text-muted-foreground/60 mt-3">
+                            {t('recruitment.recommendations.cappedNote', { defaultValue: 'Scored the most recent {{count}} candidates', count: recsData!.scanned })}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </TabsContent>
+              </Card>
+            </Tabs>
           </div>
         </div>
       </div>

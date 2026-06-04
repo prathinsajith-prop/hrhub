@@ -92,8 +92,13 @@ export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } =
 }
 
 /** One kind's paginated feed (announcements or posts). Same card + engagement
- *  logic for both; the server filters by `kind` so the lists never mix. */
-function AnnouncementFeed({ kind }: { kind: 'announcement' | 'post' }) {
+ *  logic for both; the server filters by `kind` so the lists never mix.
+ *
+ *  Exported so other portal pages (Home → Posts tab) can reuse the same
+ *  scroll-loading + card design without duplicating the hook wiring or the
+ *  empty-state copy. The hook's queryKey is keyed by `kind`, so two instances
+ *  on the same page (e.g. Home's Posts tab + a future widget) share cache. */
+export function AnnouncementFeed({ kind }: { kind: 'announcement' | 'post' }) {
     const { t } = useTranslation()
     const currentUserId = useAuthStore((s) => s.user?.id)
     const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useAnnouncementFeed(15, kind)

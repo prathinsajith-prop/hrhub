@@ -683,6 +683,7 @@
     "recommendations": {
       "candidatesTitle": "المرشحون الموصى بهم",
       "candidatesEmpty": "لا توجد تطابقات قوية في مجموعة المواهب حتى الآن",
+      "candidatesEmptyDesc": "تظهر التوصيات عندما يتطابق المرشحون الآخرون في المجموعة مع مهارات ومؤهلات وموقع هذه الوظيفة.",
       "jobsTitle": "الوظائف الموصى بها",
       "jobsEmpty": "لا توجد وظائف مفتوحة أخرى متطابقة حتى الآن",
       "matchPct": "تطابق {{score}}٪",
@@ -809,6 +810,8 @@
       "allCount": "الكل · {{count}}",
       "noCandidatesYet": "لا يوجد مرشحون بعد",
       "candidatesWillAppear": "سيظهر المرشحون الذين يتقدمون هنا.",
+      "applicants": "المتقدمون",
+      "recommended": "موصى به",
       "noCandidatesInStage": "لا يوجد مرشحون في هذه المرحلة.",
       "showAll": "عرض الكل",
       "jobNotFound": "لم يتم العثور على الوظيفة.",

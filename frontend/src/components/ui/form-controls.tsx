@@ -284,21 +284,57 @@ function ImageUpload({
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
+//
+// The `pill` (segmented control) variant is the portal's default page-level tab
+// look since the unified visual refresh — soft muted rail with the active tab
+// rendered as a raised card. Reads as a single component (not loose links),
+// supports icons + count badges, and shares its visual language with the
+// Radix-based `<Tabs>` in `@/components/ui/tabs.tsx` so the two never look
+// out-of-family on the same page.
+//
+// The legacy `underline` variant is still available for the rare case where a
+// flatter look is wanted (e.g. inline section nav inside an already-elevated
+// card). It got the same polish: thicker primary underline, hover wash, badge
+// pill style identical to the pill variant.
 interface TabsProps {
   tabs: { id: string; label: string; icon?: React.ReactNode; badge?: number }[]
   activeTab: string
   onChange: (id: string) => void
   className?: string
-  /** Visual style: 'underline' (default, used in page tabs) or 'pill' (segmented control). */
+  /**
+   * Visual style. Defaults to `'pill'` (segmented control) — the portal's
+   * primary page-level nav style. `'underline'` keeps the older row-of-links
+   * look for nested/inline section tabs.
+   */
   variant?: 'underline' | 'pill'
 }
 
-function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: TabsProps) {
+// Shared count-badge — kept identical in both variants and mirrored in the
+// Radix Tabs file so the visual stays consistent everywhere.
+function TabCountBadge({ active, count }: { active: boolean; count: number }) {
+  return (
+    <span
+      className={cn(
+        'ms-0.5 inline-flex h-4 min-w-[1.125rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums transition-colors',
+        active
+          ? 'bg-primary/15 text-primary'
+          : 'bg-muted-foreground/15 text-muted-foreground',
+      )}
+    >
+      {count}
+    </span>
+  )
+}
+
+function Tabs({ tabs, activeTab, onChange, className, variant = 'pill' }: TabsProps) {
   if (variant === 'pill') {
     return (
       <div
         className={cn(
-          'inline-flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/60',
+          // Outer rail — muted bg + hairline border so it reads as one piece of
+          // furniture. `inline-flex` keeps it sized to content (the row isn't
+          // a full-width strip when there are only a handful of tabs).
+          'inline-flex items-center gap-0.5 rounded-xl border border-border/60 bg-muted/60 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] dark:shadow-none',
           className,
         )}
         role="tablist"
@@ -313,25 +349,25 @@ function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: T
               aria-selected={active}
               onClick={() => onChange(tab.id)}
               className={cn(
-                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap',
+                'group inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
                 active
+                  // Active = raised card on the rail. Ring gives it definition
+                  // without needing a heavy shadow.
                   ? 'bg-card text-foreground shadow-sm ring-1 ring-border/80'
-                  : 'text-muted-foreground hover:text-foreground',
+                  // Inactive = transparent text-on-rail; on hover it fills the
+                  // tile with the card colour at 60% so the affordance is
+                  // obvious without committing to "active" intent.
+                  : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
               )}
             >
-              {tab.icon}
-              {tab.label}
-              {tab.badge !== undefined && tab.badge > 0 && (
-                <span
-                  className={cn(
-                    'ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
-                    active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted-foreground/15 text-muted-foreground',
-                  )}
-                >
-                  {tab.badge}
+              {tab.icon ? (
+                <span className={cn('shrink-0 [&_svg]:size-3.5', active ? 'text-primary' : 'text-muted-foreground/80 group-hover:text-foreground')}>
+                  {tab.icon}
                 </span>
+              ) : null}
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <TabCountBadge active={active} count={tab.badge} />
               )}
             </button>
           )
@@ -355,26 +391,23 @@ function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: T
             aria-selected={active}
             onClick={() => onChange(tab.id)}
             className={cn(
-              'relative flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap',
-              'after:pointer-events-none after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full after:transition-all',
+              'relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-md px-4 py-2.5 text-sm font-medium transition-all',
+              // The 2-px primary indicator sits flush with the container's
+              // -1px bottom border so the rail "consumes" into the active tab.
+              'after:pointer-events-none after:absolute after:inset-x-3 after:-bottom-px after:h-[2px] after:rounded-full after:transition-all',
               active
-                ? 'text-primary after:bg-primary after:inset-x-0'
-                : 'text-muted-foreground hover:text-foreground after:bg-transparent',
+                ? 'text-foreground font-semibold after:bg-primary after:inset-x-0'
+                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground after:bg-transparent',
             )}
           >
-            {tab.icon}
-            {tab.label}
-            {tab.badge !== undefined && tab.badge > 0 && (
-              <span
-                className={cn(
-                  'ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
-                  active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted-foreground/15 text-muted-foreground',
-                )}
-              >
-                {tab.badge}
+            {tab.icon ? (
+              <span className={cn('shrink-0 [&_svg]:size-4', active ? 'text-primary' : 'text-muted-foreground/80')}>
+                {tab.icon}
               </span>
+            ) : null}
+            <span>{tab.label}</span>
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <TabCountBadge active={active} count={tab.badge} />
             )}
           </button>
         )

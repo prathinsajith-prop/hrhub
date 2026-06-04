@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
-import { useCreateJob, useUpdateJob, useJobTagSuggestions } from '@/hooks/useRecruitment'
+import { useCreateJob, useUpdateJob, useSkillSuggestions, useQualificationSuggestions } from '@/hooks/useRecruitment'
+import type { ChipsFieldPagedSource } from '@/components/shared/ChipsField'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
@@ -274,7 +275,31 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [qualInput, setQualInput] = useState('')
     const reqInputRef = useRef<HTMLInputElement>(null)
     const createJob = useCreateJob()
-    const { data: tagSuggestions } = useJobTagSuggestions()
+    // Paginated suggestion hooks — each ChipsField pushes its trimmed input
+    // back via `onQueryChange` (debounced in ChipsField) which updates the
+    // queryKey and refetches from offset 0. Server returns 10 items per page;
+    // the dropdown's IntersectionObserver triggers fetchNextPage as the
+    // sentinel scrolls into view.
+    const [skillQuery, setSkillQuery] = useState('')
+    const [qualQuery, setQualQuery] = useState('')
+    const skillSuggestions = useSkillSuggestions(skillQuery)
+    const qualSuggestions = useQualificationSuggestions(qualQuery)
+    const skillPaged: ChipsFieldPagedSource = {
+        items: skillSuggestions.data?.pages.flatMap((p) => p.data) ?? [],
+        hasMore: !!skillSuggestions.hasNextPage,
+        isLoading: skillSuggestions.isLoading,
+        isFetchingMore: skillSuggestions.isFetchingNextPage,
+        onLoadMore: () => { if (!skillSuggestions.isFetchingNextPage) skillSuggestions.fetchNextPage() },
+        onQueryChange: setSkillQuery,
+    }
+    const qualPaged: ChipsFieldPagedSource = {
+        items: qualSuggestions.data?.pages.flatMap((p) => p.data) ?? [],
+        hasMore: !!qualSuggestions.hasNextPage,
+        isLoading: qualSuggestions.isLoading,
+        isFetchingMore: qualSuggestions.isFetchingNextPage,
+        onLoadMore: () => { if (!qualSuggestions.isFetchingNextPage) qualSuggestions.fetchNextPage() },
+        onQueryChange: setQualQuery,
+    }
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
@@ -485,7 +510,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onKeyDown={onSkillKeyDown}
                             onAdd={addSkill}
                             onAddValue={addSkill}
-                            suggestions={tagSuggestions?.skills}
+                            paged={skillPaged}
                             placeholder="Add a skill · Press Enter"
                             chipClassName="bg-sky-100 text-sky-700"
                         />
@@ -501,7 +526,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onKeyDown={onQualKeyDown}
                             onAdd={addQualification}
                             onAddValue={addQualification}
-                            suggestions={tagSuggestions?.qualifications}
+                            paged={qualPaged}
                             placeholder="Add a qualification · Press Enter"
                             chipClassName="bg-emerald-100 text-emerald-700"
                         />
@@ -2197,7 +2222,27 @@ export function EditJobDialog({
     const [qualInput, setQualInput] = useState('')
     const editReqInputRef = useRef<HTMLInputElement>(null)
     const updateJob = useUpdateJob()
-    const { data: tagSuggestionsEdit } = useJobTagSuggestions()
+    // Same paginated-suggestions wiring as NewJobDialog; see comments there.
+    const [skillQueryEdit, setSkillQueryEdit] = useState('')
+    const [qualQueryEdit, setQualQueryEdit] = useState('')
+    const skillSuggestionsEdit = useSkillSuggestions(skillQueryEdit)
+    const qualSuggestionsEdit = useQualificationSuggestions(qualQueryEdit)
+    const skillPagedEdit: ChipsFieldPagedSource = {
+        items: skillSuggestionsEdit.data?.pages.flatMap((p) => p.data) ?? [],
+        hasMore: !!skillSuggestionsEdit.hasNextPage,
+        isLoading: skillSuggestionsEdit.isLoading,
+        isFetchingMore: skillSuggestionsEdit.isFetchingNextPage,
+        onLoadMore: () => { if (!skillSuggestionsEdit.isFetchingNextPage) skillSuggestionsEdit.fetchNextPage() },
+        onQueryChange: setSkillQueryEdit,
+    }
+    const qualPagedEdit: ChipsFieldPagedSource = {
+        items: qualSuggestionsEdit.data?.pages.flatMap((p) => p.data) ?? [],
+        hasMore: !!qualSuggestionsEdit.hasNextPage,
+        isLoading: qualSuggestionsEdit.isLoading,
+        isFetchingMore: qualSuggestionsEdit.isFetchingNextPage,
+        onLoadMore: () => { if (!qualSuggestionsEdit.isFetchingNextPage) qualSuggestionsEdit.fetchNextPage() },
+        onQueryChange: setQualQueryEdit,
+    }
     const { data: orgUnitsRawEdit = [] } = useOrgUnits()
     const orgUnitsEdit = Array.isArray(orgUnitsRawEdit) ? orgUnitsRawEdit as OrgUnit[] : []
     const orgOptionsEdit = buildOrgOptions(orgUnitsEdit)
@@ -2414,7 +2459,7 @@ export function EditJobDialog({
                             onKeyDown={onSkillKeyDownEdit}
                             onAdd={addSkillEdit}
                             onAddValue={addSkillEdit}
-                            suggestions={tagSuggestionsEdit?.skills}
+                            paged={skillPagedEdit}
                             placeholder="Add a skill · Press Enter"
                             chipClassName="bg-sky-100 text-sky-700"
                         />
@@ -2430,7 +2475,7 @@ export function EditJobDialog({
                             onKeyDown={onQualKeyDownEdit}
                             onAdd={addQualEdit}
                             onAddValue={addQualEdit}
-                            suggestions={tagSuggestionsEdit?.qualifications}
+                            paged={qualPagedEdit}
                             placeholder="Add a qualification · Press Enter"
                             chipClassName="bg-emerald-100 text-emerald-700"
                         />

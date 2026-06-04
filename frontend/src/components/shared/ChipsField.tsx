@@ -1,8 +1,36 @@
-import { useMemo, useState, type KeyboardEvent } from 'react'
-import { X as XIcon, Plus } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { X as XIcon, Plus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/primitives'
 import { cn } from '@/lib/utils'
+
+/**
+ * Paginated source shape — used when ChipsField is wired to a server-backed
+ * type-ahead. The parent owns the data via something like `useInfiniteQuery`:
+ * pass the flattened items so far, whether more pages exist, the loading flag,
+ * a function to fetch the next page, and (importantly) a callback so we can
+ * push the typed query back up to refetch from offset 0.
+ *
+ * Strictly opt-in — when callers pass the plain `suggestions: string[]` prop
+ * they get the original client-side mode (filter + slice in memory). This way
+ * the candidate / referral / public careers forms don't pay for paging they
+ * don't need.
+ */
+export interface ChipsFieldPagedSource {
+    items: string[]
+    hasMore: boolean
+    isLoading?: boolean
+    isFetchingMore?: boolean
+    onLoadMore: () => void
+    /** Called with the current trimmed query whenever the user types. The parent
+     *  is expected to bump its query-key so the infinite list refetches from
+     *  offset 0. Debouncing is the parent's responsibility. */
+    onQueryChange?: (q: string) => void
+}
+
+// Page size for the in-memory (legacy) mode. Matches the server endpoint's
+// default so the two modes feel identical at the UI layer.
+const PAGE_SIZE = 10
 
 /**
  * Free-form tag/chip input — type a value, press Enter (or the + button) to add,
@@ -10,19 +38,20 @@ import { cn } from '@/lib/utils'
  * candidate add/edit dialogs, the public careers apply form, and the portal
  * referral form so they all collect skills/tags with one consistent UX.
  *
- * Optional `suggestions` enables type-ahead: as the user types (or focuses an
- * empty input) a dropdown of matching, not-yet-added suggestions appears;
- * clicking one adds it. This keeps tags consistent across records (e.g. everyone
- * picks "TypeScript" instead of "Typescript"/"TS"). Matching and de-duplication
- * are case-insensitive.
+ * Two type-ahead modes:
+ *   • `suggestions: string[]` — client-side: full list filtered + sliced
+ *     in-memory. Used where the list is small or already in cache.
+ *   • `paged: ChipsFieldPagedSource` — server-side: parent drives an infinite
+ *     query, we render pages incrementally as the dropdown scrolls and push
+ *     the typed query back up via onQueryChange so each keystroke refetches.
  *
- * Kept in its own tiny module (rather than inside action-dialogs.tsx) so the
- * public careers bundle can use it without pulling in the admin dialogs.
+ * Picking from the dropdown adds the chip. Matching + de-duplication are
+ * case-insensitive in both modes.
  */
 export function ChipsField({
     label, optional, icon, chips, onRemove,
     inputRef, inputValue, onInputChange, onKeyDown, onAdd, onAddValue,
-    placeholder, chipClassName, suggestions,
+    placeholder, chipClassName, suggestions, paged,
 }: {
     label: string
     optional?: boolean
@@ -40,31 +69,98 @@ export function ChipsField({
     placeholder?: string
     chipClassName?: string
     suggestions?: string[]
+    paged?: ChipsFieldPagedSource
 }) {
     const [focused, setFocused] = useState(false)
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
+    // ── PAGED MODE ───────────────────────────────────────────────────────────
+    // Push the typed query up to the parent so it can refetch from offset 0.
+    // Debounced 200ms so we don't fire on every keystroke. Static value
+    // means the effect's identity is stable even if the parent re-renders.
+    useEffect(() => {
+        if (!paged?.onQueryChange) return
+        const id = window.setTimeout(() => paged.onQueryChange!(inputValue.trim()), 200)
+        return () => window.clearTimeout(id)
+    }, [inputValue, paged])
+
+    // In paged mode, hide chips the user has already added from the server-
+    // returned page. Server-side dedup isn't worth a column round-trip; this is
+    // a cheap O(n) filter on (at most) a few pages of strings.
+    const pagedVisible = useMemo(() => {
+        if (!paged) return []
+        const added = new Set(chips.map((c) => c.toLowerCase()))
+        return paged.items.filter((s) => !added.has(s.toLowerCase()))
+    }, [paged, chips])
+
+    // ── CLIENT MODE ──────────────────────────────────────────────────────────
     // Case-insensitive: hide suggestions already added; filter by the typed text.
+    // We keep the FULL filtered list here (no slice) so we can grow the visible
+    // slice incrementally as the dropdown scrolls.
     const filtered = useMemo(() => {
+        if (paged) return []
         if (!suggestions || suggestions.length === 0) return []
-        const added = new Set(chips.map(c => c.toLowerCase()))
+        const added = new Set(chips.map((c) => c.toLowerCase()))
         const q = inputValue.trim().toLowerCase()
         return suggestions
-            .filter(s => !added.has(s.toLowerCase()))
-            .filter(s => (q ? s.toLowerCase().includes(q) : true))
-            .slice(0, 8)
-    }, [suggestions, chips, inputValue])
+            .filter((s) => !added.has(s.toLowerCase()))
+            .filter((s) => (q ? s.toLowerCase().includes(q) : true))
+    }, [paged, suggestions, chips, inputValue])
+
+    // Reset the visible window whenever the underlying client list changes.
+    // (Paged mode doesn't use this — the parent's queryKey reset handles it.)
+    useEffect(() => {
+        setVisibleCount(PAGE_SIZE)
+    }, [inputValue, suggestions, chips.length])
+
+    const clientVisible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
+
+    // Unified rendering surface — the dropdown reads from this regardless of mode.
+    const visible = paged ? pagedVisible : clientVisible
+    const hasMore = paged ? paged.hasMore : filtered.length > clientVisible.length
+    const total = paged ? null : filtered.length
+    const isLoading = paged?.isLoading ?? false
+    const isFetchingMore = paged?.isFetchingMore ?? false
+
+    // IntersectionObserver on the sentinel <li> at the bottom of the dropdown —
+    // when it enters the scrollable list's viewport we reveal the next page.
+    // In paged mode that fires `paged.onLoadMore()`; in client mode we just
+    // bump the local slice. The observer's root is the <ul> itself so it works
+    // for an internally scrolling popover (not the page).
+    const listRef = useRef<HTMLUListElement | null>(null)
+    const sentinelRef = useRef<HTMLLIElement | null>(null)
+    useEffect(() => {
+        if (!focused || !hasMore) return
+        const sentinel = sentinelRef.current
+        const root = listRef.current
+        if (!sentinel || !root) return
+        const io = new IntersectionObserver(
+            (entries) => {
+                if (!entries[0]?.isIntersecting) return
+                if (paged) paged.onLoadMore()
+                else setVisibleCount((n) => Math.min(n + PAGE_SIZE, filtered.length))
+            },
+            { root, rootMargin: '40px' },
+        )
+        io.observe(sentinel)
+        return () => io.disconnect()
+    }, [focused, hasMore, paged, filtered.length])
 
     const pick = (value: string) => {
         if (onAddValue) onAddValue(value)
         else { onInputChange(value); onAdd() }
     }
 
+    // Dropdown is shown when the input is focused AND we have something to
+    // render (visible rows, loading spinner, or "X of Y" footer).
+    const showDropdown = focused && (visible.length > 0 || isLoading)
+
     return (
         <div className="space-y-2">
             <Label className="flex items-center gap-1.5">{icon}{label}{optional && <span className="text-xs font-normal text-muted-foreground">(optional)</span>}</Label>
             {chips.length > 0 && (
                 <div className="flex flex-wrap gap-1.5" role="list" aria-label={label}>
-                    {chips.map(c => (
+                    {chips.map((c) => (
                         <span key={c} role="listitem" className={cn('inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full', chipClassName ?? 'bg-primary/10 text-primary')}>
                             {c}
                             <button type="button" aria-label={`Remove "${c}"`} onClick={() => onRemove(c)} className="ml-0.5 opacity-60 hover:opacity-100">
@@ -79,7 +175,7 @@ export function ChipsField({
                     <input
                         ref={inputRef}
                         value={inputValue}
-                        onChange={e => onInputChange(e.target.value)}
+                        onChange={(e) => onInputChange(e.target.value)}
                         onKeyDown={onKeyDown}
                         onFocus={() => setFocused(true)}
                         // Delay so a suggestion click (mousedown) registers before blur closes the list.
@@ -92,13 +188,20 @@ export function ChipsField({
                         <Plus className="size-3.5" />
                     </Button>
                 </div>
-                {focused && filtered.length > 0 && (
+                {showDropdown && (
                     <ul
+                        ref={listRef}
                         role="listbox"
                         aria-label={`${label} suggestions`}
                         className="absolute z-50 mt-1 w-full max-h-56 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md"
                     >
-                        {filtered.map(s => (
+                        {isLoading && visible.length === 0 ? (
+                            <li className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin" /> Loading…
+                            </li>
+                        ) : null}
+
+                        {visible.map((s) => (
                             <li key={s}>
                                 <button
                                     type="button"
@@ -111,6 +214,25 @@ export function ChipsField({
                                 </button>
                             </li>
                         ))}
+
+                        {hasMore && (
+                            // Sentinel: when this enters the dropdown's viewport
+                            // the IntersectionObserver fetches/reveals the next page.
+                            // Hint label doubles as a discoverability cue.
+                            <li
+                                ref={sentinelRef}
+                                aria-hidden="true"
+                                className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-center text-[11px] text-muted-foreground"
+                            >
+                                {isFetchingMore ? (
+                                    <><Loader2 className="size-3 animate-spin" /> Loading more…</>
+                                ) : paged ? (
+                                    <>{visible.length} loaded · scroll for more</>
+                                ) : (
+                                    <>{visible.length} / {total} · scroll for more</>
+                                )}
+                            </li>
+                        )}
                     </ul>
                 )}
             </div>

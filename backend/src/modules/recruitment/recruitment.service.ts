@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull, sql, getTableColumns, ne, inArray } from 'drizzle-orm'
+import { eq, and, desc, isNull, sql, getTableColumns, ne, inArray, ilike, asc } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications, recruitmentStages, employees, tenants, recruitmentSkills, recruitmentQualifications } from '../../db/schema/index.js'
@@ -101,6 +101,161 @@ export async function getJobTagSuggestions(tenantId: string) {
             .where(eq(recruitmentQualifications.tenantId, tenantId)).orderBy(recruitmentQualifications.name),
     ])
     return { skills: skills.map((r) => r.name), qualifications: qualifications.map((r) => r.name) }
+}
+
+/**
+ * Paginated skill-suggestion query backing the job dialog's type-ahead. Returns
+ * a single page (default 10) plus `hasMore` so the client can render an
+ * infinite-scroll dropdown without ever materialising the whole catalog.
+ *
+ * `q` is a case-insensitive substring match on the skill name. Empty string =
+ * no filter (alphabetical listing). One COUNT(*) OVER() in the same query so
+ * pagination metadata costs nothing extra.
+ */
+export async function listSkillSuggestions(
+    tenantId: string,
+    params: { q?: string; limit: number; offset: number },
+) {
+    const { q, limit, offset } = params
+    const conds = [eq(recruitmentSkills.tenantId, tenantId)] as any[]
+    const query = q?.trim()
+    if (query) conds.push(ilike(recruitmentSkills.name, `%${query}%`))
+
+    const rows = await db
+        .select({
+            name: recruitmentSkills.name,
+            totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+        })
+        .from(recruitmentSkills)
+        .where(and(...conds))
+        .orderBy(asc(recruitmentSkills.name))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return {
+        data: rows.map((r) => r.name),
+        total,
+        limit,
+        offset,
+        hasMore: offset + rows.length < total,
+    }
+}
+
+/** Sibling of {@link listSkillSuggestions} for the qualifications catalog. */
+export async function listQualificationSuggestions(
+    tenantId: string,
+    params: { q?: string; limit: number; offset: number },
+) {
+    const { q, limit, offset } = params
+    const conds = [eq(recruitmentQualifications.tenantId, tenantId)] as any[]
+    const query = q?.trim()
+    if (query) conds.push(ilike(recruitmentQualifications.name, `%${query}%`))
+
+    const rows = await db
+        .select({
+            name: recruitmentQualifications.name,
+            totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+        })
+        .from(recruitmentQualifications)
+        .where(and(...conds))
+        .orderBy(asc(recruitmentQualifications.name))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return {
+        data: rows.map((r) => r.name),
+        total,
+        limit,
+        offset,
+        hasMore: offset + rows.length < total,
+    }
+}
+
+// ─── Recruitment tag catalog CRUD (skills / qualifications) ───────────────────
+// HR manages the per-tenant skill & qualification catalogs from Organization
+// Settings → Recruitment. These are the same tables the job dialogs read for
+// type-ahead suggestions. Names are unique per tenant, case-insensitively.
+// Deleting a catalog entry is safe: jobs/applications store their own skill
+// arrays (denormalised jsonb), so removing a suggestion never mutates a record.
+
+export type RecruitmentTagKind = 'skills' | 'qualifications'
+const TAG_TABLES = { skills: recruitmentSkills, qualifications: recruitmentQualifications } as const
+function tagTableFor(kind: RecruitmentTagKind) {
+    return TAG_TABLES[kind]
+}
+function conflict(message: string) {
+    return Object.assign(new Error(message), { statusCode: 409 })
+}
+
+/**
+ * Paginated + searchable list of one tenant's catalog. The CRUD listing in
+ * Org Settings → Recruitment Stages drives this; the type-ahead in the job
+ * dialog uses the lighter `listSkillSuggestions` / `listQualificationSuggestions`
+ * helpers (those return name-only). Returns `{ data, total, limit, offset,
+ * hasMore }` so the client can do infinite scroll without ever needing a
+ * second "total count" request.
+ */
+export async function listRecruitmentTags(
+    tenantId: string,
+    kind: RecruitmentTagKind,
+    params: { q?: string; limit: number; offset: number },
+) {
+    const tbl = tagTableFor(kind)
+    const { q, limit, offset } = params
+    const conds = [eq(tbl.tenantId, tenantId)] as any[]
+    const query = q?.trim()
+    if (query) conds.push(ilike(tbl.name, `%${query}%`))
+
+    const rows = await db
+        .select({
+            id: tbl.id,
+            name: tbl.name,
+            totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+        })
+        .from(tbl)
+        .where(and(...conds))
+        .orderBy(asc(tbl.name))
+        .limit(limit)
+        .offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    return {
+        data: rows.map(({ totalCount: _t, ...r }) => r),
+        total,
+        limit,
+        offset,
+        hasMore: offset + rows.length < total,
+    }
+}
+
+export async function createRecruitmentTag(tenantId: string, kind: RecruitmentTagKind, nameRaw: string) {
+    const tbl = tagTableFor(kind)
+    const name = nameRaw.trim()
+    // onConflictDoNothing hits the (tenant, lower(name)) unique index; an empty
+    // return means the name already exists → 409.
+    const [row] = await db.insert(tbl).values({ tenantId, name }).onConflictDoNothing().returning()
+    if (!row) throw conflict('That name already exists.')
+    return row
+}
+
+export async function updateRecruitmentTag(tenantId: string, kind: RecruitmentTagKind, id: string, nameRaw: string) {
+    const tbl = tagTableFor(kind)
+    const name = nameRaw.trim()
+    const dupe = await db.select({ id: tbl.id }).from(tbl)
+        .where(and(eq(tbl.tenantId, tenantId), ne(tbl.id, id), sql`lower(${tbl.name}) = lower(${name})`)).limit(1)
+    if (dupe.length) throw conflict('That name already exists.')
+    const [row] = await db.update(tbl).set({ name })
+        .where(and(eq(tbl.id, id), eq(tbl.tenantId, tenantId))).returning()
+    return row ?? null
+}
+
+export async function deleteRecruitmentTag(tenantId: string, kind: RecruitmentTagKind, id: string) {
+    const tbl = tagTableFor(kind)
+    const [row] = await db.delete(tbl)
+        .where(and(eq(tbl.id, id), eq(tbl.tenantId, tenantId))).returning()
+    return row ?? null
 }
 
 /**

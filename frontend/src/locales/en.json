@@ -683,6 +683,7 @@
     "recommendations": {
       "candidatesTitle": "Recommended candidates",
       "candidatesEmpty": "No strong matches in the talent pool yet",
+      "candidatesEmptyDesc": "Recommendations appear when other candidates in the pool match this role’s skills, qualifications, and location.",
       "jobsTitle": "Recommended jobs",
       "jobsEmpty": "No other open roles match yet",
       "matchPct": "{{score}}% match",
@@ -809,6 +810,8 @@
       "allCount": "All · {{count}}",
       "noCandidatesYet": "No candidates yet",
       "candidatesWillAppear": "Candidates who apply will appear here.",
+      "applicants": "Applicants",
+      "recommended": "Recommended",
       "noCandidatesInStage": "No candidates in this stage.",
       "showAll": "Show all",
       "jobNotFound": "Job not found.",
