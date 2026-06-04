@@ -216,6 +216,8 @@ export interface Candidate {
   id: string
   jobId: string
   jobTitle?: string
+  /** Human-readable requisition number (e.g. "JOB-0004") of the applied job. */
+  jobNo?: string | null
   name: string
   email: string
   phone: string
@@ -277,6 +279,7 @@ export interface RecommendedCandidate {
 // A job suggested for a given candidate/application (candidate → jobs).
 export interface RecommendedJob {
   jobId: string
+  jobNo?: string | null
   title: string
   department: string | null
   location: string | null

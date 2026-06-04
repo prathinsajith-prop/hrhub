@@ -40,7 +40,7 @@
     "fastify-plugin": "^5.1.0",
     "fastify-raw-body": "^5.0.0",
     "file-type": "^22.0.1",
-    "ioredis": "^5.11.0",
+    "ioredis": "^5.11.1",
     "nodemailer": "^8.0.10",
     "otplib": "^13.4.1",
     "pdfkit": "^0.18.0",

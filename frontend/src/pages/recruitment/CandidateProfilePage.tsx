@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
     ArrowLeft, Mail, Phone, Globe, Briefcase, DollarSign, Star,
     XCircle, UserPlus, Save, Edit2, FileText, Upload, CheckCircle2,
-    Clock, ChevronRight, User, MapPin, GraduationCap, Sparkles, Wand2,
+    Clock, ChevronRight, User, MapPin, GraduationCap, Sparkles, Wand2, ArrowUpRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -640,13 +640,18 @@ export function CandidateProfilePage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => navigate(`/recruitment/jobs/${rj.jobId}`)}
-                                                        className="w-full text-start rounded-lg border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3"
+                                                        title={t('recruitment.recommendations.viewRole', { defaultValue: 'View role' })}
+                                                        className="group/rec w-full cursor-pointer text-start rounded-xl border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm transition-all p-3.5"
                                                     >
-                                                        <div className="flex items-start gap-2 flex-wrap">
-                                                            <p className="text-sm font-semibold text-foreground">{rj.title}</p>
-                                                            <MatchScoreBadge score={rj.overall} className="ms-auto" />
+                                                        {/* Title + ref on the left, match score pinned top-right. */}
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-semibold text-foreground group-hover/rec:text-primary transition-colors">{rj.title}</p>
+                                                                {rj.jobNo && <p className="text-[10px] font-medium tabular-nums text-muted-foreground/70 mt-0.5">#{rj.jobNo}</p>}
+                                                            </div>
+                                                            <MatchScoreBadge score={rj.overall} className="shrink-0" />
                                                         </div>
-                                                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                                                        <div className="flex items-center gap-2 flex-wrap mt-1.5">
                                                             {rj.department && <span className="text-[11px] text-muted-foreground">{rj.department}</span>}
                                                             {rj.location && (
                                                                 <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -657,13 +662,22 @@ export function CandidateProfilePage() {
                                                             {rj.workplaceType && <WorkplaceBadge workplace={rj.workplaceType} size="xs" variant="bordered" />}
                                                         </div>
                                                         {(rj.matchedSkills.length > 0 || rj.missingSkills.length > 0) && (
-                                                            <div className="mt-2">
+                                                            <div className="mt-2.5 border-t border-border/40 pt-2.5">
                                                                 <MatchSkillChips matched={rj.matchedSkills} missing={rj.missingSkills} />
                                                             </div>
                                                         )}
                                                         {rj.strengths.length > 0 && (
-                                                            <p className="text-[11px] text-muted-foreground/90 mt-2">{rj.strengths.join(' · ')}</p>
+                                                            <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                                                                <Sparkles className="size-3 shrink-0 mt-0.5 text-violet-500" />
+                                                                <span>{rj.strengths.join(' · ')}</span>
+                                                            </p>
                                                         )}
+                                                        {/* Explicit redirect affordance — the whole card is clickable, this
+                                                            makes it obvious where it goes. */}
+                                                        <div className="mt-3 flex items-center justify-end gap-1 text-[11px] font-medium text-primary/70 group-hover/rec:text-primary transition-colors">
+                                                            {t('recruitment.recommendations.viewRole', { defaultValue: 'View role' })}
+                                                            <ArrowUpRight className="size-3.5" data-rtl-flip />
+                                                        </div>
                                                     </button>
                                                 </li>
                                             ))}

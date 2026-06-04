@@ -689,7 +689,8 @@
       "matched": "Matched",
       "missing": "Missing",
       "alsoAppliedTo": "Also applied to:",
-      "cappedNote": "Scored the most recent {{count}} candidates"
+      "cappedNote": "Scored the most recent {{count}} candidates",
+      "viewRole": "View role"
     },
     "candidateProfile": {
       "notFound": "Candidate not found.",

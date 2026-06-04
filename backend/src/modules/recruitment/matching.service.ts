@@ -127,6 +127,7 @@ export async function recommendJobsForCandidate(tenantId: string, applicationId:
     const jobs = await db.select({
         id: recruitmentJobs.id,
         title: recruitmentJobs.title,
+        jobNo: recruitmentJobs.jobNo,
         department: recruitmentJobs.department,
         location: recruitmentJobs.location,
         workplaceType: recruitmentJobs.workplaceType,
@@ -150,6 +151,7 @@ export async function recommendJobsForCandidate(tenantId: string, applicationId:
         .slice(0, limit)
         .map(({ j, m }) => ({
             jobId: j.id,
+            jobNo: j.jobNo,
             title: j.title,
             department: j.department,
             location: j.location,

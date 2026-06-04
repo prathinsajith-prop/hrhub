@@ -328,6 +328,9 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
         ...getTableColumns(jobApplications),
         totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
         jobTitle: recruitmentJobs.title,
+        // Human-readable requisition number (e.g. JOB-0004) shown beside the job
+        // link in the candidate list.
+        jobNo: recruitmentJobs.jobNo,
         // Referrer name for the "Referred by" badge (null for direct applications).
         referredByName: sql<string | null>`CASE WHEN ${employees.id} IS NOT NULL THEN ${employees.firstName} || ' ' || ${employees.lastName} ELSE NULL END`,
     })
@@ -340,33 +343,36 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
 
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
 
-    // Auto fit-score for a single-job listing (the job detail page). The manual
+    // Auto fit-score every candidate against the job they applied to. The manual
     // `score` column is a free-form recruiter rating that's almost always 0, so
-    // the table's Score column read blank for everyone. When the list is scoped
-    // to one job we score each candidate against that job with the shared
-    // matching engine and attach `matchScore` (0–100). One job fetch + O(n)
-    // in-memory scoring over the page (≤ limit rows) — no per-row query.
-    // Skipped for cross-job listings (kanban/global) where "the job" is ambiguous.
-    let job: { skills: string[] | null; qualifications: string[] | null; industry: string | null; location: string | null; workplaceType: string | null } | null = null
-    if (jobId) {
-        const [j] = await db.select({
+    // the Score column read blank for everyone. We attach `matchScore` (0–100)
+    // from the shared matching engine instead. Works for both a single-job
+    // listing (job detail page) and the cross-job list (each candidate is bound
+    // to one jobId): batch-fetch the page's distinct jobs in ONE query, then
+    // score in memory — no per-row query / no N+1.
+    const jobIdsToScore = jobId ? [jobId] : [...new Set(rows.map(r => r.jobId))]
+    const jobRows = jobIdsToScore.length
+        ? await db.select({
+            id: recruitmentJobs.id,
             skills: recruitmentJobs.skills,
             qualifications: recruitmentJobs.qualifications,
             industry: recruitmentJobs.industry,
             location: recruitmentJobs.location,
             workplaceType: recruitmentJobs.workplaceType,
         }).from(recruitmentJobs)
-            .where(and(eq(recruitmentJobs.id, jobId), eq(recruitmentJobs.tenantId, tenantId)))
-            .limit(1)
-        job = j ?? null
-    }
+            .where(and(eq(recruitmentJobs.tenantId, tenantId), inArray(recruitmentJobs.id, jobIdsToScore)))
+        : []
+    const jobById = new Map(jobRows.map(j => [j.id, j]))
 
-    const data = await Promise.all(rows.map(async r => ({
-        ...r,
-        resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
-        avatar: (await resolveAvatarUrl(r.avatarUrl)) ?? undefined,
-        matchScore: job ? scoreMatch(job, r).overall : undefined,
-    })))
+    const data = await Promise.all(rows.map(async r => {
+        const jr = jobById.get(r.jobId)
+        return {
+            ...r,
+            resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
+            avatar: (await resolveAvatarUrl(r.avatarUrl)) ?? undefined,
+            matchScore: jr ? scoreMatch(jr, r).overall : undefined,
+        }
+    }))
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 

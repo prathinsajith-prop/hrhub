@@ -689,7 +689,8 @@
       "matched": "متطابق",
       "missing": "مفقود",
       "alsoAppliedTo": "تقدم أيضاً إلى:",
-      "cappedNote": "تم تقييم أحدث {{count}} مرشحين"
+      "cappedNote": "تم تقييم أحدث {{count}} مرشحين",
+      "viewRole": "عرض الوظيفة"
     },
     "candidateProfile": {
       "notFound": "لم يتم العثور على المرشح.",
