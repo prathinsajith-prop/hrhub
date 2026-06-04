@@ -54,7 +54,10 @@ export function OrgUnitFilters({
         if (filters.divisionId) return list.filter(d => d.parentId === filters.divisionId)
         if (filters.branchId) {
             const divIds = new Set(
-                units.filter(u => u.type === 'division' && u.parentId === filters.branchId).map(d => d.id),
+                units.reduce<string[]>((acc, u) => {
+                    if (u.type === 'division' && u.parentId === filters.branchId) acc.push(u.id)
+                    return acc
+                }, []),
             )
             return list.filter(d => d.parentId && divIds.has(d.parentId))
         }
@@ -62,7 +65,10 @@ export function OrgUnitFilters({
     }, [units, filters.divisionId, filters.branchId])
 
     const designationOptions = useMemo(
-        () => designations.filter(d => d.isActive).map(d => d.name).sort((a, b) => a.localeCompare(b)),
+        () => designations.reduce<string[]>((acc, d) => {
+            if (d.isActive) acc.push(d.name)
+            return acc
+        }, []).sort((a, b) => a.localeCompare(b)),
         [designations],
     )
 

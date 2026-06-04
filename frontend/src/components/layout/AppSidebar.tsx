@@ -19,6 +19,7 @@ import {
   PlaneIcon,
   UserMinusIcon,
   MessageSquareWarningIcon,
+  Megaphone as MegaphoneIcon,
   GraduationCapIcon,
   HandCoinsIcon,
   CalendarPlusIcon,
@@ -100,6 +101,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     {
       label: t('nav.insights'),
       items: [
+        { title: t('nav.engage', { defaultValue: 'Engage' }), url: "/engage", icon: MegaphoneIcon, match: ["/announcements", "/recognition"] },
         { title: t('nav.reports'), url: "/reports", icon: BarChart3Icon },
         { title: t('nav.auditLog'), url: "/audit", icon: ClipboardListIcon },
         { title: t('nav.complaints', { defaultValue: 'Complaints' }), url: "/complaints", icon: MessageSquareWarningIcon },
@@ -120,15 +122,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navGroups = React.useMemo(() => {
     const roles = (userRoles?.length ? userRoles : role ? [role] : []) as UserRole[]
     if (roles.length === 0) return []
-    return allNavGroups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => {
-          const routeKey = getNavRouteKey(item.url)
-          return routeKey ? canAccessRouteForRoles(roles, routeKey) : true
-        }),
-      }))
-      .filter((group) => group.items.length > 0)
+    return allNavGroups.reduce<typeof allNavGroups>((acc, group) => {
+      const items = group.items.filter((item) => {
+        const routeKey = getNavRouteKey(item.url)
+        return routeKey ? canAccessRouteForRoles(roles, routeKey) : true
+      })
+      if (items.length > 0) acc.push({ ...group, items })
+      return acc
+    }, [])
   }, [allNavGroups, userRoles, role])
 
 
@@ -180,7 +181,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroupLabel>
             <SidebarMenu>
               {group.items.map((item) => {
-                const isActive = location.pathname.startsWith(item.url)
+                // Some entries (e.g. Engage) front a hub whose tabs keep their
+                // own URLs; `match` lets the item stay highlighted on them.
+                const matchPaths = (item as { match?: string[] }).match
+                const isActive =
+                  location.pathname.startsWith(item.url) ||
+                  (matchPaths?.some((m) => location.pathname === m || location.pathname.startsWith(m + '/')) ?? false)
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton

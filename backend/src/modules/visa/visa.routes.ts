@@ -12,6 +12,7 @@ import {
 import { listVisaCosts, addVisaCost, deleteVisaCost, getVisaCost } from './visa_costs.service.js'
 import { visaStepLabel, VISA_STEP_LABELS, VISA_TOTAL_STEPS } from './visa.constants.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
 import { parseUuidParam } from '../../lib/validation.js'
 import { cacheDel } from '../../lib/redis.js'
 import { generateReportPdf } from '../../lib/pdf.js'
@@ -269,7 +270,15 @@ export default async function (fastify: any): Promise<void> {
             subKind: result.advanced ? 'advance' : 'advance-noop',
         })
 
-        if (result.advanced) cacheDel(`dashboard:kpis:${request.user.tenantId}`).catch(() => { })
+        if (result.advanced) {
+            cacheDel(`dashboard:kpis:${request.user.tenantId}`).catch(() => { })
+            notifyEmployee(request.user.tenantId, (result.visa as any)?.employeeId, {
+                type: 'info',
+                title: 'Visa application updated',
+                message: `Your visa moved to "${result.toStepLabel}".`,
+                actionUrl: '/me/profile',
+            }).catch(() => { })
+        }
 
         return reply.send({
             data: result.visa,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import { cn } from '@/lib/utils'
-import { Briefcase, MapPin, Users, DollarSign, CalendarDays, Tag, X as XIcon, Plus } from 'lucide-react'
+import { Briefcase, MapPin, Users, DollarSign, CalendarDays, Tag } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { Label, Input } from '@/components/ui/primitives'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
-import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
+import { useCreateJob, useUpdateJob, useJobTagSuggestions } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
@@ -29,7 +29,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { RichTextEditor } from '@/components/ui/rich-text-editor'
 import { employeeStep1Schema, employeeStep2Schema, employeeSalaryRuleSchema, jobPostSchema, visaApplicationSchema, leaveRequestSchema, documentMetaSchema, zodToFieldErrors } from '@/lib/schemas'
 import {
-    JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS,
+    JOB_TYPE_OPTIONS, JOB_STATUS_OPTIONS, WORKPLACE_TYPE_OPTIONS,
     VISA_APPLICATION_TYPE_OPTIONS, VISA_PRIORITY_OPTIONS,
     LEAVE_TYPE_OPTIONS,
     GENDER_OPTIONS, MARITAL_STATUS_OPTIONS, CONTRACT_TYPE_OPTIONS,
@@ -169,22 +169,84 @@ function ManagerPicker({
 
 // Build flat department options with hierarchy path for the org structure picker.
 export function buildOrgOptions(units: OrgUnit[]): Array<ComboboxOption & { branchId: string; divisionId: string; headEmployeeId: string | null; headEmployeeName: string | null }> {
-    return units
-        .filter(u => u.type === 'department' && u.isActive)
-        .map(dept => {
-            const division = units.find(u => u.id === dept.parentId)
-            const branch = division ? units.find(u => u.id === division.parentId) : null
-            const path = [branch?.name, division?.name].filter(Boolean).join(' → ')
-            return {
-                value: dept.id,
-                label: dept.name,
-                secondary: path || undefined,
-                branchId: branch?.id ?? '',
-                divisionId: division?.id ?? '',
-                headEmployeeId: dept.headEmployeeId ?? null,
-                headEmployeeName: dept.headEmployeeName ?? null,
-            }
+    return units.reduce<Array<ComboboxOption & { branchId: string; divisionId: string; headEmployeeId: string | null; headEmployeeName: string | null }>>((acc, dept) => {
+        if (dept.type !== 'department' || !dept.isActive) return acc
+        const division = units.find(u => u.id === dept.parentId)
+        const branch = division ? units.find(u => u.id === division.parentId) : null
+        const path = [branch?.name, division?.name].filter(Boolean).join(' → ')
+        acc.push({
+            value: dept.id,
+            label: dept.name,
+            secondary: path || undefined,
+            branchId: branch?.id ?? '',
+            divisionId: division?.id ?? '',
+            headEmployeeId: dept.headEmployeeId ?? null,
+            headEmployeeName: dept.headEmployeeName ?? null,
         })
+        return acc
+    }, [])
+}
+
+// ─── Job status pill toggle (shared by New + Edit Job dialogs) ──────────────
+// Each status gets its own colour — light tinted background while idle, the
+// stronger version of the same hue when selected, with a faint ring around
+// the active pill so the choice is unambiguous on either theme.
+const JOB_STATUS_PILL: Record<string, { idle: string; active: string; ring: string }> = {
+    draft: {
+        idle: 'text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-slate-800/60',
+        active: 'bg-slate-700 text-white shadow-sm dark:bg-slate-200 dark:text-slate-900',
+        ring: 'ring-slate-700/20 dark:ring-slate-200/20',
+    },
+    open: {
+        idle: 'text-emerald-700 hover:bg-emerald-100/70 dark:text-emerald-300 dark:hover:bg-emerald-950/60',
+        active: 'bg-emerald-600 text-white shadow-sm dark:bg-emerald-500 dark:text-white',
+        ring: 'ring-emerald-600/30 dark:ring-emerald-500/30',
+    },
+    closed: {
+        idle: 'text-rose-700 hover:bg-rose-100/70 dark:text-rose-300 dark:hover:bg-rose-950/60',
+        active: 'bg-rose-600 text-white shadow-sm dark:bg-rose-500 dark:text-white',
+        ring: 'ring-rose-600/30 dark:ring-rose-500/30',
+    },
+    on_hold: {
+        idle: 'text-amber-700 hover:bg-amber-100/70 dark:text-amber-300 dark:hover:bg-amber-950/60',
+        active: 'bg-amber-500 text-white shadow-sm dark:bg-amber-400 dark:text-amber-950',
+        ring: 'ring-amber-500/30 dark:ring-amber-400/30',
+    },
+}
+
+function StatusPills({
+    value,
+    onChange,
+    options,
+}: {
+    value: string
+    onChange: (v: string) => void
+    options: Array<{ value: string; label: string }>
+}) {
+    return (
+        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/30 p-0.5 mr-8">
+            {options.map((o) => {
+                const palette = JOB_STATUS_PILL[o.value] ?? JOB_STATUS_PILL.draft
+                const isActive = value === o.value
+                return (
+                    <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => onChange(o.value)}
+                        aria-pressed={isActive}
+                        className={cn(
+                            'px-3 py-1 rounded-full text-xs font-medium transition-all',
+                            isActive
+                                ? cn(palette.active, 'ring-2', palette.ring)
+                                : palette.idle,
+                        )}
+                    >
+                        {o.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
 }
 
 // ─── New Job Dialog ─────────────────────────────────────────────────────────
@@ -194,7 +256,11 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [departmentId, setDepartmentId] = useState('')
     const [location, setLocation] = useState('')
     const [type, setType] = useState('full_time')
+    const [workplaceType, setWorkplaceType] = useState('on_site')
     const [openings, setOpenings] = useState(1)
+    // Empty string when HR leaves the field blank — converted to `null` on
+    // submit so the DB column stores "no floor" rather than 0.
+    const [experienceYears, setExperienceYears] = useState<number | ''>('')
     const [minSalary, setMinSalary] = useState(0)
     const [maxSalary, setMaxSalary] = useState(0)
     const [description, setDescription] = useState('')
@@ -202,8 +268,13 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [status, setStatus] = useState<'open' | 'draft'>('open')
     const [requirements, setRequirements] = useState<string[]>([])
     const [reqInput, setReqInput] = useState('')
+    const [skills, setSkills] = useState<string[]>([])
+    const [skillInput, setSkillInput] = useState('')
+    const [qualifications, setQualifications] = useState<string[]>([])
+    const [qualInput, setQualInput] = useState('')
     const reqInputRef = useRef<HTMLInputElement>(null)
     const createJob = useCreateJob()
+    const { data: tagSuggestions } = useJobTagSuggestions()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
@@ -212,8 +283,10 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     if (!open && prevOpen) {
         setPrevOpen(false)
         setTitle(''); setDepartment(''); setDepartmentId(''); setLocation(''); setType('full_time')
-        setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
+        setWorkplaceType('on_site')
+        setOpenings(1); setExperienceYears(''); setMinSalary(0); setMaxSalary(0); setDescription('')
         setClosingDate(''); setStatus('open'); setRequirements([]); setReqInput('')
+        setSkills([]); setSkillInput(''); setQualifications([]); setQualInput('')
     } else if (open && !prevOpen) {
         setPrevOpen(true)
     }
@@ -230,6 +303,28 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             setRequirements(r => r.slice(0, -1))
     }, [addRequirement, reqInput, requirements.length])
 
+    const addSkill = useCallback((value?: string) => {
+        const val = (value ?? skillInput).trim()
+        if (val && !skills.some(s => s.toLowerCase() === val.toLowerCase())) setSkills(s => [...s, val])
+        setSkillInput('')
+    }, [skillInput, skills])
+
+    const onSkillKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSkill() }
+        if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1))
+    }, [addSkill, skillInput, skills.length])
+
+    const addQualification = useCallback((value?: string) => {
+        const val = (value ?? qualInput).trim()
+        if (val && !qualifications.some(q => q.toLowerCase() === val.toLowerCase())) setQualifications(q => [...q, val])
+        setQualInput('')
+    }, [qualInput, qualifications])
+
+    const onQualKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addQualification() }
+        if (e.key === 'Backspace' && !qualInput && qualifications.length > 0) setQualifications(q => q.slice(0, -1))
+    }, [addQualification, qualInput, qualifications.length])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
         if (!ok) {
@@ -237,7 +332,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             return
         }
         createJob.mutate(
-            { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements },
+            { title, department, location: location || null, type, workplaceType, openings, experienceYears: experienceYears === '' ? null : experienceYears, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications },
             {
                 onSuccess: () => {
                     toast.success('Job posted', `${title} has been ${status === 'draft' ? 'saved as draft' : 'posted'}.`)
@@ -250,32 +345,32 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent size="xl">
+            {/* `full` = max-w-6xl (~1152px). The form is dense (left meta column +
+                rich-text editor + chip lists) so the extra width keeps the rich
+                text editor readable without crowding the metadata column. */}
+            {/* Custom width — `full` (max-w-6xl, 1152px) + override to max-w-7xl
+                (1280px) so the metadata column + rich-text editor + chip lists
+                all sit comfortably without feeling cramped. Full-screen would
+                lose the "edit in context" feel — wider is better here. */}
+            <DialogContent size="full" className="lg:max-w-7xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Post New Job</DialogTitle>
-                        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5 mr-8">
-                            <button
-                                type="button"
-                                onClick={() => setStatus('open')}
-                                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === 'open' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                            >Open</button>
-                            <button
-                                type="button"
-                                onClick={() => setStatus('draft')}
-                                className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === 'draft' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                            >Draft</button>
-                        </div>
+                        <StatusPills
+                            value={status}
+                            onChange={(v) => setStatus(v as 'open' | 'draft')}
+                            options={[{ value: 'open', label: 'Open' }, { value: 'draft', label: 'Draft' }]}
+                        />
                     </div>
                 </DialogHeader>
 
                 <DialogBody className="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border min-h-0">
                     {/* ── Left: job metadata ── */}
-                    <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
+                    <div className="md:w-[38%] lg:w-[36%] shrink-0 overflow-y-auto p-5 space-y-4">
 
                         <div className="space-y-1.5">
                             <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
-                            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Property Consultant" />
+                            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job title" />
                         </div>
 
                         <div className="space-y-1.5">
@@ -295,7 +390,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
                         <div className="space-y-1.5">
                             <Label className="flex items-center gap-1.5"><MapPin className="size-3.5 text-muted-foreground" />Location</Label>
-                            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Dubai Marina" />
+                            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" />
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
@@ -309,9 +404,38 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
+                                <Label>Workplace Type</Label>
+                                <Select value={workplaceType} onValueChange={setWorkplaceType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {WORKPLACE_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
                                 <Label>Openings</Label>
                                 <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
                             </div>
+                            <div className="space-y-1.5">
+                                <Label>Experience required <span className="text-xs font-normal text-muted-foreground">(years)</span></Label>
+                                <NumericInput
+                                    decimal={false}
+                                    value={experienceYears === '' ? '' : experienceYears}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setExperienceYears(v === '' ? '' : Math.max(0, Number(v)))
+                                    }}
+                                    placeholder="e.g. 3"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
 
                         <div className="space-y-1.5">
@@ -322,14 +446,9 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} placeholder="Max" className="flex-1" />
                             </div>
                         </div>
-
-                        <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
-                        </div>
                     </div>
 
-                    {/* ── Right: description + requirements ── */}
+                    {/* ── Right: description + requirements + skills + qualifications ── */}
                     <div className="flex-1 overflow-y-auto p-5 space-y-4">
                         <div className="space-y-1.5">
                             <Label>Job Description</Label>
@@ -341,34 +460,51 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5"><Tag className="size-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            {requirements.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
-                                    {requirements.map(r => (
-                                        <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
-                                            {r}
-                                            <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
-                                                <XIcon className="size-3" />
-                                            </button>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <input
-                                    ref={reqInputRef}
-                                    value={reqInput}
-                                    onChange={e => setReqInput(e.target.value)}
-                                    onKeyDown={onReqKeyDown}
-                                    placeholder="e.g. 3+ years experience · Press Enter to add"
-                                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                                <Button type="button" variant="outline" size="sm" onClick={addRequirement} disabled={!reqInput.trim()}>
-                                    <Plus className="size-3.5" />
-                                </Button>
-                            </div>
-                        </div>
+                        <ChipsField
+                            label="Requirements"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={requirements}
+                            onRemove={(v) => setRequirements(prev => prev.filter(x => x !== v))}
+                            inputRef={reqInputRef}
+                            inputValue={reqInput}
+                            onInputChange={setReqInput}
+                            onKeyDown={onReqKeyDown}
+                            onAdd={addRequirement}
+                            placeholder="Add a requirement · Press Enter"
+                        />
+
+                        <ChipsField
+                            label="Skills"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={skills}
+                            onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                            inputValue={skillInput}
+                            onInputChange={setSkillInput}
+                            onKeyDown={onSkillKeyDown}
+                            onAdd={addSkill}
+                            onAddValue={addSkill}
+                            suggestions={tagSuggestions?.skills}
+                            placeholder="Add a skill · Press Enter"
+                            chipClassName="bg-sky-100 text-sky-700"
+                        />
+
+                        <ChipsField
+                            label="Qualifications"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={qualifications}
+                            onRemove={(v) => setQualifications(prev => prev.filter(x => x !== v))}
+                            inputValue={qualInput}
+                            onInputChange={setQualInput}
+                            onKeyDown={onQualKeyDown}
+                            onAdd={addQualification}
+                            onAddValue={addQualification}
+                            suggestions={tagSuggestions?.qualifications}
+                            placeholder="Add a qualification · Press Enter"
+                            chipClassName="bg-emerald-100 text-emerald-700"
+                        />
                     </div>
                 </DialogBody>
 
@@ -382,6 +518,17 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </Dialog>
     )
 }
+
+/**
+ * Reusable chip-input field. Used for Requirements / Skills / Qualifications
+ * on the New/Edit Job dialogs and any future tag-style list inputs. Press
+ * Enter to add; Backspace on empty input removes the last chip.
+ */
+// ChipsField lives in its own module so the public careers bundle can reuse it
+// without importing the admin dialogs. Imported for local use here (the job
+// dialogs render it) and re-exported for existing callers.
+import { ChipsField } from './ChipsField'
+export { ChipsField }
 
 // ─── New Visa Application Dialog ────────────────────────────────────────────
 export function NewVisaApplicationDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -614,8 +761,10 @@ const EMPTY_FORM: EmpForm = {
     paymentMethod: 'bank_transfer', bankName: '', accountName: '', accountNumber: '', swiftCode: '', bankBranch: '', iban: '', emiratisationCategory: 'expat',
 }
 
+const STEP_INDICATOR_STEPS = ['Personal Info', 'Employment', 'Salary & Payroll']
+
 function StepIndicator({ step }: { step: Step }) {
-    const steps = ['Personal Info', 'Employment', 'Salary & Payroll']
+    const steps = STEP_INDICATOR_STEPS
     return (
         <div className="flex items-center gap-0 mb-5">
             {steps.map((label, i) => {
@@ -820,9 +969,11 @@ export function AddEmployeeDialog({
         // percentage rate for percentage_of_basic) — the backend resolver
         // re-computes the AED at run time, so storing the raw value lets
         // basic-changes recalculate downstream components correctly.
-        const salaryComponents = activeEarnings
-            .map((c) => ({ componentId: c.id, amount: parseFloat(form.componentAmounts[c.id] || '0') || 0 }))
-            .filter((a) => a.amount > 0)
+        const salaryComponents = activeEarnings.reduce<Array<{ componentId: string; amount: number }>>((acc, c) => {
+            const amount = parseFloat(form.componentAmounts[c.id] || '0') || 0
+            if (amount > 0) acc.push({ componentId: c.id, amount })
+            return acc
+        }, [])
         try {
             // Auto-create designation if it's a new name not in the existing list
             if (form.designation) {
@@ -946,10 +1097,10 @@ export function AddEmployeeDialog({
                         <div className="space-y-3">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <FormField label="First Name" required error={errors.firstName}>
-                                    <Input value={form.firstName} onChange={set('firstName')} placeholder="Ahmed" aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
+                                    <Input value={form.firstName} onChange={set('firstName')} placeholder="First name" aria-invalid={!!errors.firstName} className={errors.firstName ? 'border-destructive' : ''} />
                                 </FormField>
                                 <FormField label="Last Name" required error={errors.lastName}>
-                                    <Input value={form.lastName} onChange={set('lastName')} placeholder="Al Mansouri" aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
+                                    <Input value={form.lastName} onChange={set('lastName')} placeholder="Last name" aria-invalid={!!errors.lastName} className={errors.lastName ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -988,7 +1139,7 @@ export function AddEmployeeDialog({
                                 </FormField>
                                 <div className="space-y-1.5">
                                     <Label>Passport No</Label>
-                                    <Input value={form.passportNo} onChange={set('passportNo')} placeholder="A12345678" />
+                                    <Input value={form.passportNo} onChange={set('passportNo')} placeholder="Passport number" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1001,7 +1152,7 @@ export function AddEmployeeDialog({
                                     />
                                 </FormField>
                                 <FormField label="Personal Email" error={errors.personalEmail}>
-                                    <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="ahmed@gmail.com" aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
+                                    <Input type="email" value={form.personalEmail} onChange={set('personalEmail')} placeholder="Email address" aria-invalid={!!errors.personalEmail} className={errors.personalEmail ? 'border-destructive' : ''} />
                                 </FormField>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1035,7 +1186,7 @@ export function AddEmployeeDialog({
                                 </FormField>
                             </div>
                             <FormField label="Work Email" error={errors.workEmail} hint="Used for login invites and official communications">
-                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="Email address" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
                             {/* Department picker - Branch and Division auto-assigned */}
                             <div className="space-y-1.5">
@@ -1111,8 +1262,10 @@ export function AddEmployeeDialog({
                                     value={form.designation}
                                     onValueChange={v => setForm(f => ({ ...f, designation: v }))}
                                     options={(Array.isArray(designationList) ? designationList : [])
-                                        .filter((d: { isActive: boolean }) => d.isActive)
-                                        .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                        .reduce<Array<{ value: string; label: string }>>((acc, d: { id: string; name: string; isActive: boolean }) => {
+                                            if (d.isActive) acc.push({ value: d.name, label: d.name })
+                                            return acc
+                                        }, [])}
                                     placeholder="Select or type designation…"
                                     searchPlaceholder="Search or create…"
                                     clearable
@@ -1131,7 +1284,7 @@ export function AddEmployeeDialog({
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label>Work Location</Label>
-                                    <Input value={form.workLocation} onChange={set('workLocation')} placeholder="e.g. Dubai HQ" />
+                                    <Input value={form.workLocation} onChange={set('workLocation')} placeholder="Work location" />
                                 </div>
                             </div>
                             {form.contractType === 'probation' && (
@@ -1271,27 +1424,27 @@ export function AddEmployeeDialog({
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label>Account Number</Label>
-                                            <Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" />
+                                            <Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="Account number" />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
                                             <Label>Bank Name</Label>
-                                            <Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" />
+                                            <Input value={form.bankName} onChange={set('bankName')} placeholder="Bank name" />
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label>Branch</Label>
-                                            <Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" />
+                                            <Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="Branch name" />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div className="space-y-1.5">
                                             <Label>IBAN Number</Label>
-                                            <Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" />
+                                            <Input value={form.iban} onChange={set('iban')} placeholder="IBAN" />
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label>Swift Code</Label>
-                                            <Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" />
+                                            <Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="SWIFT code" />
                                         </div>
                                     </div>
                                 </div>
@@ -1609,7 +1762,7 @@ export function EditEmploymentDialog({
                                 <DatePicker value={form.joinDate} min="1970-01-01" onChange={v => { setForm(f => ({ ...f, joinDate: v ?? '' })); if (errors.joinDate) setErrors(p => { const n = { ...p }; delete n.joinDate; return n }) }} aria-invalid={!!errors.joinDate} className={errors.joinDate ? 'border-destructive' : ''} />
                             </FormField>
                             <FormField label="Work Email" error={errors.workEmail} hint="Used for login and communications">
-                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="ahmed@company.ae" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
+                                <Input type="email" value={form.workEmail} onChange={set('workEmail')} placeholder="Email address" aria-invalid={!!errors.workEmail} className={errors.workEmail ? 'border-destructive' : ''} />
                             </FormField>
                         </div>
                         <div className="space-y-1.5">
@@ -1654,8 +1807,10 @@ export function EditEmploymentDialog({
                                 value={form.designation}
                                 onValueChange={v => setForm(f => ({ ...f, designation: v }))}
                                 options={(Array.isArray(designationList) ? designationList : [])
-                                    .filter((d: { isActive: boolean }) => d.isActive)
-                                    .map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                                    .reduce<Array<{ value: string; label: string }>>((acc, d: { id: string; name: string; isActive: boolean }) => {
+                                        if (d.isActive) acc.push({ value: d.name, label: d.name })
+                                        return acc
+                                    }, [])}
                                 placeholder="Select or type designation…"
                                 searchPlaceholder="Search or create…"
                                 clearable
@@ -1679,9 +1834,10 @@ export function EditEmploymentDialog({
                             <Combobox
                                 value={form.shiftId}
                                 onValueChange={v => setForm(f => ({ ...f, shiftId: v }))}
-                                options={shifts
-                                    .filter(s => s.isActive || s.id === form.shiftId)
-                                    .map(s => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` }))}
+                                options={shifts.reduce<Array<{ value: string; label: string }>>((acc, s) => {
+                                    if (s.isActive || s.id === form.shiftId) acc.push({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` })
+                                    return acc
+                                }, [])}
                                 placeholder="Select shift…"
                                 searchPlaceholder="Search shifts…"
                                 emptyMessage="No shifts found. Add them in Org Settings → Shifts."
@@ -1828,9 +1984,11 @@ export function EditPayrollDialog({
         // Per-component assignments store the RAW user input (the resolver
         // re-applies the percentage at run time using the freshly-resolved
         // basic, so basic changes cascade automatically).
-        const salaryComponents = earningsCatalog
-            .map((c) => ({ componentId: c.id, amount: parseFloat(componentAmounts[c.id] || '0') || 0 }))
-            .filter((a) => a.amount > 0)
+        const salaryComponents = earningsCatalog.reduce<Array<{ componentId: string; amount: number }>>((acc, c) => {
+            const amount = parseFloat(componentAmounts[c.id] || '0') || 0
+            if (amount > 0) acc.push({ componentId: c.id, amount })
+            return acc
+        }, [])
         const result = zodToFieldErrors(employeeSalaryRuleSchema, { basicSalary: basic, totalSalary: total })
         if (Object.keys(result.errors).length) {
             setErrors(result.errors)
@@ -1976,15 +2134,15 @@ export function EditPayrollDialog({
                             <div className="space-y-3">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="space-y-1.5"><Label>Account Name</Label><Input value={form.accountName} onChange={set('accountName')} placeholder="Account holder name" /></div>
-                                    <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="e.g. 1234567890" /></div>
+                                    <div className="space-y-1.5"><Label>Account Number</Label><Input value={form.accountNumber} onChange={set('accountNumber')} placeholder="Account number" /></div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="e.g. Emirates NBD" /></div>
-                                    <div className="space-y-1.5"><Label>Bank Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="e.g. Dubai Main Branch" /></div>
+                                    <div className="space-y-1.5"><Label>Bank Name</Label><Input value={form.bankName} onChange={set('bankName')} placeholder="Bank name" /></div>
+                                    <div className="space-y-1.5"><Label>Bank Branch</Label><Input value={form.bankBranch} onChange={set('bankBranch')} placeholder="Branch name" /></div>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="AE070331234567890123456" /></div>
-                                    <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="e.g. EBILAEAD" /></div>
+                                    <div className="space-y-1.5"><Label>IBAN Number</Label><Input value={form.iban} onChange={set('iban')} placeholder="IBAN" /></div>
+                                    <div className="space-y-1.5"><Label>Swift Code</Label><Input value={form.swiftCode} onChange={set('swiftCode')} placeholder="SWIFT code" /></div>
                                 </div>
                             </div>
                         )}
@@ -2016,14 +2174,16 @@ export function EditJobDialog({
 }: {
     open: boolean
     onOpenChange: (o: boolean) => void
-    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[] }
+    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; workplaceType?: string; openings?: number; experienceYears?: number | null; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[]; skills?: string[]; qualifications?: string[] }
 }) {
     const [title, setTitle] = useState(job.title ?? '')
     const [department, setDepartment] = useState(job.department ?? '')
     const [departmentId, setDepartmentId] = useState('')
     const [location, setLocation] = useState(job.location ?? '')
     const [type, setType] = useState(job.type ?? 'full_time')
+    const [workplaceType, setWorkplaceType] = useState(job.workplaceType ?? 'on_site')
     const [openings, setOpenings] = useState(job.openings ?? 1)
+    const [experienceYears, setExperienceYears] = useState<number | ''>(job.experienceYears ?? '')
     const [minSalary, setMinSalary] = useState(Number(job.minSalary ?? 0))
     const [maxSalary, setMaxSalary] = useState(Number(job.maxSalary ?? 0))
     const [description, setDescription] = useState(job.description ?? '')
@@ -2031,8 +2191,13 @@ export function EditJobDialog({
     const [closingDate, setClosingDate] = useState(job.closingDate ?? '')
     const [requirements, setRequirements] = useState<string[]>(job.requirements ?? [])
     const [reqInput, setReqInput] = useState('')
+    const [skills, setSkills] = useState<string[]>(job.skills ?? [])
+    const [skillInput, setSkillInput] = useState('')
+    const [qualifications, setQualifications] = useState<string[]>(job.qualifications ?? [])
+    const [qualInput, setQualInput] = useState('')
     const editReqInputRef = useRef<HTMLInputElement>(null)
     const updateJob = useUpdateJob()
+    const { data: tagSuggestionsEdit } = useJobTagSuggestions()
     const { data: orgUnitsRawEdit = [] } = useOrgUnits()
     const orgUnitsEdit = Array.isArray(orgUnitsRawEdit) ? orgUnitsRawEdit as OrgUnit[] : []
     const orgOptionsEdit = buildOrgOptions(orgUnitsEdit)
@@ -2041,10 +2206,14 @@ export function EditJobDialog({
     if (open && !prevEditJobOpen) {
         setPrevEditJobOpen(true)
         setTitle(job.title ?? ''); setLocation(job.location ?? '')
-        setType(job.type ?? 'full_time'); setOpenings(job.openings ?? 1)
+        setType(job.type ?? 'full_time'); setWorkplaceType(job.workplaceType ?? 'on_site')
+        setOpenings(job.openings ?? 1)
+        setExperienceYears(job.experienceYears ?? '')
         setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
         setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
         setClosingDate(job.closingDate ?? ''); setRequirements(job.requirements ?? [])
+        setSkills(job.skills ?? []); setSkillInput('')
+        setQualifications(job.qualifications ?? []); setQualInput('')
         const match = orgOptionsEdit.find(o => o.label === job.department)
         setDepartmentId(match?.value ?? '')
         setDepartment(job.department ?? '')
@@ -2064,6 +2233,28 @@ export function EditJobDialog({
             setRequirements(r => r.slice(0, -1))
     }, [addEditRequirement, reqInput, requirements.length])
 
+    const addSkillEdit = useCallback((value?: string) => {
+        const val = (value ?? skillInput).trim()
+        if (val && !skills.some(s => s.toLowerCase() === val.toLowerCase())) setSkills(s => [...s, val])
+        setSkillInput('')
+    }, [skillInput, skills])
+
+    const onSkillKeyDownEdit = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addSkillEdit() }
+        if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1))
+    }, [addSkillEdit, skillInput, skills.length])
+
+    const addQualEdit = useCallback((value?: string) => {
+        const val = (value ?? qualInput).trim()
+        if (val && !qualifications.some(q => q.toLowerCase() === val.toLowerCase())) setQualifications(q => [...q, val])
+        setQualInput('')
+    }, [qualInput, qualifications])
+
+    const onQualKeyDownEdit = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') { e.preventDefault(); addQualEdit() }
+        if (e.key === 'Backspace' && !qualInput && qualifications.length > 0) setQualifications(q => q.slice(0, -1))
+    }, [addQualEdit, qualInput, qualifications.length])
+
     const submit = () => {
         const { ok, errors } = zodToFieldErrors(jobPostSchema, { title, department })
         if (!ok) {
@@ -2071,7 +2262,7 @@ export function EditJobDialog({
             return
         }
         updateJob.mutate(
-            { id: job.id, data: { title, department, location: location || null, type, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements } },
+            { id: job.id, data: { title, department, location: location || null, type, workplaceType, openings, experienceYears: experienceYears === '' ? null : experienceYears, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications } },
             {
                 onSuccess: () => {
                     toast.success('Job updated', `${title} has been saved.`)
@@ -2084,26 +2275,27 @@ export function EditJobDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent size="xl">
+            {/* `full` = max-w-6xl (~1152px). Matches NewJobDialog so the layout
+                feels identical when editing vs creating. */}
+            {/* Custom width — `full` (max-w-6xl, 1152px) + override to max-w-7xl
+                (1280px) so the metadata column + rich-text editor + chip lists
+                all sit comfortably without feeling cramped. Full-screen would
+                lose the "edit in context" feel — wider is better here. */}
+            <DialogContent size="full" className="lg:max-w-7xl">
                 <DialogHeader>
                     <div className="flex items-center justify-between">
                         <DialogTitle>Edit Job</DialogTitle>
-                        <div className="flex items-center gap-1 rounded-full border border-border bg-muted/40 p-0.5 mr-8">
-                            {JOB_STATUS_OPTIONS.map((o: SelectOption) => (
-                                <button
-                                    key={o.value}
-                                    type="button"
-                                    onClick={() => setStatus(o.value)}
-                                    className={cn('px-3 py-1 rounded-full text-xs font-medium transition-all', status === o.value ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
-                                >{o.label}</button>
-                            ))}
-                        </div>
+                        <StatusPills
+                            value={status}
+                            onChange={setStatus}
+                            options={JOB_STATUS_OPTIONS}
+                        />
                     </div>
                 </DialogHeader>
 
                 <DialogBody className="p-0 flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border min-h-0">
                     {/* ── Left: job metadata ── */}
-                    <div className="md:w-[42%] shrink-0 overflow-y-auto p-5 space-y-4">
+                    <div className="md:w-[38%] lg:w-[36%] shrink-0 overflow-y-auto p-5 space-y-4">
 
                         <div className="space-y-1.5">
                             <Label required className="flex items-center gap-1.5"><Briefcase className="size-3.5 text-muted-foreground" />Job Title</Label>
@@ -2141,9 +2333,38 @@ export function EditJobDialog({
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
+                                <Label>Workplace Type</Label>
+                                <Select value={workplaceType} onValueChange={setWorkplaceType}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {WORKPLACE_TYPE_OPTIONS.map((o: SelectOption) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
                                 <Label>Openings</Label>
                                 <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
                             </div>
+                            <div className="space-y-1.5">
+                                <Label>Experience required <span className="text-xs font-normal text-muted-foreground">(years)</span></Label>
+                                <NumericInput
+                                    decimal={false}
+                                    value={experienceYears === '' ? '' : experienceYears}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setExperienceYears(v === '' ? '' : Math.max(0, Number(v)))
+                                    }}
+                                    placeholder="e.g. 3"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
 
                         <div className="space-y-1.5">
@@ -2154,14 +2375,9 @@ export function EditJobDialog({
                                 <NumericInput value={maxSalary} onChange={(e) => setMaxSalary(Number(e.target.value))} placeholder="Max" className="flex-1" />
                             </div>
                         </div>
-
-                        <div className="space-y-1.5">
-                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
-                        </div>
                     </div>
 
-                    {/* ── Right: description + requirements ── */}
+                    {/* ── Right: description + requirements + skills + qualifications ── */}
                     <div className="flex-1 overflow-y-auto p-5 space-y-4">
                         <div className="space-y-1.5">
                             <Label>Job Description</Label>
@@ -2173,34 +2389,51 @@ export function EditJobDialog({
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label className="flex items-center gap-1.5"><Tag className="size-3.5 text-muted-foreground" />Requirements <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                            {requirements.length > 0 && (
-                                <div className="flex flex-wrap gap-1.5" role="list" aria-label="Requirements">
-                                    {requirements.map(r => (
-                                        <span key={r} role="listitem" className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
-                                            {r}
-                                            <button type="button" aria-label={`Remove "${r}"`} onClick={() => setRequirements(prev => prev.filter(x => x !== r))} className="ml-0.5 text-primary/60 hover:text-primary">
-                                                <XIcon className="size-3" />
-                                            </button>
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                            <div className="flex gap-2">
-                                <input
-                                    ref={editReqInputRef}
-                                    value={reqInput}
-                                    onChange={e => setReqInput(e.target.value)}
-                                    onKeyDown={onEditReqKeyDown}
-                                    placeholder="e.g. 3+ years experience · Press Enter to add"
-                                    className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                />
-                                <Button type="button" variant="outline" size="sm" onClick={addEditRequirement} disabled={!reqInput.trim()}>
-                                    <Plus className="size-3.5" />
-                                </Button>
-                            </div>
-                        </div>
+                        <ChipsField
+                            label="Requirements"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={requirements}
+                            onRemove={(v) => setRequirements(prev => prev.filter(x => x !== v))}
+                            inputRef={editReqInputRef}
+                            inputValue={reqInput}
+                            onInputChange={setReqInput}
+                            onKeyDown={onEditReqKeyDown}
+                            onAdd={addEditRequirement}
+                            placeholder="Add a requirement · Press Enter"
+                        />
+
+                        <ChipsField
+                            label="Skills"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={skills}
+                            onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                            inputValue={skillInput}
+                            onInputChange={setSkillInput}
+                            onKeyDown={onSkillKeyDownEdit}
+                            onAdd={addSkillEdit}
+                            onAddValue={addSkillEdit}
+                            suggestions={tagSuggestionsEdit?.skills}
+                            placeholder="Add a skill · Press Enter"
+                            chipClassName="bg-sky-100 text-sky-700"
+                        />
+
+                        <ChipsField
+                            label="Qualifications"
+                            optional
+                            icon={<Tag className="size-3.5 text-muted-foreground" />}
+                            chips={qualifications}
+                            onRemove={(v) => setQualifications(prev => prev.filter(x => x !== v))}
+                            inputValue={qualInput}
+                            onInputChange={setQualInput}
+                            onKeyDown={onQualKeyDownEdit}
+                            onAdd={addQualEdit}
+                            onAddValue={addQualEdit}
+                            suggestions={tagSuggestionsEdit?.qualifications}
+                            placeholder="Add a qualification · Press Enter"
+                            chipClassName="bg-emerald-100 text-emerald-700"
+                        />
                     </div>
                 </DialogBody>
 
@@ -2284,7 +2517,7 @@ export function EditDocumentDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label required>Document Type</Label>
-                            <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="e.g. passport" />
+                            <Input value={docType} onChange={(e) => setDocType(e.target.value)} placeholder="Document type" />
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -2302,6 +2535,8 @@ export function EditDocumentDialog({
 }
 
 // ─── Assign Asset to Employee ─────────────────────────────────────────────────
+
+const CONDITION_LABEL: Record<string, string> = { new: 'New', good: 'Good', damaged: 'Damaged' }
 
 export function AssignAssetToEmployeeDialog({
     employee,
@@ -2363,8 +2598,6 @@ export function AssignAssetToEmployeeDialog({
             toast.error('Assignment failed', err instanceof Error ? err.message : 'Please try again.')
         }
     }
-
-    const CONDITION_LABEL: Record<string, string> = { new: 'New', good: 'Good', damaged: 'Damaged' }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

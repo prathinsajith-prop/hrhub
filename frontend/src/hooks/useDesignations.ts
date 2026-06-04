@@ -29,7 +29,10 @@ export function useDesignationOptions() {
     const { data = [] } = useDesignations()
     return useMemo(() => {
         const list = Array.isArray(data) ? data : []
-        return list.filter((d) => d.isActive).map((d) => ({ value: d.name, label: d.name }))
+        return list.reduce<Array<{ value: string; label: string }>>((acc, d) => {
+            if (d.isActive) acc.push({ value: d.name, label: d.name })
+            return acc
+        }, [])
     }, [data])
 }
 

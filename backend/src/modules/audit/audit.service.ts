@@ -11,11 +11,12 @@ import { maskAuditChanges } from './audit.changes.js'
  */
 export type AuditAction =
     | 'create' | 'update' | 'delete' | 'view'
-    | 'approve' | 'reject' | 'submit'
+    | 'approve' | 'reject' | 'submit' | 'cancel'
     | 'export' | 'import' | 'upload' | 'download'
     | 'assign' | 'unassign'
     | 'login' | 'logout' | 'invite'
     | 'permission_change' | 'role_change'
+    | 'publish' | 'archive' | 'expire' | 'schedule' | 'acknowledge'
 
 /** Parse basic browser/OS info from User-Agent string */
 function parseUserAgent(ua: string): {

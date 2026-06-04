@@ -17,7 +17,7 @@
 //   • useSubmitInterviewResponses(id) — POST that overwrites all answers
 //     (the backend wipes + reinserts inside a single transaction).
 
-import { useState, useImperativeHandle, forwardRef } from 'react'
+import { useState, useImperativeHandle, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle2, Clock, MessageSquare, Star, ListChecks, Save, Pencil } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -53,6 +53,10 @@ interface ExitInterviewSectionProps {
      *  wizard to relabel its Next button "Save & Next" when there's unsaved
      *  work in this step. */
     onDirtyChange?: (dirty: boolean) => void
+    /** React 19 lets us accept the ref as a regular prop — no forwardRef
+     *  wrapper needed. The wizard passes its `useRef<ExitInterviewSectionHandle>()`
+     *  here to read isDirty / call save() at Next-button time. */
+    ref?: Ref<ExitInterviewSectionHandle>
 }
 
 export interface ExitInterviewSectionHandle {
@@ -64,10 +68,7 @@ export interface ExitInterviewSectionHandle {
     save: () => Promise<boolean>
 }
 
-export const ExitInterviewSection = forwardRef<
-    ExitInterviewSectionHandle,
-    ExitInterviewSectionProps
->(function ExitInterviewSection({ exitId, submitted, onDirtyChange }, ref) {
+export function ExitInterviewSection({ exitId, submitted, onDirtyChange, ref }: ExitInterviewSectionProps) {
     const { t } = useTranslation()
     const questionsQ = useInterviewQuestions()
     const responsesQ = useExitInterviewResponses(exitId)
@@ -252,7 +253,7 @@ export const ExitInterviewSection = forwardRef<
             )}
         </div>
     )
-})
+}
 
 // ─── Per-question inputs ────────────────────────────────────────────────────
 
@@ -263,7 +264,7 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
             <Input
                 value={(value as string) ?? ''}
                 onChange={(e) => onChange(e.target.value)}
-                placeholder="Type the response…"
+                placeholder="Response"
                 className="text-sm"
             />
         )
@@ -274,7 +275,7 @@ function AnswerInput({ question, value, onChange }: { question: InterviewQuestio
                 rows={3}
                 value={(value as string) ?? ''}
                 onChange={(e) => onChange(e.target.value)}
-                placeholder="Type the response…"
+                placeholder="Response…"
                 className="text-sm"
             />
         )

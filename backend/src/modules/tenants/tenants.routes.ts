@@ -13,6 +13,30 @@ import {
 } from './tenants.service.js'
 import type { MemberRole } from '../../lib/permissions.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { createNotification } from '../notifications/notifications.service.js'
+import { sendEmail, membershipChangeEmail } from '../../plugins/email.js'
+import { db } from '../../db/index.js'
+import { tenants as tenantsTable } from '../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
+
+// Notify + email a member whose role changed or who was removed (best-effort).
+async function notifyMembershipChange(
+    tenantId: string,
+    userId: string | null | undefined,
+    email: string | null | undefined,
+    name: string | null | undefined,
+    change: 'role_changed' | 'removed',
+    role?: string,
+): Promise<void> {
+    const [t] = await db.select({ name: tenantsTable.name }).from(tenantsTable).where(eq(tenantsTable.id, tenantId)).limit(1)
+    const workspaceName = t?.name ?? 'your workspace'
+    if (userId && change === 'role_changed') {
+        createNotification({ tenantId, userId, type: 'info', title: 'Your role was updated', message: `Your role in ${workspaceName} is now ${role}.`, actionUrl: '/dashboard' }).catch(() => { })
+    }
+    if (email) {
+        sendEmail({ ...membershipChangeEmail({ recipientName: name ?? 'there', workspaceName, change, role }), to: email }).catch(() => { })
+    }
+}
 
 /**
  * Audit helper — every mutating route in this module funnels through this so
@@ -212,6 +236,7 @@ export default async function tenantsRoutes(fastify: any): Promise<void> {
             changes: { role: { from: before?.role ?? null, to: data.role } },
             metadata: { membershipId: data.id },
         })
+        notifyMembershipChange(request.user.tenantId, data.userId ?? before?.userId, before?.userEmail ?? before?.invitedEmail, before?.userName, 'role_changed', data.role).catch(() => { })
         return reply.send({ data })
     })
 
@@ -235,6 +260,7 @@ export default async function tenantsRoutes(fastify: any): Promise<void> {
             action: 'delete',
             metadata: { kind: 'member_removed', membershipId: id, role: target?.role },
         })
+        notifyMembershipChange(request.user.tenantId, target?.userId, target?.userEmail ?? target?.invitedEmail, target?.userName, 'removed').catch(() => { })
         return reply.code(204).send()
     })
 

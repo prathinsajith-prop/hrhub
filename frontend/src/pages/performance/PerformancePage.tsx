@@ -24,7 +24,7 @@ import { EmployeeLink } from '@/components/shared/EmployeeLink'
 
 const PERFORMANCE_FILTERS: FilterConfig[] = [
     { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: PERFORMANCE_STATUS_OPTIONS },
-    { name: 'period', label: 'Period', type: 'text', field: 'period', placeholder: 'e.g. 2024-Q2' },
+    { name: 'period', label: 'Period', type: 'text', field: 'period', placeholder: 'Review period' },
     { name: 'overallRating', label: 'Overall rating', type: 'number_range', field: 'overallRating', min: 1, max: 5, step: 1 },
     { name: 'reviewDate', label: 'Review date', type: 'date_range', field: 'reviewDate' },
 ]

@@ -12,6 +12,8 @@ import { useMyEmployee, useMyPayslips } from '@/hooks/useMe'
 import { useLeaveBalance } from '@/hooks/useLeave'
 import { QuickAction, SectionHeading } from './_shared'
 
+const PROFILE_FIELDS = ['phone', 'mobileNo', 'personalEmail', 'emergencyContact', 'homeCountryAddress', 'nationality', 'dateOfBirth', 'maritalStatus'] as const
+
 export function EmployeeDashboard() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -19,7 +21,6 @@ export function EmployeeDashboard() {
   const { data: payslips, isLoading: payslipsLoading } = useMyPayslips()
   const { data: leaveBalance, isLoading: leaveLoading } = useLeaveBalance(myEmployee?.id)
 
-  const PROFILE_FIELDS = ['phone', 'mobileNo', 'personalEmail', 'emergencyContact', 'homeCountryAddress', 'nationality', 'dateOfBirth', 'maritalStatus'] as const
   const filled = PROFILE_FIELDS.filter(f => !!(myEmployee as Record<string, unknown> | undefined)?.[f]).length
   const completeness = empLoading ? 100 : Math.round((filled / PROFILE_FIELDS.length) * 100)
 

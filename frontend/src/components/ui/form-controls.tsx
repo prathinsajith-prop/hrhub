@@ -174,11 +174,11 @@ function ImageUpload({
           )}
         </button>
         {preview && (
-          <button onClick={clear} className="absolute -top-1 -right-1 size-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors">
+          <button type="button" onClick={clear} className="absolute -top-1 -right-1 size-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors">
             <X className="size-3" />
           </button>
         )}
-        <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+        <input ref={inputRef} type="file" aria-label={label ?? 'Upload avatar'} accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
       </div>
     )
   }
@@ -221,14 +221,14 @@ function ImageUpload({
             )}
           </div>
           {fileName && (
-            <button onClick={clear} className="shrink-0 size-6 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors">
+            <button type="button" onClick={clear} className="shrink-0 size-6 rounded-full hover:bg-red-100 flex items-center justify-center transition-colors">
               <X className="size-3.5 text-red-500" />
             </button>
           )}
         </div>
         {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+        <input ref={inputRef} type="file" aria-label={label ?? 'Upload document'} accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
       </div>
     )
   }
@@ -257,6 +257,7 @@ function ImageUpload({
           <div className="relative">
             <img src={preview} alt="Preview" className="w-full h-48 object-cover" />
             <button
+              type="button"
               onClick={clear}
               className="absolute top-2 right-2 size-7 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
             >
@@ -277,7 +278,7 @@ function ImageUpload({
       </div>
       {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs text-red-500">{error}</p>}
-      <input ref={inputRef} type="file" accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+      <input ref={inputRef} type="file" aria-label={label ?? 'Upload file'} accept={accept} className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
     </div>
   )
 }
@@ -306,6 +307,7 @@ function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: T
           const active = activeTab === tab.id
           return (
             <button
+              type="button"
               key={tab.id}
               role="tab"
               aria-selected={active}
@@ -347,6 +349,7 @@ function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: T
         const active = activeTab === tab.id
         return (
           <button
+            type="button"
             key={tab.id}
             role="tab"
             aria-selected={active}

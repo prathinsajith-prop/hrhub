@@ -6,6 +6,7 @@ import { templateRoutes } from './templates.routes.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { logDocumentAction, getDocumentAuditLog } from '../onboarding/onboarding.docs.service.js'
 import { sendEmail, documentVerifiedEmail, documentRejectedEmail } from '../../plugins/email.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
 import { db } from '../../db/index.js'
 import { employees, tenants, onboardingSteps, onboardingChecklists } from '../../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
@@ -187,6 +188,12 @@ export default async function (fastify: any): Promise<void> {
                 ipAddress: (request as any).ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
+            notifyEmployee(request.user.tenantId, updated.employeeId, {
+                type: 'success',
+                title: 'Document verified',
+                message: `Your document "${updated.docType ?? updated.fileName ?? 'document'}" has been verified.`,
+                actionUrl: '/me/documents',
+            }).catch(() => { })
         }
         await logDocumentAction({
             tenantId: request.user.tenantId,
@@ -258,6 +265,12 @@ export default async function (fastify: any): Promise<void> {
                 metadata: { kind: 'document', subKind: 'reject', documentId: id, docType: updated.docType, reason },
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            notifyEmployee(request.user.tenantId, updated.employeeId, {
+                type: 'warning',
+                title: 'Document needs attention',
+                message: `Your document "${updated.docType ?? updated.fileName ?? 'document'}" was rejected.${reason ? ` Reason: ${reason}` : ''} Please re-upload.`,
+                actionUrl: '/me/documents',
             }).catch(() => { })
         }
         await logDocumentAction({

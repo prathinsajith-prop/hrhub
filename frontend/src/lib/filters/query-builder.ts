@@ -150,7 +150,10 @@ export function formatFilterValue(
     if (typeof v === 'boolean') return v ? 'Yes' : 'No'
     if (Array.isArray(v)) {
         if (config?.options) {
-            const labels = config.options.filter((o) => v.includes(o.value as never)).map((o) => o.label)
+            const labels = config.options.reduce<string[]>((acc, o) => {
+                if (v.includes(o.value as never)) acc.push(o.label)
+                return acc
+            }, [])
             return labels.join(', ') || v.join(', ')
         }
         return v.join(', ')

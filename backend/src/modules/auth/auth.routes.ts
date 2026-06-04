@@ -225,6 +225,7 @@ export default async function (fastify: any): Promise<void> {
             .select({
                 attendancePunchEnabled: users.attendancePunchEnabled,
                 attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+                portalPostEnabled: users.portalPostEnabled,
             })
             .from(users)
             .where(eq(users.id, request.user.id))
@@ -234,6 +235,7 @@ export default async function (fastify: any): Promise<void> {
                 ...request.user,
                 attendancePunchEnabled: row?.attendancePunchEnabled ?? true,
                 attendanceManualEntryEnabled: row?.attendanceManualEntryEnabled ?? true,
+                portalPostEnabled: row?.portalPostEnabled ?? false,
             },
         })
     })

@@ -512,6 +512,132 @@
       "when": 1781107200000,
       "tag": "0072_default_general_shift_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1781193600000,
+      "tag": "0073_employee_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1781280000000,
+      "tag": "0074_job_no",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1781366400000,
+      "tag": "0075_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1781452800000,
+      "tag": "0076_recognitions",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1781539200000,
+      "tag": "0077_soft_delete_employee_subrecords",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1781625600000,
+      "tag": "0078_job_workplace_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1781712000000,
+      "tag": "0079_application_photo",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1781798400000,
+      "tag": "0080_hot_list_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1781884800000,
+      "tag": "0081_candidate_profile_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1781971200000,
+      "tag": "0082_recognition_points_award_uniq",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1780540800000,
+      "tag": "0083_announcement_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1782057600000,
+      "tag": "0084_list_pagination_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1782144000000,
+      "tag": "0085_employee_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1782230400000,
+      "tag": "0086_application_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1782316800000,
+      "tag": "0087_portal_post_enabled",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1782403200000,
+      "tag": "0088_recruitment_tag_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1782489600000,
+      "tag": "0089_job_experience_years",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1782576000000,
+      "tag": "0090_announcement_kind",
+      "breakpoints": true
     }
   ]
 }

@@ -67,6 +67,30 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
+    // Defense-in-depth: an archived employee must never authenticate, even if a
+    // legacy `users` row was left active before archiving also began revoking
+    // logins. Covers pre-existing archived records without a data backfill.
+    if (user.employeeId) {
+        const [emp] = await db
+            .select({ archived: employees.isArchived })
+            .from(employees)
+            .where(and(eq(employees.id, user.employeeId), eq(employees.tenantId, user.tenantId)))
+            .limit(1)
+        if (emp?.archived) {
+            recordLoginEvent({
+                tenantId: user.tenantId,
+                userId: user.id,
+                email: user.email,
+                eventType: 'failed_login',
+                success: false,
+                ipAddress: input.ipAddress,
+                userAgent: input.userAgent,
+                failureReason: 'employee_archived',
+            }).catch(() => { })
+            return null
+        }
+    }
+
     // Read current lockout state with a row-level lock, then run bcrypt outside the
     // transaction so the DB connection isn't held for the ~100ms hash duration.
     const fresh = await db.transaction(async (tx) => {

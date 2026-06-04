@@ -39,6 +39,9 @@ export const ROUTES = {
     // Insights
     reports: '/reports',
     audit: '/audit',
+    engage: '/engage',
+    announcements: '/announcements',
+    recognition: '/recognition',
     loginHistory: '/my/login-history',
 
     // Workspace
@@ -64,6 +67,15 @@ export const ROUTES = {
 export type RouteKey = keyof typeof ROUTES
 
 /**
+ * Public (unauthenticated) careers-portal route builders. Kept separate from
+ * ROUTES so they don't pollute RouteKey / the RoleRoute permission matrix.
+ */
+export const PUBLIC_ROUTES = {
+    careersJobs: (companyCode: string) => `/careers/${encodeURIComponent(companyCode)}/jobs`,
+    careersJob: (companyCode: string, jobId: string) => `/careers/${encodeURIComponent(companyCode)}/jobs/${jobId}`,
+} as const
+
+/**
  * Maps the first URL segment to its i18n key in the `nav.*` namespace.
  * Used by the breadcrumb in the SiteHeader to translate root paths.
  */
@@ -86,6 +98,8 @@ export const ROOT_NAV_LABELS: Record<string, string> = {
     travel: 'nav.travel',
     reports: 'nav.reports',
     audit: 'nav.auditLog',
+    engage: 'nav.engage',
+    recognition: 'nav.recognition',
     'login-history': 'loginHistory.title',
     notifications: 'profile.notifications',
     settings: 'nav.settings',

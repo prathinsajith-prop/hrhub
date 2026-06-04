@@ -728,12 +728,12 @@ function CalendarView({ month, myRow }: { month: string; myRow: CalendarEmployee
       </div>
       <div className="grid grid-cols-7 gap-1">
         {cells.map((c, i) => {
-          if (!c) return <div key={i} />
+          if (!c) return <div key={`empty-${i}`} />
           const klass = classify(c.cell, new Date(year, mon - 1, c.day), new Date())
           const tone = statusTone(klass)
           return (
             <div
-              key={i}
+              key={`day-${c.day}`}
               className={cn(
                 'aspect-square rounded-md border flex flex-col items-center justify-center gap-0.5 p-1 text-xs',
                 tone.bar,
@@ -949,7 +949,7 @@ function AuditHistoryDialog({
           ) : (
             <ol className="relative border-l-2 border-border ms-4 pt-2 space-y-5">
               {events.map((e, i) => (
-                <li key={i} className="ms-6 relative">
+                <li key={`${i}-${e.time}-${e.action}`} className="ms-6 relative">
                   <span className="absolute -start-[2.05rem] top-0.5 size-7 rounded-full bg-background border-2 border-border flex items-center justify-center">
                     {e.action === 'check_in' ? <LogIn className="size-3 text-emerald-600" /> : <LogOut className="size-3 text-rose-600" />}
                   </span>

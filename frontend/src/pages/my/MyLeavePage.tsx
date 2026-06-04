@@ -90,7 +90,7 @@ function ApplyDialog({ employeeId, currentEmployeeId, onClose }: { employeeId: s
                     <DialogTitle>Apply for Leave</DialogTitle>
                     <DialogDescription>Submit a new leave request for approval.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-1">
+                <div className="space-y-4 pt-2">
                     <div className="space-y-1.5">
                         <Label>Leave Type</Label>
                         <Select value={form.leaveType} onValueChange={v => setForm(f => ({ ...f, leaveType: v }))}>

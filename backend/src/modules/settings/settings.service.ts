@@ -96,6 +96,10 @@ export async function listTenantUsers(tenantId: string) {
             isActive: users.isActive,
             attendancePunchEnabled: users.attendancePunchEnabled,
             attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            // Without this column in the SELECT, the Manage Access modal
+            // would always render the "Create posts" toggle as OFF on reopen
+            // — even right after the user enabled and saved it.
+            portalPostEnabled: users.portalPostEnabled,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
             employeeId: users.employeeId,
@@ -124,12 +128,13 @@ const ROLE_HIERARCHY: Record<string, number> = { super_admin: 5, hr_manager: 4, 
 export async function updateUserStatus(
     tenantId: string,
     userId: string,
-    data: { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean },
+    data: { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean },
 ) {
     const patch: Record<string, unknown> = { updatedAt: new Date() }
     if (data.isActive !== undefined) patch.isActive = data.isActive
     if (data.attendancePunchEnabled !== undefined) patch.attendancePunchEnabled = data.attendancePunchEnabled
     if (data.attendanceManualEntryEnabled !== undefined) patch.attendanceManualEntryEnabled = data.attendanceManualEntryEnabled
+    if (data.portalPostEnabled !== undefined) patch.portalPostEnabled = data.portalPostEnabled
     if (data.roles && data.roles.length > 0) {
         const effectiveRole = data.roles.reduce((best, r) => (ROLE_HIERARCHY[r] ?? 0) > (ROLE_HIERARCHY[best] ?? 0) ? r : best, data.roles[0])
         patch.role = effectiveRole as UserRole
@@ -151,6 +156,7 @@ export async function updateUserStatus(
             isActive: users.isActive,
             attendancePunchEnabled: users.attendancePunchEnabled,
             attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            portalPostEnabled: users.portalPostEnabled,
         })
     return updated ?? null
 }
@@ -283,7 +289,11 @@ export async function inviteUser(
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
 
-    const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
+    // Employees live in the self-service portal; HR / admin / PRO use the admin
+    // app. Point the invite link at the surface the invitee will actually use so
+    // an employee isn't dropped into the admin console they can't access.
+    const inviteBase = data.role === 'employee' ? env.PORTAL_URL : env.APP_URL
+    const inviteUrl = `${inviteBase}/reset-password?token=${rawToken}`
     const emailOpts = inviteUserEmail({ inviteeName: name, workspaceName: 'HRHub', role: data.role, inviteUrl })
     const result = await sendEmail({ ...emailOpts, to: email })
 
@@ -342,7 +352,7 @@ export async function resendInvite(tenantId: string, employeeId: string) {
     const env = loadEnv()
 
     const [user] = await db
-        .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive })
+        .select({ id: users.id, email: users.email, name: users.name, isActive: users.isActive, role: users.role })
         .from(users)
         .where(and(eq(users.employeeId, employeeId), eq(users.tenantId, tenantId)))
         .limit(1)
@@ -359,8 +369,9 @@ export async function resendInvite(tenantId: string, employeeId: string) {
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
     await db.insert(passwordResetTokens).values({ userId: user.id, tokenHash, expiresAt })
 
-    const inviteUrl = `${env.APP_URL}/reset-password?token=${rawToken}`
-    const emailOpts = inviteUserEmail({ inviteeName: user.name, workspaceName: 'HRHub', role: 'employee', inviteUrl })
+    const inviteBase = user.role === 'employee' ? env.PORTAL_URL : env.APP_URL
+    const inviteUrl = `${inviteBase}/reset-password?token=${rawToken}`
+    const emailOpts = inviteUserEmail({ inviteeName: user.name, workspaceName: 'HRHub', role: user.role, inviteUrl })
     const result = await sendEmail({ ...emailOpts, to: user.email })
 
     // sendEmail resolves with { ok: false, error } on SMTP/transport failure — previously

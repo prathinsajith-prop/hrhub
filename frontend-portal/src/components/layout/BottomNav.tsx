@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
+    Briefcase,
     Calendar,
     FileCheck2,
     FileText,
@@ -8,7 +9,6 @@ import {
     MoreHorizontal,
     Receipt,
     ShieldCheck,
-    Sparkles,
     Users,
     Clock,
     ListChecks,
@@ -31,17 +31,15 @@ type NavItem = { to: string; label: string; icon: typeof Home }
 // the row starts visibly cramping on small phones.
 const EMPLOYEE_ITEMS: NavItem[] = [
     { to: ROUTES.employeeHome, label: 'nav.home', icon: Home },
-    { to: ROUTES.employeeLeave, label: 'nav.leave', icon: Calendar },
+    { to: ROUTES.employeeWork, label: 'nav.myWork', icon: Briefcase },
     { to: ROUTES.employeePayslips, label: 'nav.payslips', icon: Receipt },
-    { to: ROUTES.employeeAttendance, label: 'nav.attendance', icon: Clock },
-]
-// Profile intentionally omitted — it lives in the avatar dropdown in TopBar,
-// which is the consistent entry point for personal/account screens. Listing
-// it in two places would dilute that convention.
-const EMPLOYEE_MORE: NavItem[] = [
     { to: ROUTES.employeeDocuments, label: 'nav.documents', icon: FileText },
-    { to: ROUTES.employeePerformance, label: 'nav.performance', icon: Sparkles },
 ]
+// Profile + Referrals live in the avatar dropdown in TopBar (the single entry
+// point for personal/account screens); Announcements/Overview/Recognitions are
+// tabs inside Home. Employees therefore have no overflow — the "More" button is
+// hidden for them (render is guarded on moreItems.length below).
+const EMPLOYEE_MORE: NavItem[] = []
 
 const MANAGER_ITEMS: NavItem[] = [
     { to: ROUTES.managerHome, label: 'nav.home', icon: Home },
@@ -102,8 +100,11 @@ export function BottomNav() {
                     )
                 })}
 
-                {/* Overflow — keeps the rest of the screens reachable on mobile
-                    without exceeding the 5-slot visual limit. */}
+                {/* Overflow — only rendered when there are overflow items.
+                    Employees have none (everything lives in the primary row,
+                    Home tabs, or the avatar menu), so the button is hidden for
+                    them; only managers see it. */}
+                {moreItems.length > 0 ? (
                 <li className="flex-1">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -143,6 +144,7 @@ export function BottomNav() {
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </li>
+                ) : null}
             </ul>
         </nav>
     )

@@ -985,7 +985,7 @@ function ExpenseActionDialog({
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             rows={3}
-                            placeholder={t('travel.expense.reject.placeholder', 'e.g. Missing receipt, exceeds policy, wrong category...') as string}
+                            placeholder={t('travel.expense.reject.placeholder', 'Reason for rejection…') as string}
                             autoFocus
                         />
                     </div>
@@ -1151,11 +1151,11 @@ function AddTravelRequestDialog({
                             )}
                             <div>
                                 <FieldLabel>{t('travel.create.place', 'Place of visit')}</FieldLabel>
-                                <Input value={placeOfVisit} onChange={(e) => setPlaceOfVisit(e.target.value)} placeholder="Riyadh, Dubai, etc." />
+                                <Input value={placeOfVisit} onChange={(e) => setPlaceOfVisit(e.target.value)} placeholder="Place of visit" />
                             </div>
                             <div>
                                 <FieldLabel>{t('travel.create.customer', 'Customer name')}</FieldLabel>
-                                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Acme LLC" />
+                                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" />
                             </div>
                             <div className="sm:col-span-2">
                                 <FieldLabel>{t('travel.create.purpose', 'Purpose of visit')}</FieldLabel>
@@ -1163,7 +1163,7 @@ function AddTravelRequestDialog({
                                     value={purposeOfVisit}
                                     onChange={(e) => setPurposeOfVisit(e.target.value)}
                                     rows={2}
-                                    placeholder={t('travel.create.purposePlaceholder', 'Client onboarding, training, vendor meeting...') as string}
+                                    placeholder={t('travel.create.purposePlaceholder', 'Purpose of visit…') as string}
                                 />
                             </div>
                         </div>
@@ -1243,7 +1243,7 @@ function AddTravelRequestDialog({
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
                                     rows={2}
-                                    placeholder={t('travel.create.notesPlaceholder', 'Anything HR should know — accommodation preference, equipment, visa status...') as string}
+                                    placeholder={t('travel.create.notesPlaceholder', 'Additional notes for HR…') as string}
                                 />
                             </div>
                         </div>
@@ -1469,7 +1469,7 @@ function AddTravelExpenseDialog({
                                 <Input
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
-                                    placeholder={t('travel.expense.descPlaceholder', 'Flight to Riyadh, taxi from hotel, etc.') as string}
+                                    placeholder={t('travel.expense.descPlaceholder', 'Expense description') as string}
                                 />
                             </div>
                         </div>
@@ -1679,7 +1679,7 @@ function AmountField({
                     const n = Number(raw)
                     onChange(Number.isFinite(n) ? n : '')
                 }}
-                placeholder="0.00"
+                placeholder="Amount"
                 min={0}
             />
         </div>

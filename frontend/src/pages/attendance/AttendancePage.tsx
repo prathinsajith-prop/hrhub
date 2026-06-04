@@ -51,6 +51,11 @@ import { ATTENDANCE_STATUS_OPTIONS } from '@/lib/options'
 import { exportAttendance } from '@/lib/export'
 import { cn } from '@/lib/utils'
 
+// Leave-type codes that roll up into the "leave" KPI bucket. Hoisted to a
+// module-scope Set so the per-cell loop does an O(1) lookup instead of
+// rebuilding + linearly scanning an array on every iteration.
+const LEAVE_CODES = new Set(['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'])
+
 const ATTENDANCE_FILTERS: FilterConfig[] = [
     { name: 'employeeName', label: 'Employee', type: 'text', field: 'employeeName' },
     { name: 'status', label: 'Status', type: 'multi_select', field: 'status', options: ATTENDANCE_STATUS_OPTIONS },
@@ -733,8 +738,8 @@ export function AttendancePage() {
                                         outerRadius={80}
                                         paddingAngle={2}
                                     >
-                                        {pieData.map((entry, i) => (
-                                            <Cell key={i} fill={entry.color} strokeWidth={0} />
+                                        {pieData.map((entry) => (
+                                            <Cell key={entry.name} fill={entry.color} strokeWidth={0} />
                                         ))}
                                     </Pie>
                                     <Tooltip
@@ -1180,7 +1185,7 @@ function EmployeeMonthAttendanceDialog({
             if (c.code === 'P' || c.code === 'IP') acc.present++
             else if (c.code === 'P-late' || c.code === 'P-short') acc.late++
             else if (c.code === 'A' || c.code === 'INC') acc.absent++
-            else if (['AL', 'SL', 'ML', 'PL', 'BL', 'HJ'].includes(c.code)) acc.leave++
+            else if (LEAVE_CODES.has(c.code)) acc.leave++
             else if (c.code === 'WFH') acc.wfh++
             else if (c.code === 'H') acc.holiday++
             else if (c.code === 'WO') acc.weekOff++
@@ -1428,6 +1433,23 @@ interface ResolvedImportRow extends ImportRow {
     resolvedVia: 'employee_no' | 'mapper_id' | null
 }
 
+/**
+ * Sample template rows. Covers both identity columns:
+ *   - employee_no  (HRHub's own employee code)
+ *   - mapper_id    (biometric device user id; takes precedence when both are set)
+ *
+ * One file format for the sample (.xlsx) keeps the UI uncluttered. The
+ * parser still accepts CSV uploads — only the sample-download surface
+ * is xlsx-only.
+ */
+const SAMPLE_HEADER = ['employee_no', 'mapper_id', 'date', 'in_time', 'out_time', 'in_notes', 'out_notes', 'location']
+const SAMPLE_ROWS: ReadonlyArray<ReadonlyArray<string>> = [
+    ['EMP-001', '', '2026-05-19', '09:00', '18:00', 'On-time', 'End of shift', 'Office'],
+    ['EMP-001', '', '2026-05-19', '19:00', '21:30', 'Overtime in', 'Overtime out', 'Office'],
+    ['', '101', '2026-05-20', '08:55', '17:30', 'Biometric punch', 'Auto out', 'Site A'],
+    ['EMP-002', '', '2026-05-20', '09:10', '', 'Forgot punch-out', '', 'Site B'],
+]
+
 function ImportAttendancePunchesDialog({
     open, onOpenChange, employees,
 }: {
@@ -1564,23 +1586,6 @@ function ImportAttendancePunchesDialog({
             toast.error('Empty file', 'No data rows found in the file.')
         }
     }
-
-    /**
-     * Sample template rows. Covers both identity columns:
-     *   - employee_no  (HRHub's own employee code)
-     *   - mapper_id    (biometric device user id; takes precedence when both are set)
-     *
-     * One file format for the sample (.xlsx) keeps the UI uncluttered. The
-     * parser still accepts CSV uploads — only the sample-download surface
-     * is xlsx-only.
-     */
-    const SAMPLE_HEADER = ['employee_no', 'mapper_id', 'date', 'in_time', 'out_time', 'in_notes', 'out_notes', 'location']
-    const SAMPLE_ROWS: ReadonlyArray<ReadonlyArray<string>> = [
-        ['EMP-001', '', '2026-05-19', '09:00', '18:00', 'On-time', 'End of shift', 'Office'],
-        ['EMP-001', '', '2026-05-19', '19:00', '21:30', 'Overtime in', 'Overtime out', 'Office'],
-        ['', '101', '2026-05-20', '08:55', '17:30', 'Biometric punch', 'Auto out', 'Site A'],
-        ['EMP-002', '', '2026-05-20', '09:10', '', 'Forgot punch-out', '', 'Site B'],
-    ]
 
     async function downloadSample() {
         // Lazy-load xlsx — same reason as the import path: it's a heavy

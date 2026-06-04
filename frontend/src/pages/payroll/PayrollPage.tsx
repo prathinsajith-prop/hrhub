@@ -302,8 +302,8 @@ function PayrollCharts({ runs }: { runs: PayrollRun[] }) {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {statusData.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  {statusData.map((d, i) => (
+                    <Cell key={d.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
@@ -392,8 +392,11 @@ function PayslipBreakdown({ ps }: { ps: Payslip }) {
   // Order mirrors Add/Edit Employee Step 3 + Payroll Summary so HR sees the
   // same shape everywhere.
   const breakdown = (ps.earningsBreakdown ?? [])
-    .map((b) => ({ ...b, amount: Number(b.amount) }))
-    .filter((b) => b.amount > 0)
+    .reduce<Array<{ componentId: string; category: string; name: string; amount: number }>>((acc, b) => {
+      const amount = Number(b.amount)
+      if (amount > 0) acc.push({ ...b, amount })
+      return acc
+    }, [])
     .sort((a, b) => {
       const rank: Record<string, number> = { basic: 0, housing: 1, transport: 2, cost_of_living: 3, custom_allowance: 4, social: 5 }
       const ra = rank[a.category] ?? 99
@@ -822,11 +825,11 @@ function GratuityCalculator() {
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Basic Monthly Salary (AED)</Label>
-          <NumericInput maxDecimals={2} placeholder="e.g. 10,000" value={basic} onChange={e => setBasic(e.target.value)} />
+          <NumericInput maxDecimals={2} placeholder="Amount" value={basic} onChange={e => setBasic(e.target.value)} />
         </div>
         <div className="space-y-1.5">
           <Label>Years of Service</Label>
-          <NumericInput maxDecimals={1} placeholder="e.g. 3" value={years} onChange={e => setYears(e.target.value)} />
+          <NumericInput maxDecimals={1} placeholder="Number of years" value={years} onChange={e => setYears(e.target.value)} />
         </div>
       </div>
 
@@ -2182,17 +2185,18 @@ function AddAdjustmentDialog({
                   const raw = e.target.value
                   setAmount(raw === '' ? '' : Number(raw))
                 }}
-                placeholder="0.00"
+                placeholder="Amount"
                 maxDecimals={2}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Notes (optional)</Label>
               <input
+                aria-label="Notes"
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Q2 sales commission"
+                placeholder="Description"
               />
             </div>
           </TabsContent>
