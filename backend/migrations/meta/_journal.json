@@ -624,6 +624,13 @@
       "when": 1782403200000,
       "tag": "0088_recruitment_tag_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1782489600000,
+      "tag": "0089_job_experience_years",
+      "breakpoints": true
     }
   ]
 }

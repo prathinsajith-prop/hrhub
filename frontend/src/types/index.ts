@@ -191,6 +191,8 @@ export interface Job {
   workplaceType: WorkplaceType
   status: JobStatus
   openings: number
+  /** Minimum years of experience the role expects. Null = no floor. */
+  experienceYears?: number | null
   applications: number
   /**
    * Backend returns the DB column name (`createdAt`). `postedDate` is kept as
@@ -219,7 +221,11 @@ export interface Candidate {
   phone: string
   nationality: string
   stage: ApplicationStage
+  /** Manual recruiter rating (0–100), free-form. Defaults to 0 / usually unset. */
   score: number
+  /** Auto fit-score (0–100) vs the job, computed by the matching engine. Present
+   *  only when the candidate is listed in a single-job context (job detail page). */
+  matchScore?: number
   appliedDate: string
   avatar?: string
   avatarUrl?: string | null

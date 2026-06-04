@@ -4,6 +4,7 @@ import { db } from '../../db/index.js'
 import { recruitmentJobs, jobApplications, recruitmentStages, employees, tenants, recruitmentSkills, recruitmentQualifications } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
+import { scoreMatch } from './matching.engine.js'
 import { buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
@@ -44,8 +45,26 @@ export async function listJobs(tenantId: string, params: { status?: string; depa
         .search(q, recruitmentJobs.title, recruitmentJobs.department)
         .filter(filter, JOB_FIELD_MAP, JOB_ALLOWED)
 
-    const rows = await db.select({ ...getTableColumns(recruitmentJobs), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+    // Live applicant count per job. `recruitment_jobs` has no `applications`
+    // counter column, so the list (and its "Applications" table column) must
+    // compute it — otherwise every row shows 0. Pre-aggregated subquery (one
+    // row per job) LEFT JOINed in, so COUNT(*) OVER() still counts jobs, not
+    // applications. Counts only non-deleted applications, tenant-scoped to use
+    // idx_applications_tenant. Mirrors the memberCount pattern in listTeams.
+    const appCounts = db
+        .select({ jobId: jobApplications.jobId, count: sql<number>`COUNT(*)`.as('count') })
+        .from(jobApplications)
+        .where(and(eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
+        .groupBy(jobApplications.jobId)
+        .as('ac')
+
+    const rows = await db.select({
+        ...getTableColumns(recruitmentJobs),
+        applications: sql<number>`COALESCE(${appCounts.count}, 0)::int`,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+    })
         .from(recruitmentJobs)
+        .leftJoin(appCounts, eq(recruitmentJobs.id, appCounts.jobId))
         .where(conds.where())
         .orderBy(desc(recruitmentJobs.createdAt))
         .limit(limit).offset(offset)
@@ -137,6 +156,7 @@ const PUBLIC_JOB_COLUMNS = {
     type: recruitmentJobs.type,
     workplaceType: recruitmentJobs.workplaceType,
     openings: recruitmentJobs.openings,
+    experienceYears: recruitmentJobs.experienceYears,
     minSalary: recruitmentJobs.minSalary,
     maxSalary: recruitmentJobs.maxSalary,
     industry: recruitmentJobs.industry,
@@ -319,10 +339,33 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
         .limit(limit).offset(offset)
 
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+
+    // Auto fit-score for a single-job listing (the job detail page). The manual
+    // `score` column is a free-form recruiter rating that's almost always 0, so
+    // the table's Score column read blank for everyone. When the list is scoped
+    // to one job we score each candidate against that job with the shared
+    // matching engine and attach `matchScore` (0–100). One job fetch + O(n)
+    // in-memory scoring over the page (≤ limit rows) — no per-row query.
+    // Skipped for cross-job listings (kanban/global) where "the job" is ambiguous.
+    let job: { skills: string[] | null; qualifications: string[] | null; industry: string | null; location: string | null; workplaceType: string | null } | null = null
+    if (jobId) {
+        const [j] = await db.select({
+            skills: recruitmentJobs.skills,
+            qualifications: recruitmentJobs.qualifications,
+            industry: recruitmentJobs.industry,
+            location: recruitmentJobs.location,
+            workplaceType: recruitmentJobs.workplaceType,
+        }).from(recruitmentJobs)
+            .where(and(eq(recruitmentJobs.id, jobId), eq(recruitmentJobs.tenantId, tenantId)))
+            .limit(1)
+        job = j ?? null
+    }
+
     const data = await Promise.all(rows.map(async r => ({
         ...r,
         resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
         avatar: (await resolveAvatarUrl(r.avatarUrl)) ?? undefined,
+        matchScore: job ? scoreMatch(job, r).overall : undefined,
     })))
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }

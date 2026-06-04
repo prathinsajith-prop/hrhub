@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/primitives'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter, toast } from '@/components/ui/overlays'
 import { useUpdateApplication, useJobTagSuggestions } from '@/hooks/useRecruitment'
 import { PhoneInput, CountrySelect, resolveCountryIso, countryNameFromIso } from '@/components/shared/PhoneInput'
-import { CandidateProfileFields } from '@/components/shared/CandidateProfileFields'
+import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
 import { ChipsField } from '@/components/shared/ChipsField'
 import type { EducationEntry, ExperienceEntry, Gender } from '@/components/shared/MultiEntryField'
 import type { Candidate } from '@/types'
@@ -148,11 +148,11 @@ export function EditCandidateDialog({
                             <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
                         </div>
                     </div>
+                    <div className="space-y-1.5">
+                        <Label>Phone</Label>
+                        <PhoneInput value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <Label>Phone</Label>
-                            <PhoneInput value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
-                        </div>
                         <div className="space-y-1.5">
                             <Label>Nationality</Label>
                             <CountrySelect
@@ -160,6 +160,10 @@ export function EditCandidateDialog({
                                 onChange={(iso) => setForm((f) => ({ ...f, nationality: countryNameFromIso(iso) }))}
                                 placeholder="Select nationality"
                             />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Gender <span className="ml-1 text-[11px] font-normal text-muted-foreground">(Optional)</span></Label>
+                            <GenderSelect value={form.gender} onChange={(v) => setForm((f) => ({ ...f, gender: v }))} />
                         </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -183,13 +187,16 @@ export function EditCandidateDialog({
                         </div>
                     </div>
 
-                    {/* Address · Gender · Experience[] · Education[] */}
+                    {/* Address (full width) · Experience[] · Education[].
+                        Gender is rendered above beside Nationality, so we pass
+                        showGender={false} to let Address span the full row. */}
                     <div className="pt-4 border-t border-border/60">
                         <CandidateProfileFields
                             address={form.address}
                             onAddressChange={(v) => setForm((f) => ({ ...f, address: v }))}
                             gender={form.gender}
                             onGenderChange={(v) => setForm((f) => ({ ...f, gender: v }))}
+                            showGender={false}
                             education={educationHistory}
                             onEducationChange={setEducationHistory}
                             experience={experienceHistory}

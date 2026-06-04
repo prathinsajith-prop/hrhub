@@ -258,6 +258,9 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [type, setType] = useState('full_time')
     const [workplaceType, setWorkplaceType] = useState('on_site')
     const [openings, setOpenings] = useState(1)
+    // Empty string when HR leaves the field blank — converted to `null` on
+    // submit so the DB column stores "no floor" rather than 0.
+    const [experienceYears, setExperienceYears] = useState<number | ''>('')
     const [minSalary, setMinSalary] = useState(0)
     const [maxSalary, setMaxSalary] = useState(0)
     const [description, setDescription] = useState('')
@@ -281,7 +284,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         setPrevOpen(false)
         setTitle(''); setDepartment(''); setDepartmentId(''); setLocation(''); setType('full_time')
         setWorkplaceType('on_site')
-        setOpenings(1); setMinSalary(0); setMaxSalary(0); setDescription('')
+        setOpenings(1); setExperienceYears(''); setMinSalary(0); setMaxSalary(0); setDescription('')
         setClosingDate(''); setStatus('open'); setRequirements([]); setReqInput('')
         setSkills([]); setSkillInput(''); setQualifications([]); setQualInput('')
     } else if (open && !prevOpen) {
@@ -329,7 +332,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             return
         }
         createJob.mutate(
-            { title, department, location: location || null, type, workplaceType, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications },
+            { title, department, location: location || null, type, workplaceType, openings, experienceYears: experienceYears === '' ? null : experienceYears, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications },
             {
                 onSuccess: () => {
                     toast.success('Job posted', `${title} has been ${status === 'draft' ? 'saved as draft' : 'posted'}.`)
@@ -417,9 +420,22 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                                 <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                                <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
+                                <Label>Experience required <span className="text-xs font-normal text-muted-foreground">(years)</span></Label>
+                                <NumericInput
+                                    decimal={false}
+                                    value={experienceYears === '' ? '' : experienceYears}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setExperienceYears(v === '' ? '' : Math.max(0, Number(v)))
+                                    }}
+                                    placeholder="e.g. 3"
+                                />
                             </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
 
                         <div className="space-y-1.5">
@@ -2158,7 +2174,7 @@ export function EditJobDialog({
 }: {
     open: boolean
     onOpenChange: (o: boolean) => void
-    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; workplaceType?: string; openings?: number; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[]; skills?: string[]; qualifications?: string[] }
+    job: { id: string; title?: string; department?: string; location?: string | null; type?: string; workplaceType?: string; openings?: number; experienceYears?: number | null; minSalary?: number | string | null; maxSalary?: number | string | null; description?: string | null; status?: string; closingDate?: string | null; requirements?: string[]; skills?: string[]; qualifications?: string[] }
 }) {
     const [title, setTitle] = useState(job.title ?? '')
     const [department, setDepartment] = useState(job.department ?? '')
@@ -2167,6 +2183,7 @@ export function EditJobDialog({
     const [type, setType] = useState(job.type ?? 'full_time')
     const [workplaceType, setWorkplaceType] = useState(job.workplaceType ?? 'on_site')
     const [openings, setOpenings] = useState(job.openings ?? 1)
+    const [experienceYears, setExperienceYears] = useState<number | ''>(job.experienceYears ?? '')
     const [minSalary, setMinSalary] = useState(Number(job.minSalary ?? 0))
     const [maxSalary, setMaxSalary] = useState(Number(job.maxSalary ?? 0))
     const [description, setDescription] = useState(job.description ?? '')
@@ -2191,6 +2208,7 @@ export function EditJobDialog({
         setTitle(job.title ?? ''); setLocation(job.location ?? '')
         setType(job.type ?? 'full_time'); setWorkplaceType(job.workplaceType ?? 'on_site')
         setOpenings(job.openings ?? 1)
+        setExperienceYears(job.experienceYears ?? '')
         setMinSalary(Number(job.minSalary ?? 0)); setMaxSalary(Number(job.maxSalary ?? 0))
         setDescription(job.description ?? ''); setStatus(job.status ?? 'open')
         setClosingDate(job.closingDate ?? ''); setRequirements(job.requirements ?? [])
@@ -2244,7 +2262,7 @@ export function EditJobDialog({
             return
         }
         updateJob.mutate(
-            { id: job.id, data: { title, department, location: location || null, type, workplaceType, openings, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications } },
+            { id: job.id, data: { title, department, location: location || null, type, workplaceType, openings, experienceYears: experienceYears === '' ? null : experienceYears, minSalary, maxSalary, description: description || null, status, closingDate: closingDate || null, requirements, skills, qualifications } },
             {
                 onSuccess: () => {
                     toast.success('Job updated', `${title} has been saved.`)
@@ -2331,9 +2349,22 @@ export function EditJobDialog({
                                 <NumericInput decimal={false} value={openings} onChange={(e) => setOpenings(Number(e.target.value))} />
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
-                                <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
+                                <Label>Experience required <span className="text-xs font-normal text-muted-foreground">(years)</span></Label>
+                                <NumericInput
+                                    decimal={false}
+                                    value={experienceYears === '' ? '' : experienceYears}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setExperienceYears(v === '' ? '' : Math.max(0, Number(v)))
+                                    }}
+                                    placeholder="e.g. 3"
+                                />
                             </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-1.5"><CalendarDays className="size-3.5 text-muted-foreground" />Closing Date <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+                            <DatePicker value={closingDate} onChange={v => setClosingDate(v ?? '')} placeholder="Select closing date" />
                         </div>
 
                         <div className="space-y-1.5">

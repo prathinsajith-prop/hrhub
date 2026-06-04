@@ -221,6 +221,7 @@ export default async function (fastify: any): Promise<void> {
                     type: { type: 'string', enum: ['full_time', 'part_time', 'contract', 'internship', 'temporary', 'freelance'] },
                     workplaceType: { type: 'string', enum: ['on_site', 'hybrid', 'remote'] },
                     openings: { type: 'integer', minimum: 1 },
+                    experienceYears: { type: 'integer', minimum: 0, nullable: true },
                     minSalary: { type: 'number' },
                     maxSalary: { type: 'number' },
                     industry: { type: 'string' },
@@ -568,6 +569,9 @@ export default async function (fastify: any): Promise<void> {
             ...(b.workplaceType !== undefined && { workplaceType: b.workplaceType as never }),
             ...(b.status !== undefined && { status: b.status as never }),
             ...(b.openings !== undefined && { openings: Number(b.openings) }),
+            ...(b.experienceYears !== undefined && {
+                experienceYears: b.experienceYears === null || b.experienceYears === '' ? null : Number(b.experienceYears),
+            }),
             ...(b.minSalary !== undefined && { minSalary: b.minSalary as string }),
             ...(b.maxSalary !== undefined && { maxSalary: b.maxSalary as string }),
             ...(b.industry !== undefined && { industry: b.industry as string }),

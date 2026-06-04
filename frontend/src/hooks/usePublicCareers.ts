@@ -16,6 +16,7 @@ export interface PublicJob {
     type: 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary' | 'freelance'
     workplaceType: 'on_site' | 'hybrid' | 'remote'
     openings: number
+    experienceYears: number | null
     minSalary: string | null
     maxSalary: string | null
     industry: string | null

@@ -136,6 +136,15 @@ export function CareersJobPage() {
                                         <span className="tabular-figures">{job.openings}</span>
                                     </HeroFact>
                                 )}
+                                {job.experienceYears != null && (
+                                    <HeroFact icon={<Briefcase className="size-3.5" />} label={t('careers.experienceLabel', { defaultValue: 'Experience' })}>
+                                        <span className="tabular-figures">
+                                            {job.experienceYears}+ {job.experienceYears === 1
+                                                ? t('careers.yearSingular', { defaultValue: 'year' })
+                                                : t('careers.yearPlural', { defaultValue: 'years' })}
+                                        </span>
+                                    </HeroFact>
+                                )}
                                 {job.closingDate && (
                                     <HeroFact icon={<CalendarDays className="size-3.5" />} label={t('careers.closingLabel', { defaultValue: 'Closes' })}>
                                         <span className="tabular-figures">{formatDate(job.closingDate)}</span>

@@ -21,14 +21,17 @@ function matchTone(score: number) {
     return 'bg-muted text-muted-foreground border-border'
 }
 
-export function MatchScoreBadge({ score, className }: { score: number; className?: string }) {
+export function MatchScoreBadge({ score, className, compact = false }: { score: number; className?: string; compact?: boolean }) {
     const { t } = useTranslation()
     return (
         <Badge
             variant="outline"
             className={cn('text-[11px] font-semibold tabular-nums px-2 py-0.5', matchTone(score), className)}
+            // Full form ("66% match") for the recommendation panels; compact
+            // ("66%") for tight spots like the candidates table Score column.
+            title={compact ? t('recruitment.recommendations.matchPct', { defaultValue: '{{score}}% match', score }) : undefined}
         >
-            {t('recruitment.recommendations.matchPct', { defaultValue: '{{score}}% match', score })}
+            {compact ? `${score}%` : t('recruitment.recommendations.matchPct', { defaultValue: '{{score}}% match', score })}
         </Badge>
     )
 }

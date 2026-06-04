@@ -116,13 +116,29 @@ const CandidateCard = memo(function CandidateCard({
   const isDragging = draggable && drag.isDragging
   const cardDragProps = draggable && !isDragOverlay ? { ...drag.attributes, ...drag.listeners } : {}
 
+  // A click on the card body opens the candidate profile — the card's primary
+  // action. Previously only the small Eye icon navigated, so users clicked the
+  // body (nothing happened) or hit the full-width "Move to next stage" button
+  // and accidentally advanced the candidate. `draggedRef` swallows the click
+  // that fires on pointer-up after a real drag-drop, so dragging never also
+  // navigates. The drag sensor's 200ms delay keeps a genuine click a click.
+  const draggedRef = useRef(false)
+  useEffect(() => { if (isDragging) draggedRef.current = true }, [isDragging])
+  const handleCardClick = () => {
+    if (isDragOverlay) return
+    if (draggedRef.current) { draggedRef.current = false; return }
+    navigate(`/recruitment/candidates/${candidate.id}`)
+  }
+
   return (
     <div
       ref={draggable ? drag.setNodeRef : undefined}
       {...cardDragProps}
+      onClick={handleCardClick}
       className={cn(
         'bg-card rounded-xl border border-border p-3 shadow-sm hover:shadow-md transition-shadow select-none',
-        draggable && !isDragOverlay && 'cursor-grab active:cursor-grabbing',
+        !isDragOverlay && 'cursor-pointer',
+        draggable && !isDragOverlay && 'active:cursor-grabbing',
         isDragging && !isDragOverlay && 'opacity-20 pointer-events-none',
         isDragOverlay && 'ring-2 ring-primary shadow-xl cursor-grabbing',
       )}

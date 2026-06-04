@@ -25,6 +25,10 @@ export const recruitmentJobs = pgTable('recruitment_jobs', {
     status: text('status').notNull().default('draft')
         .$type<'draft' | 'open' | 'closed' | 'on_hold'>(),
     openings: integer('openings').notNull().default(1),
+    // Minimum years of professional experience the role expects. Optional —
+    // null means HR hasn't set a floor. Surfaced in the admin job detail page
+    // and the public careers detail page so applicants self-screen.
+    experienceYears: integer('experience_years'),
     minSalary: numeric('min_salary', { precision: 12, scale: 2 }),
     maxSalary: numeric('max_salary', { precision: 12, scale: 2 }),
     industry: text('industry'),

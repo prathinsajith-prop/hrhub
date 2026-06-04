@@ -78,6 +78,13 @@ export function JobDetailPage() {
     () => ((appsData as { data?: Candidate[] })?.data ?? []) as Candidate[],
     [appsData],
   )
+  // Authoritative applicant count. The detail page used to read `job.applications`,
+  // but the job record carries NO applicant counter column — that field is always
+  // undefined, so the "Applications" stat + fill-rate rendered 0 even with
+  // candidates listed below. Use the applications query's own server-side total
+  // (COUNT(*) OVER(), not capped by the 200-row fetch limit) so the stat can never
+  // disagree with the candidates table on the same page.
+  const applicationCount = (appsData as { total?: number } | undefined)?.total ?? allCandidates.length
   const stageCounts = useMemo(
     () => allCandidates.reduce<Partial<Record<ApplicationStage, number>>>((acc, c) => {
       acc[c.stage] = (acc[c.stage] ?? 0) + 1
@@ -143,9 +150,20 @@ export function JobDetailPage() {
     {
       id: 'score',
       header: t('recruitment.jobDetail.score', { defaultValue: 'Score' }),
-      cell: ({ row }) => row.original.score > 0
-        ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span className="font-medium">{row.original.score}</span></div>
-        : <span className="text-[11px] text-muted-foreground">—</span>,
+      // A manual recruiter rating wins when set (gold star); otherwise we show
+      // the engine's fit score against this job (% match badge), so the column
+      // is meaningful even when nobody has hand-scored the candidate. Falls back
+      // to — only when neither exists.
+      cell: ({ row }) => {
+        const c = row.original
+        if (c.score > 0) {
+          return <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span className="font-medium">{c.score}</span></div>
+        }
+        if (typeof c.matchScore === 'number' && c.matchScore > 0) {
+          return <MatchScoreBadge score={c.matchScore} compact />
+        }
+        return <span className="text-[11px] text-muted-foreground">—</span>
+      },
     },
     {
       id: 'applied',
@@ -199,7 +217,7 @@ export function JobDetailPage() {
 
   const statusStyle = JOB_STATUS_STYLE[job.status] ?? JOB_STATUS_STYLE.draft
   const filledPct = job.openings > 0
-    ? Math.min(100, Math.round(((job.applications ?? 0) / job.openings) * 100))
+    ? Math.min(100, Math.round((applicationCount / job.openings) * 100))
     : 0
 
   return (
@@ -287,7 +305,7 @@ export function JobDetailPage() {
               </div>
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{t('recruitment.jobDetail.applications')}</p>
-                <p className="text-lg font-bold text-foreground mt-0.5">{job.applications ?? 0}</p>
+                <p className="text-lg font-bold text-foreground mt-0.5">{applicationCount}</p>
               </div>
               <div className="rounded-lg bg-muted/40 border border-border/60 px-3 py-2.5">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{t('recruitment.jobDetail.salaryRange')}</p>
@@ -305,7 +323,7 @@ export function JobDetailPage() {
               <div className="mt-3">
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
                   <span>{t('recruitment.jobDetail.fillRate')}</span>
-                  <span className="font-medium">{t('recruitment.jobDetail.fillRateCount', { applications: job.applications ?? 0, openings: job.openings })}</span>
+                  <span className="font-medium">{t('recruitment.jobDetail.fillRateCount', { applications: applicationCount, openings: job.openings })}</span>
                 </div>
                 <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                   <div
@@ -364,6 +382,15 @@ export function JobDetailPage() {
                       ? <WorkplaceBadge workplace={job.workplaceType} size="xs" variant="bordered" />
                       : <span className="text-xs text-muted-foreground">—</span>}
                   </OverviewRow>
+                  {job.experienceYears != null && (
+                    <OverviewRow label={t('recruitment.jobDetail.experienceRequired', { defaultValue: 'Experience required' })}>
+                      <span className="text-foreground/90">
+                        {job.experienceYears} {job.experienceYears === 1
+                          ? t('recruitment.jobDetail.yearSingular', { defaultValue: 'year' })
+                          : t('recruitment.jobDetail.yearPlural', { defaultValue: 'years' })}
+                      </span>
+                    </OverviewRow>
+                  )}
                   {job.industry && (
                     <OverviewRow label={t('recruitment.jobDetail.industry', { defaultValue: 'Industry' })}>
                       <span className="text-foreground/90">{job.industry}</span>
