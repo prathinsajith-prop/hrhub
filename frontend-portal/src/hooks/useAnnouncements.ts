@@ -68,6 +68,17 @@ export function useDeletePost() {
     })
 }
 
+/** Pin / unpin the signed-in employee's own post. Pinned posts sort to the top
+ *  of the feed (server orders by `pinned DESC`), so a refetch reorders the list. */
+export function useTogglePinPost() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
+            api.patch<{ data: FeedAnnouncement }>(`/announcements/${id}/pin`, { pinned }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'announcements'] }),
+    })
+}
+
 export function useMarkAnnouncementRead() {
     const qc = useQueryClient()
     return useMutation({

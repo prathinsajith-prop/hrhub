@@ -78,7 +78,12 @@
         "failed": "Could not publish post",
         "deleteFailed": "Could not delete post",
         "deleteTitle": "Delete this post?",
-        "deleteDesc": "This permanently removes your post from the feed."
+        "deleteDesc": "This permanently removes your post from the feed.",
+        "pin": "Pin to top",
+        "unpin": "Unpin",
+        "pinned": "Post pinned",
+        "unpinned": "Post unpinned",
+        "pinFailed": "Could not update pin"
     },
     "announcements": {
         "title": "Announcements",

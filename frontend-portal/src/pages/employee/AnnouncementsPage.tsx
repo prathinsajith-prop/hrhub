@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import DOMPurify from 'dompurify'
 import { Megaphone, Pin, AlertTriangle, Check, Loader2, CheckCircle2, ChevronDown } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -9,7 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { useAnnouncementFeed, useMarkAnnouncementRead, useAcknowledgeAnnouncement, type FeedAnnouncement } from '@/hooks/useAnnouncements'
+import { useAuthStore } from '@/store/authStore'
+import { PostOwnerMenu } from '@/components/shared/PostOwnerMenu'
+import { useAnnouncementFeed, useMarkAnnouncementRead, useAcknowledgeAnnouncement, useUpdatePost, type FeedAnnouncement } from '@/hooks/useAnnouncements'
 
 // Priority → left accent rail + shadcn Badge variant. The Badge variants carry
 // design-system tokens with guaranteed contrast (≥4.5:1) in both themes, which
@@ -31,47 +34,27 @@ function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// HTML sanitizer for announcement bodies — defangs scripts, event-handlers
-// (quoted or unquoted), `javascript:` / `data:` URI schemes, and HTML
-// comments (which can hide CSS expression attacks). Authored content is
-// HR-trusted (admin-only write path), but we sanitise before
-// dangerouslySetInnerHTML so a hostile or compromised HR session can't
-// pop XSS at every employee who opens the feed.
+// HTML sanitizer for announcement bodies — DOMPurify with a tight allow-list
+// (mirrors the admin app's RichTextDisplay). The feed mixes HR rich-HTML
+// announcements with employee plain-text posts; both flow through
+// dangerouslySetInnerHTML, so this is the last line of defence before render.
 //
-// The previous version only matched double- and single-quoted event
-// handlers and missed unquoted ones (`<img onerror=alert(1)>`), inline
-// `<svg>` payloads, and dangerous URI schemes inside `href` / `src` /
-// `formaction` etc. This version closes those gaps with a regex pass
-// suitable for the controlled set of HTML the admin tiptap editor emits.
-//
-// Why not DOMPurify? The portal frontend doesn't yet depend on
-// `dompurify` (only the admin app does), and pulling it in just for
-// announcements would add ~22 KB to the portal bundle. The body shape is
-// a known closed grammar from the tiptap editor, so a regex pass with
-// explicit blocklists is enough — but we keep the function small so it's
-// easy to swap to DOMPurify later.
+// We previously used a hand-rolled regex blocklist, which was bypassable
+// (e.g. `<img/src=x/onerror=…>` — `/` instead of whitespace before the
+// handler). DOMPurify parses the DOM and strips everything outside the
+// allow-list, closing that whole class of bypass. Employee posts are also
+// escaped server-side, so this is defence-in-depth for that path and the
+// primary guard for HR-authored HTML.
+const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre']
+const ALLOWED_ATTR = ['href', 'target', 'rel']
+
 function sanitize(html: string): string {
-    // Block: <script>, <style>, <iframe>, <object>, <embed>, <link>,
-    // <meta>, <base>, <form>, <svg> (svg can carry <script>).
-    const BLOCK_TAGS = /<\s*(script|style|iframe|object|embed|link|meta|base|form|svg)\b[^>]*>([\s\S]*?<\s*\/\s*\1\s*>)?/gi
-    return html
-        .replace(BLOCK_TAGS, '')
-        // Self-closing / unmatched openers for the same tags.
-        .replace(/<\s*\/?\s*(script|style|iframe|object|embed|link|meta|base|svg)\b[^>]*\/?>/gi, '')
-        // Event-handler attributes (quoted, single-quoted, OR unquoted).
-        .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
-        .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
-        .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
-        // Dangerous URI schemes anywhere (href/src/formaction/etc.). We
-        // drop the scheme so the attribute becomes a relative path.
-        .replace(/(href|src|xlink:href|formaction|action|background|poster|cite|longdesc|usemap|profile|codebase|data)\s*=\s*("|'|)\s*(javascript|vbscript|data|blob|file)\s*:/gi, '$1=$2#')
-        // HTML comments — IE/legacy parsers can resolve conditional
-        // comments into script payloads.
-        .replace(/<!--[\s\S]*?-->/g, '')
+    return DOMPurify.sanitize(html, { ALLOWED_TAGS, ALLOWED_ATTR, FORCE_BODY: true })
 }
 
 export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
+    const currentUserId = useAuthStore((s) => s.user?.id)
     const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useAnnouncementFeed()
     const markRead = useMarkAnnouncementRead()
     const acknowledge = useAcknowledgeAnnouncement()
@@ -111,6 +94,7 @@ export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } =
                         <AnnouncementCard
                             key={a.id}
                             a={a}
+                            currentUserId={currentUserId}
                             onMarkRead={(id) => markRead.mutate(id)}
                             onAck={(id) => acknowledge.mutate(id, {
                                 onSuccess: () => toast.success(t('announcements.acknowledged', { defaultValue: 'Acknowledged' })),
@@ -127,8 +111,9 @@ export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } =
     )
 }
 
-function AnnouncementCard({ a, onMarkRead, onAck, ackPending }: {
+function AnnouncementCard({ a, currentUserId, onMarkRead, onAck, ackPending }: {
     a: FeedAnnouncement
+    currentUserId?: string
     onMarkRead: (id: string) => void
     onAck: (id: string) => void
     ackPending: boolean
@@ -140,6 +125,27 @@ function AnnouncementCard({ a, onMarkRead, onAck, ackPending }: {
     const [canExpand, setCanExpand] = useState(false)
     const bodyRef = useRef<HTMLDivElement>(null)
     const markedRef = useRef(false)
+
+    // Own posts (authored by the signed-in user) get edit/pin/delete — the same
+    // controls as the home Feed card, so the two surfaces stay consistent.
+    // Ownership is the `createdBy` match, so this never touches HR announcements.
+    const isOwn = !!a.createdBy && !!currentUserId && a.createdBy === currentUserId
+    const updatePost = useUpdatePost()
+    const [editing, setEditing] = useState(false)
+    const [editText, setEditText] = useState(a.body)
+
+    function saveEdit() {
+        const body = editText.trim()
+        if (!body || updatePost.isPending) return
+        updatePost.mutate(
+            { id: a.id, body },
+            {
+                onSuccess: () => { setEditing(false); toast.success(t('post.updated', { defaultValue: 'Post updated' })) },
+                onError: (err: unknown) =>
+                    toast.error(err instanceof Error ? err.message : t('post.failed', { defaultValue: 'Could not update post' })),
+            },
+        )
+    }
 
     // Detect whether the (clamped) body overflows, so we only show "Read more"
     // when there's actually more to read.
@@ -165,7 +171,7 @@ function AnnouncementCard({ a, onMarkRead, onAck, ackPending }: {
                         <div className="flex items-center gap-1.5 flex-wrap">
                             {a.pinned && <Pin className="size-3.5 text-primary" aria-label={t('announcements.pinned', { defaultValue: 'Pinned' })} />}
                             {a.priority === 'critical' && <AlertTriangle className="size-3.5 text-rose-600" />}
-                            <h3 className={cn('text-sm', unread ? 'font-semibold' : 'font-medium')}>{a.title}</h3>
+                            {a.title ? <h3 className={cn('text-sm', unread ? 'font-semibold' : 'font-medium')}>{a.title}</h3> : null}
                         </div>
                         <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                             <Badge variant={p.variant} className="px-2 py-0.5 text-xs">{t(`announcements.priority.${a.priority}`, { defaultValue: p.label })}</Badge>
@@ -176,15 +182,38 @@ function AnnouncementCard({ a, onMarkRead, onAck, ackPending }: {
                             <span>{fmtDate(a.publishedAt ?? a.createdAt)}</span>
                         </div>
                     </div>
+                    {isOwn && !editing ? (
+                        <PostOwnerMenu item={a} onEdit={() => { setEditText(a.body); setEditing(true) }} />
+                    ) : null}
                 </div>
 
-                {a.body && (
+                {editing ? (
+                    <div className="mt-3">
+                        <textarea
+                            autoFocus
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            rows={3}
+                            maxLength={5000}
+                            className="w-full resize-none rounded-xl border border-border/70 bg-background px-3.5 py-2.5 text-sm leading-relaxed outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                        />
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                                {t('common.cancel', { defaultValue: 'Cancel' })}
+                            </Button>
+                            <Button type="button" size="sm" onClick={saveEdit} disabled={!editText.trim() || updatePost.isPending}>
+                                {updatePost.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                                <span className={updatePost.isPending ? 'ms-1.5' : ''}>{t('common.save', { defaultValue: 'Save' })}</span>
+                            </Button>
+                        </div>
+                    </div>
+                ) : a.body ? (
                     <div
                         ref={bodyRef}
                         className={cn('mt-2.5 text-sm leading-relaxed text-foreground/80 [overflow-wrap:anywhere] [&_a]:text-primary [&_a]:underline', !expanded && 'line-clamp-3')}
                         dangerouslySetInnerHTML={{ __html: sanitize(a.body) }}
                     />
-                )}
+                ) : null}
 
                 {(canExpand || a.requireAck || unread) && (
                     <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-2.5">

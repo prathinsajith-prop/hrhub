@@ -19,15 +19,12 @@ import {
     LogOut,
     Megaphone,
     MessageCircle,
-    MoreHorizontal,
     Newspaper,
     Pin,
-    Pencil,
     PenSquare,
     Send,
     Sparkles,
     Target,
-    Trash2,
     User,
     UserPlus,
     Contact as UserPin,
@@ -42,14 +39,12 @@ import {
     useAnnouncementComments,
     useAddAnnouncementComment,
     useUpdatePost,
-    useDeletePost,
     type FeedAnnouncement,
 } from '@/hooks/useAnnouncements'
 import { BirthdaysCard } from '@/components/shared/BirthdaysCard'
 import { CompactEmptyState } from '@/components/shared/EmptyState'
 import { StartPostComposer } from '@/components/shared/StartPostComposer'
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { PostOwnerMenu } from '@/components/shared/PostOwnerMenu'
 import { useMyChangeRequests } from '@/hooks/useProfileChanges'
 import { useUnreadNotificationsCount } from '@/hooks/useNotifications'
 import { formatTime } from '@/lib/datetime'
@@ -544,10 +539,8 @@ function AnnouncementCard({
     // HR-authored announcements, even for a user with the post permission.
     const isOwn = !!item.createdBy && !!currentUserId && item.createdBy === currentUserId
     const updatePost = useUpdatePost()
-    const deletePost = useDeletePost()
     const [editing, setEditing] = useState(false)
     const [editText, setEditText] = useState(item.body)
-    const [confirmDelete, setConfirmDelete] = useState(false)
 
     function saveEdit() {
         const body = editText.trim()
@@ -563,19 +556,6 @@ function AnnouncementCard({
                     toast.error(err instanceof Error ? err.message : t('post.failed', { defaultValue: 'Could not update post' })),
             },
         )
-    }
-
-    function runDelete() {
-        deletePost.mutate(item.id, {
-            onSuccess: () => {
-                setConfirmDelete(false)
-                toast.success(t('post.deleted', { defaultValue: 'Post deleted' }))
-            },
-            onError: (err: unknown) => {
-                setConfirmDelete(false)
-                toast.error(err instanceof Error ? err.message : t('post.deleteFailed', { defaultValue: 'Could not delete post' }))
-            },
-        })
     }
 
     // Lazy-load comments only when the user opens the thread — keeps the
@@ -630,28 +610,7 @@ function AnnouncementCard({
                     </span>
                 ) : null}
                 {isOwn && !editing ? (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <button
-                                type="button"
-                                aria-label={t('common.more', { defaultValue: 'More' })}
-                                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            >
-                                <MoreHorizontal className="size-4" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onSelect={() => { setEditText(item.body); setEditing(true) }} className="gap-2.5">
-                                <Pencil className="size-4" /> {t('common.edit', { defaultValue: 'Edit' })}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={() => setConfirmDelete(true)}
-                                className="gap-2.5 text-rose-600 focus:text-rose-700 dark:text-rose-300"
-                            >
-                                <Trash2 className="size-4" /> {t('common.delete', { defaultValue: 'Delete' })}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <PostOwnerMenu item={item} onEdit={() => { setEditText(item.body); setEditing(true) }} />
                 ) : null}
             </header>
 
@@ -686,17 +645,6 @@ function AnnouncementCard({
                     ) : null}
                 </div>
             )}
-
-            <ConfirmDialog
-                open={confirmDelete}
-                onOpenChange={setConfirmDelete}
-                title={t('post.deleteTitle', { defaultValue: 'Delete this post?' })}
-                description={t('post.deleteDesc', { defaultValue: 'This permanently removes your post from the feed.' })}
-                confirmLabel={t('common.delete', { defaultValue: 'Delete' })}
-                onConfirm={runDelete}
-                loading={deletePost.isPending}
-                variant="destructive"
-            />
 
             {/* ── Comment affordance ──
                 A single, honest control. The disabled "React — coming soon"

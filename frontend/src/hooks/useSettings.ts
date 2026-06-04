@@ -94,14 +94,25 @@ export function useUpdateUser() {
         mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean }) =>
             api.patch<{ data: TenantUser }>(`/settings/users/${id}`, data).then((r) => r.data),
         onSuccess: () => {
-            // Invalidate both query trees that surface user/account data:
-            //   • ['settings', 'users']            — the Users page list
-            //   • ['employees', employeeId, 'account'] — the InviteEmployeeDialog's account query
+            // Invalidate every cache tree that can surface user/account data:
+            //   • ['settings', 'users']                — the Users page list
+            //   • ['employees', employeeId, 'account'] — the InviteEmployeeDialog's
+            //                                            account query
+            //   • ['auth-me-flags', userId]            — the admin's own
+            //                                            attendance-flag mirror.
+            //                                            Without this, an HR
+            //                                            user toggling their
+            //                                            own flag from Manage
+            //                                            Access waits up to
+            //                                            30s (the polling
+            //                                            interval) before the
+            //                                            UI follows.
             // Without invalidating ['employees'], reopening the Login Access
             // dialog within the 30s staleTime window would show the previous
             // feature-flag state instead of the freshly saved one.
             qc.invalidateQueries({ queryKey: ['settings', 'users'] })
             qc.invalidateQueries({ queryKey: ['employees'] })
+            qc.invalidateQueries({ queryKey: ['auth-me-flags'] })
         },
     })
 }

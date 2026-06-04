@@ -279,6 +279,33 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
         return true
     }
 
+    /**
+     * Load a post the signed-in user OWNS, or send the right error and return
+     * null. Centralises the gate shared by edit / delete / pin so the three
+     * mutating routes can't drift apart: 404 if the row is gone (or not in this
+     * tenant), 403 if it exists but `created_by` isn't the caller. The
+     * ownership check means none of these can ever touch an HR-authored
+     * announcement, even for a user holding the post permission.
+     */
+    async function loadOwnedPost(request: any, reply: any, id: string): Promise<{ createdBy: string | null } | null> {
+        const [existing] = await db.select({ createdBy: announcements.createdBy }).from(announcements)
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId), isNull(announcements.deletedAt))).limit(1)
+        if (!existing) {
+            reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Post not found' })
+            return null
+        }
+        if (existing.createdBy !== request.user.id) {
+            reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only modify your own posts' })
+            return null
+        }
+        return existing
+    }
+
+    // Employee posts are plain social text (the portal composer is a <textarea>)
+    // and are rendered as React-escaped text on the home feed (whitespace-pre-
+    // line) and through DOMPurify on the Announcements page. The body is stored
+    // verbatim — no server-side HTML transform — so it survives losslessly for
+    // the text renderer; XSS is neutralised at the DOMPurify render sink.
     function readPostBody(request: any, reply: any): string | null {
         const raw = (request.body as any)?.body
         const body = typeof raw === 'string' ? raw.trim() : ''
@@ -328,12 +355,7 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
     fastify.patch('/:id', { ...auth }, async (request: any, reply: any) => {
         if (!(await assertCanPost(request, reply))) return
         const { id } = request.params as { id: string }
-        const [existing] = await db.select({ createdBy: announcements.createdBy }).from(announcements)
-            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId), isNull(announcements.deletedAt))).limit(1)
-        if (!existing) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Post not found' })
-        if (existing.createdBy !== request.user.id) {
-            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only edit your own posts' })
-        }
+        if (!(await loadOwnedPost(request, reply, id))) return
         const body = readPostBody(request, reply)
         if (body === null) return
         const [row] = await db.update(announcements).set({ body, updatedAt: new Date() })
@@ -346,16 +368,33 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
         return reply.send({ data: row })
     })
 
+    // PATCH /announcements/:id/pin — pin or unpin your own post. Pinned posts
+    // sort to the top of every recipient's feed (the feed orders by
+    // `pinned DESC`), so this is a deliberately owner-only action: it can only
+    // move YOUR post, never an HR announcement. Body `{ pinned: boolean }`;
+    // defaults to pinning when omitted so a bare POST-style call still does
+    // the obvious thing.
+    fastify.patch('/:id/pin', { ...auth }, async (request: any, reply: any) => {
+        if (!(await assertCanPost(request, reply))) return
+        const { id } = request.params as { id: string }
+        if (!(await loadOwnedPost(request, reply, id))) return
+        const raw = (request.body as any)?.pinned
+        const pinned = typeof raw === 'boolean' ? raw : true
+        const [row] = await db.update(announcements).set({ pinned, updatedAt: new Date() })
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId))).returning()
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'announcement', entityId: id, entityName: (row?.body ?? 'Post').slice(0, 80), action: 'update',
+            metadata: { kind: 'post', subKind: pinned ? 'pin' : 'unpin' }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
     // DELETE /announcements/:id — delete (soft) your own post.
     fastify.delete('/:id', { ...auth }, async (request: any, reply: any) => {
         if (!(await assertCanPost(request, reply))) return
         const { id } = request.params as { id: string }
-        const [existing] = await db.select({ createdBy: announcements.createdBy }).from(announcements)
-            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId), isNull(announcements.deletedAt))).limit(1)
-        if (!existing) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Post not found' })
-        if (existing.createdBy !== request.user.id) {
-            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only delete your own posts' })
-        }
+        if (!(await loadOwnedPost(request, reply, id))) return
         await db.update(announcements).set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId)))
         recordActivity({

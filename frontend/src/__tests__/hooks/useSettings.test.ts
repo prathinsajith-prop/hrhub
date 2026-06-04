@@ -103,7 +103,8 @@ describe('useUpdateUser', () => {
         await act(async () => { await result.current.mutateAsync({ id: 'u1', portalPostEnabled: true }) })
         const calls = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
         expect(calls).toContainEqual(['settings', 'users'])
-        expect(calls).toContainEqual(['employees'])  // matches all keys starting with 'employees', including the account query
+        expect(calls).toContainEqual(['employees'])           // matches the InviteEmployeeDialog account query
+        expect(calls).toContainEqual(['auth-me-flags'])       // matches the admin user's own flag mirror
     })
 })
 
