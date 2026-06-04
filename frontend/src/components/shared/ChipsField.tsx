@@ -108,10 +108,17 @@ export function ChipsField({
     }, [paged, suggestions, chips, inputValue])
 
     // Reset the visible window whenever the underlying client list changes.
-    // (Paged mode doesn't use this — the parent's queryKey reset handles it.)
-    useEffect(() => {
+    // State-during-render pattern (per CLAUDE.md) instead of useEffect so the
+    // reset happens in the SAME render as the trigger — no double-render, no
+    // `react-hooks/set-state-in-effect` warning. Paged mode doesn't use this
+    // (the parent's queryKey reset handles it).
+    const [lastInput, setLastInput] = useState(inputValue)
+    const [lastSuggestions, setLastSuggestions] = useState(suggestions)
+    if (lastInput !== inputValue || lastSuggestions !== suggestions) {
+        setLastInput(inputValue)
+        setLastSuggestions(suggestions)
         setVisibleCount(PAGE_SIZE)
-    }, [inputValue, suggestions, chips.length])
+    }
 
     const clientVisible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
 

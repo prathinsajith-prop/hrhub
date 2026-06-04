@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { RichTextDisplay } from '@/components/ui/rich-text-display'
@@ -63,12 +63,11 @@ export function JobDetailPage() {
   const [stageFilter, setStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [sourceFilter, setSourceFilter] = useState<'all' | 'direct' | 'referral' | 'careers'>('all')
   // Candidates card has two lenses: real applicants for this role, and
-  // talent-pool matches surfaced by the recommendation engine. Null means
-  // "not yet decided" — the auto-pick effect below resolves it once both
-  // queries finish loading (lands on Recommended when there are zero
-  // applicants but matches exist; Applicants otherwise). After the first
-  // resolution the value stays user-controlled.
-  const [tab, setTab] = useState<'applicants' | 'recommended' | null>(null)
+  // talent-pool matches surfaced by the recommendation engine. `pickedTab`
+  // is the user's explicit choice; null until they click. The effective
+  // `tab` (computed below) auto-picks the right initial value from the
+  // loaded counts — no useEffect/setState round-trip needed.
+  const [pickedTab, setPickedTab] = useState<'applicants' | 'recommended' | null>(null)
 
   const { data: jobData, isLoading: jobLoading } = useJob(id)
   const { data: appsData, isLoading: appsLoading } = useApplications({ jobId: id, limit: 200 })
@@ -120,15 +119,16 @@ export function JobDetailPage() {
   // a 200-row fetch cap can never disagree with the badge.
   const recCount = recsData?.data?.length ?? 0
 
-  // Auto-pick the default tab once both queries finish: lands on Recommended
-  // when this role has zero applicants but the talent pool has matches —
-  // otherwise Applicants (the common case). Only runs while `tab === null`,
-  // so a user click is never overridden by a late-arriving query.
-  useEffect(() => {
-    if (tab !== null) return
-    if (appsLoading || recsLoading) return
-    setTab(applicationCount === 0 && recCount > 0 ? 'recommended' : 'applicants')
-  }, [tab, appsLoading, recsLoading, applicationCount, recCount])
+  // Effective tab: user's explicit pick wins; otherwise auto-pick from the
+  // loaded counts. While either query is still loading we render the safe
+  // default (Applicants) — the swap to Recommended only happens once both
+  // queries settle, so the tab doesn't flicker during initial load.
+  const tab: 'applicants' | 'recommended' =
+    pickedTab ?? (
+      !appsLoading && !recsLoading && applicationCount === 0 && recCount > 0
+        ? 'recommended'
+        : 'applicants'
+    )
 
   const columns = useMemo<ColumnDef<Candidate>[]>(() => [
     {
@@ -490,8 +490,8 @@ export function JobDetailPage() {
                 Stage / Source filter rails live INSIDE the Applicants tab —
                 they were never relevant to recommendations. */}
             <Tabs
-              value={tab ?? 'applicants'}
-              onValueChange={(v) => setTab(v as 'applicants' | 'recommended')}
+              value={tab}
+              onValueChange={(v) => setPickedTab(v as 'applicants' | 'recommended')}
             >
               <Card>
                 <div className="flex items-center justify-between gap-3 px-4 py-3 border-b">
