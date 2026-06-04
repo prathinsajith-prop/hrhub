@@ -294,9 +294,9 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
     const [skills, setSkills] = useState<string[]>([])
     const [skillInput, setSkillInput] = useState('')
-    const addSkill = () => {
-        const v = skillInput.trim()
-        if (v && !skills.includes(v)) setSkills(s => [...s, v])
+    const addSkill = (value?: string) => {
+        const v = (value ?? skillInput).trim()
+        if (v && !skills.some(s => s.toLowerCase() === v.toLowerCase())) setSkills(s => [...s, v])
         setSkillInput('')
     }
 
@@ -568,6 +568,8 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                                 onInputChange={setSkillInput}
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
                                 onAdd={addSkill}
+                                onAddValue={addSkill}
+                                suggestions={job?.skills}
                                 placeholder={t('referrals.skillPlaceholder', { defaultValue: 'Add a skill · Press Enter' })}
                                 chipClassName="bg-sky-100 text-sky-700"
                             />

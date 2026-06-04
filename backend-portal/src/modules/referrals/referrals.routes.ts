@@ -70,6 +70,8 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                 location: recruitmentJobs.location,
                 type: recruitmentJobs.type,
                 openings: recruitmentJobs.openings,
+                // Drives the skill type-ahead suggestions in the referral form.
+                skills: recruitmentJobs.skills,
             })
             .from(recruitmentJobs)
             .where(and(

@@ -5,12 +5,14 @@ import {
     ArrowRight,
     Bell,
     Calendar,
+    CalendarCheck,
     CalendarDays,
     ExternalLink,
     Link2,
     Receipt,
     Sparkles,
     User,
+    Wallet,
 } from 'lucide-react'
 
 import { Card, CardContent } from '@/components/ui/card'
@@ -59,6 +61,12 @@ export function EmployeeReportsPage({ embedded = false }: { embedded?: boolean }
     const today = new Date().toISOString().slice(0, 10)
 
     const annualBalance = balance?.balance?.annual
+    // Year-to-date take-home: sum of net pay across this calendar year's payslips.
+    const currentYear = new Date().getFullYear()
+    const ytdNet = (payslips ?? [])
+        .filter((p) => p.year === currentYear)
+        .reduce((sum, p) => sum + (Number(p.netSalary) || 0), 0)
+    const lastDaysWorked = latestSlip?.daysWorked ?? null
     const pendingLeaveCount = leaveList?.data.filter((l) => l.status === 'pending').length ?? 0
     const pendingProfileChangeCount = myChanges?.filter((c) => c.status === 'pending').length ?? 0
     const unread = unreadCount ?? 0
@@ -78,7 +86,10 @@ export function EmployeeReportsPage({ embedded = false }: { embedded?: boolean }
             )}
 
             {/* ── KPI stat cards ── */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {/* Embedded (inside Home's 2/3-width column) caps at 2 columns so the
+                cards stay wide enough for large currency figures; standalone the
+                page is full-width, so 4-across on xl is fine. */}
+            <div className={cn('grid gap-4 sm:grid-cols-2', !embedded && 'xl:grid-cols-4')}>
                 <StatCard
                     tone="primary"
                     icon={<Calendar className="size-4" />}
@@ -119,12 +130,21 @@ export function EmployeeReportsPage({ embedded = false }: { embedded?: boolean }
                     accent="emerald"
                 >
                     {latestSlip ? (
-                        <div className="flex items-baseline gap-3">
-                            <div className="font-display text-2xl font-bold tabular-figures text-foreground sm:text-3xl">
+                        // Amount on its own full-width line (no side label competing
+                        // for room) so large figures never clip inside the card; the
+                        // period + gross/deductions wrap onto the meta line below.
+                        <div className="min-w-0">
+                            <div className="font-display text-2xl font-bold leading-none tabular-figures text-foreground break-words sm:text-3xl">
                                 {formatCurrency(latestSlip.netSalary)}
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                                {monthName(latestSlip.month)} {latestSlip.year}
+                            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                                <span className="font-medium text-foreground/70">
+                                    {monthName(latestSlip.month)} {latestSlip.year}
+                                </span>
+                                <span aria-hidden className="opacity-40">·</span>
+                                <span>{t('reports.gross', { defaultValue: 'Gross' })} {formatCurrency(latestSlip.grossSalary)}</span>
+                                <span aria-hidden className="opacity-40">·</span>
+                                <span>{t('reports.deductions', { defaultValue: 'Deductions' })} {formatCurrency(latestSlip.deductions)}</span>
                             </div>
                         </div>
                     ) : (
@@ -135,6 +155,50 @@ export function EmployeeReportsPage({ embedded = false }: { embedded?: boolean }
                     <FooterLink to={ROUTES.employeePayslips} accent="emerald">
                         {t('home.viewPayslips')}
                     </FooterLink>
+                </StatCard>
+
+                {/* Take-home this year — sum of net pay across the current year's
+                    payslips. Surfaces a number no other widget shows. */}
+                <StatCard
+                    tone="default"
+                    icon={<Wallet className="size-4" />}
+                    label={t('reports.ytdNet', { defaultValue: 'Take-home this year' })}
+                    accent="sky"
+                >
+                    <div className="min-w-0">
+                        <div className="font-display text-2xl font-bold leading-none tabular-figures text-foreground break-words sm:text-3xl">
+                            {formatCurrency(ytdNet)}
+                        </div>
+                        <div className="mt-2 text-[11px] text-muted-foreground">
+                            {t('reports.ytdNetHint', { defaultValue: 'Net pay received in {{year}}', year: currentYear })}
+                        </div>
+                    </div>
+                    <FooterLink to={ROUTES.employeePayslips} accent="sky">
+                        {t('home.viewPayslips')}
+                    </FooterLink>
+                </StatCard>
+
+                {/* Days worked in the most recent pay period — a quick attendance
+                    signal pulled straight from the latest payslip. */}
+                <StatCard
+                    tone="warning"
+                    icon={<CalendarCheck className="size-4" />}
+                    label={t('reports.daysWorked', { defaultValue: 'Days worked' })}
+                    accent="amber"
+                >
+                    <div className="flex items-baseline gap-2">
+                        <div className="font-display text-3xl font-bold tabular-figures text-foreground sm:text-4xl">
+                            {lastDaysWorked ?? '—'}
+                        </div>
+                        {lastDaysWorked != null ? (
+                            <div className="text-xs text-muted-foreground">{t('reports.daysUnit', { defaultValue: 'days' })}</div>
+                        ) : null}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                        {latestSlip
+                            ? `${monthName(latestSlip.month)} ${latestSlip.year}`
+                            : t('reports.notYetAvailable', { defaultValue: 'Not yet available' })}
+                    </div>
                 </StatCard>
             </div>
 
@@ -320,6 +384,16 @@ const ACCENT_CLASSES = {
         label: 'text-emerald-700 dark:text-emerald-300',
         icon: 'text-emerald-700 dark:text-emerald-300',
         link: 'text-emerald-700 dark:text-emerald-300',
+    },
+    sky: {
+        label: 'text-sky-700 dark:text-sky-300',
+        icon: 'text-sky-700 dark:text-sky-300',
+        link: 'text-sky-700 dark:text-sky-300',
+    },
+    amber: {
+        label: 'text-amber-700 dark:text-amber-300',
+        icon: 'text-amber-700 dark:text-amber-300',
+        link: 'text-amber-700 dark:text-amber-300',
     },
 } as const
 

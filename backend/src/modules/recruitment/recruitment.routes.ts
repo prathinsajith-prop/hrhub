@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
+import { listJobs, getJob, getJobTagSuggestions, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
@@ -172,6 +172,15 @@ export default async function (fastify: any): Promise<void> {
         if (filter && filter.length > 2000) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'filter param too long' })
         const result = await listJobs(request.user.tenantId, { status, department, q, filter, limit: Number(limit), offset: Number(offset) })
         return reply.send(result)
+    })
+
+    // GET /api/v1/jobs/tag-suggestions — distinct skills/qualifications used by
+    // the tenant's jobs, for the create/edit dialog type-ahead. Registered
+    // before /jobs/:id (static beats parametric in Fastify's router regardless,
+    // but keeping them adjacent makes the intent obvious).
+    fastify.get('/jobs/tag-suggestions', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
+        const data = await getJobTagSuggestions(request.user.tenantId)
+        return reply.send({ data })
     })
 
     // GET /api/v1/jobs/:id

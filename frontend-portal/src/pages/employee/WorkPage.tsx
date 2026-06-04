@@ -46,14 +46,14 @@ export function EmployeeWorkPage() {
             />
 
             <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-                <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:w-auto">
-                    <TabsTrigger value="attendance" className="gap-1.5">
+                <TabsList variant="underline">
+                    <TabsTrigger value="attendance">
                         <Clock className="size-3.5" /> {t('nav.attendance')}
                     </TabsTrigger>
-                    <TabsTrigger value="leave" className="gap-1.5">
+                    <TabsTrigger value="leave">
                         <CalendarDays className="size-3.5" /> {t('nav.leave')}
                     </TabsTrigger>
-                    <TabsTrigger value="performance" className="gap-1.5">
+                    <TabsTrigger value="performance">
                         <Sparkles className="size-3.5" /> {t('nav.performance')}
                     </TabsTrigger>
                 </TabsList>

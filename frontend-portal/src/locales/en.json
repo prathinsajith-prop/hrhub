@@ -647,7 +647,13 @@
     "reports": {
         "title": "Overview",
         "subtitle": "Your personal insights and pending items",
-        "notYetAvailable": "Not yet available"
+        "notYetAvailable": "Not yet available",
+        "gross": "Gross",
+        "deductions": "Deductions",
+        "ytdNet": "Take-home this year",
+        "ytdNetHint": "Net pay received in {{year}}",
+        "daysWorked": "Days worked",
+        "daysUnit": "days"
     },
     "documents": {
         "title": "My documents",

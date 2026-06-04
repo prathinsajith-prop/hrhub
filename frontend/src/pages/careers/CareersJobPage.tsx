@@ -252,7 +252,7 @@ export function CareersJobPage() {
                     /* Application tab — wider container so the résumé dropzone
                         and the inline 2-col form fields breathe properly. */
                     <div className="mx-auto mt-6 max-w-4xl">
-                        <ApplyForm companyCode={companyCode} jobId={jobId} jobTitle={job.title} />
+                        <ApplyForm companyCode={companyCode} jobId={jobId} jobTitle={job.title} jobSkills={job.skills ?? []} />
                     </div>
                 )}
             </div>
@@ -285,7 +285,7 @@ function SectionTitle({ children }: { children: ReactNode }) {
     )
 }
 
-function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobId: string; jobTitle: string }) {
+function ApplyForm({ companyCode, jobId, jobTitle, jobSkills }: { companyCode: string; jobId: string; jobTitle: string; jobSkills: string[] }) {
     const { t } = useTranslation()
     const apply = useApplyToJob(companyCode, jobId)
     const [form, setForm] = useState({ name: '', email: '', phone: '', nationality: '', experience: '', expectedSalary: '', currentSalary: '', coverNote: '' })
@@ -297,9 +297,9 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
     const [experience, setExperience] = useState<ExperienceEntry[]>([])
     const [skills, setSkills] = useState<string[]>([])
     const [skillInput, setSkillInput] = useState('')
-    const addSkill = () => {
-        const v = skillInput.trim()
-        if (v && !skills.includes(v)) setSkills(s => [...s, v])
+    const addSkill = (value?: string) => {
+        const v = (value ?? skillInput).trim()
+        if (v && !skills.some(s => s.toLowerCase() === v.toLowerCase())) setSkills(s => [...s, v])
         setSkillInput('')
     }
     const [file, setFile] = useState<File | null>(null)
@@ -450,6 +450,8 @@ function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobI
                             onInputChange={setSkillInput}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
                             onAdd={addSkill}
+                            onAddValue={addSkill}
+                            suggestions={jobSkills}
                             placeholder={t('careers.apply.skillPlaceholder', { defaultValue: 'Add a skill · Press Enter' })}
                             chipClassName="bg-sky-100 text-sky-700"
                         />

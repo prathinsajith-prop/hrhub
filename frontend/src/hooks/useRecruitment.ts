@@ -42,11 +42,28 @@ export function useJob(id: string | undefined) {
     })
 }
 
+/**
+ * Distinct skills + qualifications already used across the tenant's jobs —
+ * powers the type-ahead suggestions in the job create/edit dialogs. Cached a
+ * little longer than the default since the tag vocabulary changes slowly.
+ */
+export function useJobTagSuggestions() {
+    return useQuery({
+        queryKey: ['job-tag-suggestions'],
+        queryFn: () => api.get<{ data: { skills: string[]; qualifications: string[] } }>('/jobs/tag-suggestions').then((r) => r.data),
+        staleTime: 5 * 60_000,
+    })
+}
+
 export function useCreateJob() {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (data: unknown) => api.post('/jobs', data),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['jobs'] }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['jobs'] })
+            // New skills/qualifications may have been introduced — refresh the type-ahead vocabulary.
+            qc.invalidateQueries({ queryKey: ['job-tag-suggestions'] })
+        },
     })
 }
 
@@ -208,6 +225,7 @@ export function useUpdateJob() {
         onSuccess: (_res, { id }) => {
             qc.invalidateQueries({ queryKey: ['jobs'] })       // list view
             qc.invalidateQueries({ queryKey: ['job', id] })    // detail page
+            qc.invalidateQueries({ queryKey: ['job-tag-suggestions'] }) // refresh tag vocabulary
         },
     })
 }

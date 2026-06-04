@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
-import { useCreateJob, useUpdateJob } from '@/hooks/useRecruitment'
+import { useCreateJob, useUpdateJob, useJobTagSuggestions } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
@@ -271,6 +271,7 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [qualInput, setQualInput] = useState('')
     const reqInputRef = useRef<HTMLInputElement>(null)
     const createJob = useCreateJob()
+    const { data: tagSuggestions } = useJobTagSuggestions()
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
@@ -299,9 +300,9 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             setRequirements(r => r.slice(0, -1))
     }, [addRequirement, reqInput, requirements.length])
 
-    const addSkill = useCallback(() => {
-        const val = skillInput.trim()
-        if (val && !skills.includes(val)) setSkills(s => [...s, val])
+    const addSkill = useCallback((value?: string) => {
+        const val = (value ?? skillInput).trim()
+        if (val && !skills.some(s => s.toLowerCase() === val.toLowerCase())) setSkills(s => [...s, val])
         setSkillInput('')
     }, [skillInput, skills])
 
@@ -310,9 +311,9 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1))
     }, [addSkill, skillInput, skills.length])
 
-    const addQualification = useCallback(() => {
-        const val = qualInput.trim()
-        if (val && !qualifications.includes(val)) setQualifications(q => [...q, val])
+    const addQualification = useCallback((value?: string) => {
+        const val = (value ?? qualInput).trim()
+        if (val && !qualifications.some(q => q.toLowerCase() === val.toLowerCase())) setQualifications(q => [...q, val])
         setQualInput('')
     }, [qualInput, qualifications])
 
@@ -467,6 +468,8 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onInputChange={setSkillInput}
                             onKeyDown={onSkillKeyDown}
                             onAdd={addSkill}
+                            onAddValue={addSkill}
+                            suggestions={tagSuggestions?.skills}
                             placeholder="Add a skill · Press Enter"
                             chipClassName="bg-sky-100 text-sky-700"
                         />
@@ -481,6 +484,8 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                             onInputChange={setQualInput}
                             onKeyDown={onQualKeyDown}
                             onAdd={addQualification}
+                            onAddValue={addQualification}
+                            suggestions={tagSuggestions?.qualifications}
                             placeholder="Add a qualification · Press Enter"
                             chipClassName="bg-emerald-100 text-emerald-700"
                         />
@@ -2175,6 +2180,7 @@ export function EditJobDialog({
     const [qualInput, setQualInput] = useState('')
     const editReqInputRef = useRef<HTMLInputElement>(null)
     const updateJob = useUpdateJob()
+    const { data: tagSuggestionsEdit } = useJobTagSuggestions()
     const { data: orgUnitsRawEdit = [] } = useOrgUnits()
     const orgUnitsEdit = Array.isArray(orgUnitsRawEdit) ? orgUnitsRawEdit as OrgUnit[] : []
     const orgOptionsEdit = buildOrgOptions(orgUnitsEdit)
@@ -2209,9 +2215,9 @@ export function EditJobDialog({
             setRequirements(r => r.slice(0, -1))
     }, [addEditRequirement, reqInput, requirements.length])
 
-    const addSkillEdit = useCallback(() => {
-        const val = skillInput.trim()
-        if (val && !skills.includes(val)) setSkills(s => [...s, val])
+    const addSkillEdit = useCallback((value?: string) => {
+        const val = (value ?? skillInput).trim()
+        if (val && !skills.some(s => s.toLowerCase() === val.toLowerCase())) setSkills(s => [...s, val])
         setSkillInput('')
     }, [skillInput, skills])
 
@@ -2220,9 +2226,9 @@ export function EditJobDialog({
         if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1))
     }, [addSkillEdit, skillInput, skills.length])
 
-    const addQualEdit = useCallback(() => {
-        const val = qualInput.trim()
-        if (val && !qualifications.includes(val)) setQualifications(q => [...q, val])
+    const addQualEdit = useCallback((value?: string) => {
+        const val = (value ?? qualInput).trim()
+        if (val && !qualifications.some(q => q.toLowerCase() === val.toLowerCase())) setQualifications(q => [...q, val])
         setQualInput('')
     }, [qualInput, qualifications])
 
@@ -2376,6 +2382,8 @@ export function EditJobDialog({
                             onInputChange={setSkillInput}
                             onKeyDown={onSkillKeyDownEdit}
                             onAdd={addSkillEdit}
+                            onAddValue={addSkillEdit}
+                            suggestions={tagSuggestionsEdit?.skills}
                             placeholder="Add a skill · Press Enter"
                             chipClassName="bg-sky-100 text-sky-700"
                         />
@@ -2390,6 +2398,8 @@ export function EditJobDialog({
                             onInputChange={setQualInput}
                             onKeyDown={onQualKeyDownEdit}
                             onAdd={addQualEdit}
+                            onAddValue={addQualEdit}
+                            suggestions={tagSuggestionsEdit?.qualifications}
                             placeholder="Add a qualification · Press Enter"
                             chipClassName="bg-emerald-100 text-emerald-700"
                         />

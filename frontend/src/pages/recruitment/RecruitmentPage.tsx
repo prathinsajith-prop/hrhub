@@ -28,7 +28,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { cn, formatCurrency, formatDate, getInitials, onActivate, splitFullName } from '@/lib/utils'
-import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useUploadCandidatePhoto, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useUploadCandidatePhoto, useRecruitmentStages, useJobTagSuggestions } from '@/hooks/useRecruitment'
 import { ResumeUpload } from '@/components/shared/ResumeUpload'
 import type { ParsedResume } from '@/lib/resume-parser'
 import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
@@ -426,11 +426,12 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [skillInput, setSkillInput] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [photo, setPhoto] = useState<Blob | null>(null)
-  const addSkill = () => {
-    const v = skillInput.trim()
-    if (v && !skills.includes(v)) setSkills(s => [...s, v])
+  const addSkill = (value?: string) => {
+    const v = (value ?? skillInput).trim()
+    if (v && !skills.some(s => s.toLowerCase() === v.toLowerCase())) setSkills(s => [...s, v])
     setSkillInput('')
   }
+  const { data: tagSuggestions } = useJobTagSuggestions()
   const createApp = useCreateApplication()
   const uploadResume = useUploadResume()
   const uploadPhoto = useUploadCandidatePhoto()
@@ -607,6 +608,8 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
                 onInputChange={setSkillInput}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
                 onAdd={addSkill}
+                onAddValue={addSkill}
+                suggestions={tagSuggestions?.skills}
                 placeholder="Add a skill · Press Enter"
                 chipClassName="bg-sky-100 text-sky-700"
               />

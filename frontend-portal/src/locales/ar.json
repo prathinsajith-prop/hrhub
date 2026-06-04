@@ -647,7 +647,13 @@
     "reports": {
         "title": "نظرة عامة",
         "subtitle": "رؤى شخصية ومهامك المعلّقة",
-        "notYetAvailable": "غير متاح بعد"
+        "notYetAvailable": "غير متاح بعد",
+        "gross": "الإجمالي",
+        "deductions": "الاستقطاعات",
+        "ytdNet": "صافي الراتب هذا العام",
+        "ytdNetHint": "صافي الراتب المستلَم في {{year}}",
+        "daysWorked": "أيام العمل",
+        "daysUnit": "يوم"
     },
     "documents": {
         "title": "مستنداتي",

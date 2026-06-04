@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -12,12 +12,14 @@ import {
     ChevronRight,
     Clock,
     ExternalLink,
+    LayoutDashboard,
     Link2,
     Loader2,
     LogIn,
     LogOut,
     Megaphone,
     MessageCircle,
+    Newspaper,
     Pin,
     PenSquare,
     Send,
@@ -88,8 +90,15 @@ export function EmployeeHomePage() {
 
     const { data: me } = useMyEmployee()
     const { data: leaveList } = useLeaveRequests({ employeeId, limit: 4 })
-    const { data: announcementPages } = useAnnouncementFeed(5)
-    const announcements = (announcementPages?.pages?.[0]?.data ?? []).slice(0, 3)
+    // Feed announcements load 3 at a time: first page renders 3, then the list
+    // pulls the next 3 as the user scrolls (see AnnouncementsList sentinel).
+    const {
+        data: announcementPages,
+        fetchNextPage: fetchMoreAnnouncements,
+        hasNextPage: hasMoreAnnouncements,
+        isFetchingNextPage: isLoadingMoreAnnouncements,
+    } = useAnnouncementFeed(3)
+    const announcements = announcementPages?.pages.flatMap((p) => p.data) ?? []
     const { data: myChanges } = useMyChangeRequests()
     const { data: unreadCount } = useUnreadNotificationsCount()
 
@@ -149,11 +158,19 @@ export function EmployeeHomePage() {
             <div className="grid gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2">
                     <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-                        <TabsList className="flex w-full justify-start gap-1 overflow-x-auto sm:w-auto">
-                            <TabsTrigger value="feed">{t('home.tabFeed', { defaultValue: 'Feed' })}</TabsTrigger>
-                            <TabsTrigger value="overview">{t('home.tabOverview', { defaultValue: 'Overview' })}</TabsTrigger>
-                            <TabsTrigger value="announcements">{t('home.tabAnnouncements', { defaultValue: 'Announcements' })}</TabsTrigger>
-                            <TabsTrigger value="recognitions">{t('home.tabRecognitions', { defaultValue: 'Recognitions' })}</TabsTrigger>
+                        <TabsList variant="underline">
+                            <TabsTrigger value="feed">
+                                <Newspaper className="size-3.5" /> {t('home.tabFeed', { defaultValue: 'Feed' })}
+                            </TabsTrigger>
+                            <TabsTrigger value="overview">
+                                <LayoutDashboard className="size-3.5" /> {t('home.tabOverview', { defaultValue: 'Overview' })}
+                            </TabsTrigger>
+                            <TabsTrigger value="announcements">
+                                <Megaphone className="size-3.5" /> {t('home.tabAnnouncements', { defaultValue: 'Announcements' })}
+                            </TabsTrigger>
+                            <TabsTrigger value="recognitions">
+                                <Award className="size-3.5" /> {t('home.tabRecognitions', { defaultValue: 'Recognitions' })}
+                            </TabsTrigger>
                         </TabsList>
 
                         {/* ── Feed — activity stream: welcome, announcements preview, recent leave ── */}
@@ -170,6 +187,9 @@ export function EmployeeHomePage() {
                                 onViewAll={() => setTab('announcements')}
                                 currentUserName={displayName}
                                 currentUserAvatarUrl={me?.avatarUrl}
+                                hasMore={hasMoreAnnouncements}
+                                isLoadingMore={isLoadingMoreAnnouncements}
+                                onLoadMore={fetchMoreAnnouncements}
                             />
 
                             {leaveList?.data && leaveList.data.length > 0 ? (
@@ -378,10 +398,58 @@ interface AnnouncementsListProps {
     onViewAll: () => void
     currentUserName?: string
     currentUserAvatarUrl?: string | null
+    hasMore?: boolean
+    isLoadingMore?: boolean
+    onLoadMore?: () => void
 }
 
-function AnnouncementsList({ items, onViewAll, currentUserName, currentUserAvatarUrl }: AnnouncementsListProps) {
+function AnnouncementsList({
+    items,
+    onViewAll,
+    currentUserName,
+    currentUserAvatarUrl,
+    hasMore = false,
+    isLoadingMore = false,
+    onLoadMore,
+}: AnnouncementsListProps) {
     const { t, i18n } = useTranslation()
+    const scrollRef = useRef<HTMLDivElement | null>(null)
+    const listRef = useRef<HTMLUListElement | null>(null)
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
+    const [maxHeight, setMaxHeight] = useState<number | undefined>(undefined)
+
+    // Show three announcements at a time: cap the visible area to the height of
+    // the first three real cards (+ a sliver of the next as a scroll affordance),
+    // and let the rest scroll inside the card. Derived from the actual rendered
+    // cards so the window always matches three, whatever their content height.
+    useLayoutEffect(() => {
+        const ul = listRef.current
+        if (!ul) return
+        const lis = Array.from(ul.children) as HTMLElement[]
+        if (lis.length <= 3) {
+            setMaxHeight(undefined)
+            return
+        }
+        const rowGap = parseFloat(getComputedStyle(ul).rowGap) || 16
+        const threeCards = lis.slice(0, 3).reduce((sum, li) => sum + li.offsetHeight, 0)
+        setMaxHeight(Math.round(threeCards + rowGap * 2 + 28))
+    }, [items.length])
+
+    // Infinite scroll within the capped window: when the sentinel nears the
+    // bottom of the scroll container, pull the next page (3 more). Scoped to the
+    // scroll container as root so it fires on inner-scroll, not page-scroll.
+    useEffect(() => {
+        const node = sentinelRef.current
+        if (!node || !hasMore || !onLoadMore) return
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0]?.isIntersecting) onLoadMore()
+            },
+            { root: scrollRef.current ?? null, rootMargin: '120px' },
+        )
+        observer.observe(node)
+        return () => observer.disconnect()
+    }, [hasMore, onLoadMore, items.length, maxHeight])
 
     return (
         <Card className="overflow-hidden border-border/70">
@@ -403,18 +471,29 @@ function AnnouncementsList({ items, onViewAll, currentUserName, currentUserAvata
                 {items.length === 0 ? (
                     <CardEmptyState icon={Megaphone} message={t('home.noAnnouncements')} />
                 ) : (
-                    <ul className="space-y-4">
-                        {items.map((a) => (
-                            <li key={a.id}>
-                                <AnnouncementCard
-                                    item={a}
-                                    locale={i18n.language}
-                                    currentUserName={currentUserName}
-                                    currentUserAvatarUrl={currentUserAvatarUrl}
-                                />
-                            </li>
-                        ))}
-                    </ul>
+                    <div
+                        ref={scrollRef}
+                        style={maxHeight ? { maxHeight } : undefined}
+                        className={cn(maxHeight && 'overflow-y-auto overscroll-contain -mr-2.5 pr-2.5')}
+                    >
+                        <ul ref={listRef} className="space-y-4">
+                            {items.map((a) => (
+                                <li key={a.id}>
+                                    <AnnouncementCard
+                                        item={a}
+                                        locale={i18n.language}
+                                        currentUserName={currentUserName}
+                                        currentUserAvatarUrl={currentUserAvatarUrl}
+                                    />
+                                </li>
+                            ))}
+                        </ul>
+                        {hasMore ? (
+                            <div ref={sentinelRef} className="flex justify-center pt-4 text-muted-foreground">
+                                {isLoadingMore ? <Loader2 className="size-4 animate-spin" /> : null}
+                            </div>
+                        ) : null}
+                    </div>
                 )}
             </CardContent>
         </Card>

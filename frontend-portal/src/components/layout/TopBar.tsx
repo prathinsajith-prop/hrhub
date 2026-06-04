@@ -3,9 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 
 import { useAuthStore } from '@/store/authStore'
-import { canSwitchToManager } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
-import { ModeToggle } from './ModeToggle'
 import { NotificationsBell } from './NotificationsBell'
 import { HeaderNav } from './HeaderNav'
 import { AccountMenu } from './AccountMenu'
@@ -14,16 +12,14 @@ const CONTAINER_WIDTHS = 'max-w-6xl xl:max-w-7xl 2xl:max-w-[1536px] 3xl:max-w-[1
 
 /**
  * Sticky application header — three regions on one row:
- *   [Brand]   [HeaderNav]   [Right cluster: bell · mode toggle · avatar]
+ *   [Brand]   [HeaderNav]   [Right cluster: bell · avatar]
  *
- * Compresses on scroll. On mobile, HeaderNav is hidden and the mode-toggle
- * sits in a second row below the header so dept_heads can still find it.
+ * Compresses on scroll.
  */
 export function TopBar() {
     const { t } = useTranslation()
     const user = useAuthStore((s) => s.user)
     const tenant = useAuthStore((s) => s.tenant)
-    const canManage = canSwitchToManager(user)
     const scrolled = useScrollPast(8)
 
     return (
@@ -49,17 +45,6 @@ export function TopBar() {
 
                 <div className="flex shrink-0 items-center gap-2 sm:gap-1.5">
                     <NotificationsBell />
-                    {canManage ? (
-                        <>
-                            {/* Mobile: compact icon-only switch. Desktop: full
-                                pill with label. Same action, presentation
-                                adapted to the available room. */}
-                            <ModeToggle variant="compact" className="sm:hidden" />
-                            <div className="hidden sm:block">
-                                <ModeToggle />
-                            </div>
-                        </>
-                    ) : null}
                     <AccountMenu />
                 </div>
             </div>

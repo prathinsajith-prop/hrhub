@@ -61,6 +61,37 @@ export async function getJob(tenantId: string, id: string) {
     return row ?? null
 }
 
+/**
+ * Distinct skills + qualifications already used across the tenant's jobs.
+ * Powers the type-ahead suggestions in the job create/edit dialogs so HR reuses
+ * consistent tags instead of inventing case/spelling variants. De-duplicated
+ * case-insensitively (first-seen casing wins) and sorted alphabetically.
+ */
+export async function getJobTagSuggestions(tenantId: string) {
+    const rows = await db
+        .select({ skills: recruitmentJobs.skills, qualifications: recruitmentJobs.qualifications })
+        .from(recruitmentJobs)
+        .where(and(eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
+
+    const collect = (lists: Array<string[] | null>) => {
+        const seen = new Map<string, string>() // lowercase → first-seen original casing
+        for (const list of lists) {
+            for (const raw of list ?? []) {
+                const val = typeof raw === 'string' ? raw.trim() : ''
+                if (!val) continue
+                const key = val.toLowerCase()
+                if (!seen.has(key)) seen.set(key, val)
+            }
+        }
+        return [...seen.values()].sort((a, b) => a.localeCompare(b))
+    }
+
+    return {
+        skills: collect(rows.map(r => r.skills)),
+        qualifications: collect(rows.map(r => r.qualifications)),
+    }
+}
+
 /* ─── Public careers portal (unauthenticated) ─────────────────────────────────
  * These functions back the public /careers/:companyCode pages. A visitor has no
  * JWT, so the tenant is resolved from the unique, shareable `companyCode`. Only
@@ -191,15 +222,50 @@ export async function generateNextJobNo(tenantId: string, conn: typeof db = db):
     return `JOB-${String(next).padStart(4, '0')}`
 }
 
+/**
+ * Trim, drop empties, and de-duplicate a tag list case-insensitively
+ * (first-seen casing wins) — e.g. ["React", "  react ", "", "REACT"] → ["React"].
+ * Returns undefined for non-arrays so callers can omit the field from the update.
+ */
+function dedupeTags(list: unknown): string[] | undefined {
+    if (!Array.isArray(list)) return undefined
+    const seen = new Map<string, string>() // lowercase → first-seen original casing
+    for (const raw of list) {
+        const val = typeof raw === 'string' ? raw.trim() : ''
+        if (!val) continue
+        const key = val.toLowerCase()
+        if (!seen.has(key)) seen.set(key, val)
+    }
+    return [...seen.values()]
+}
+
+/**
+ * Normalise a job's tag arrays (skills / qualifications / requirements) so no
+ * duplicate listings are ever persisted — regardless of entry path (form, bulk
+ * import, or direct API). Only includes fields actually present on `data`.
+ */
+function normalizeJobTags(data: { skills?: unknown; qualifications?: unknown; requirements?: unknown }) {
+    const out: Record<string, string[]> = {}
+    const skills = dedupeTags(data.skills)
+    const qualifications = dedupeTags(data.qualifications)
+    const requirements = dedupeTags(data.requirements)
+    if (skills) out.skills = skills
+    if (qualifications) out.qualifications = qualifications
+    if (requirements) out.requirements = requirements
+    return out
+}
+
 export async function createJob(tenantId: string, data: Omit<NewJob, 'tenantId' | 'id'>) {
     const jobNo = await generateNextJobNo(tenantId)
-    const [row] = await db.insert(recruitmentJobs).values({ ...data, tenantId, jobNo }).returning()
+    const [row] = await db.insert(recruitmentJobs)
+        .values({ ...data, ...normalizeJobTags(data), tenantId, jobNo } as never)
+        .returning()
     return row
 }
 
 export async function updateJob(tenantId: string, id: string, data: Partial<NewJob>) {
     const [row] = await db.update(recruitmentJobs)
-        .set(withTimestamp(data))
+        .set(withTimestamp({ ...data, ...normalizeJobTags(data) }))
         .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
         .returning()
     return row ?? null

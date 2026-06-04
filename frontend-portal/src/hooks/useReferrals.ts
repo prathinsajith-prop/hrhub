@@ -10,6 +10,8 @@ export interface ReferralJob {
     location: string | null
     type: 'full_time' | 'part_time' | 'contract'
     openings: number
+    /** The role's required skills — used to suggest tags in the referral form. */
+    skills?: string[]
 }
 
 export interface MyReferral {
