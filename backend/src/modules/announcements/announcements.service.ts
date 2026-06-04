@@ -141,7 +141,10 @@ export async function getAnnouncement(tenantId: string, id: string) {
 export async function listAnnouncements(tenantId: string, params: { status?: string; category?: string; priority?: string; q?: string; limit: number; offset: number }) {
     await processDueTransitions(tenantId)
     const { status, category, priority, q, limit, offset } = params
-    const conds = [eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt)]
+    // Official HR announcements only — employee social posts (kind='post') live
+    // in the same table but are authored/managed by employees in the portal, so
+    // they must not clutter the admin announcements management surface.
+    const conds = [eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt), eq(announcements.kind, 'announcement' as never)]
     if (status) conds.push(eq(announcements.status, status as never))
     if (category) conds.push(eq(announcements.category, category))
     if (priority) conds.push(eq(announcements.priority, priority as never))

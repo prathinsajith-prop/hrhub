@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import DOMPurify from 'dompurify'
-import { Megaphone, Pin, AlertTriangle, Check, Loader2, CheckCircle2, ChevronDown } from 'lucide-react'
+import { Megaphone, MessageSquare, Pin, AlertTriangle, Check, Loader2, CheckCircle2, ChevronDown } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -54,8 +55,48 @@ function sanitize(html: string): string {
 
 export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
+    const [kind, setKind] = useState<'announcement' | 'post'>('announcement')
+
+    return (
+        // Constrain to a comfortable reading column so long announcements don't
+        // stretch edge-to-edge on wide screens (full width when embedded in a tab).
+        <div className={embedded ? 'w-full space-y-5' : 'mx-auto w-full max-w-3xl space-y-5'}>
+            {!embedded && (
+                <PageHeader
+                    title={t('announcements.title', { defaultValue: 'Announcements' })}
+                    subtitle={t('announcements.subtitle', { defaultValue: 'Company news and updates relevant to you.' })}
+                />
+            )}
+
+            {/* Two tabs — official HR announcements vs employee posts. They share
+                the same card + engagement logic but never mix, so each surface
+                reads clearly as one kind of content. */}
+            <Tabs value={kind} onValueChange={(v) => setKind(v as 'announcement' | 'post')} className="space-y-4">
+                <TabsList variant="underline">
+                    <TabsTrigger value="announcement">
+                        <Megaphone className="size-3.5" /> {t('announcements.tabAnnouncements', { defaultValue: 'Announcements' })}
+                    </TabsTrigger>
+                    <TabsTrigger value="post">
+                        <MessageSquare className="size-3.5" /> {t('announcements.tabPosts', { defaultValue: 'Posts' })}
+                    </TabsTrigger>
+                </TabsList>
+                <TabsContent value="announcement" className="focus-visible:outline-none">
+                    <AnnouncementFeed kind="announcement" />
+                </TabsContent>
+                <TabsContent value="post" className="focus-visible:outline-none">
+                    <AnnouncementFeed kind="post" />
+                </TabsContent>
+            </Tabs>
+        </div>
+    )
+}
+
+/** One kind's paginated feed (announcements or posts). Same card + engagement
+ *  logic for both; the server filters by `kind` so the lists never mix. */
+function AnnouncementFeed({ kind }: { kind: 'announcement' | 'post' }) {
+    const { t } = useTranslation()
     const currentUserId = useAuthStore((s) => s.user?.id)
-    const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useAnnouncementFeed()
+    const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useAnnouncementFeed(15, kind)
     const markRead = useMarkAnnouncementRead()
     const acknowledge = useAcknowledgeAnnouncement()
     const list = useMemo<FeedAnnouncement[]>(() => (data?.pages ?? []).flatMap((p) => p.data), [data])
@@ -69,44 +110,35 @@ export function AnnouncementsPage({ embedded = false }: { embedded?: boolean } =
         return () => io.disconnect()
     }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
+    if (isLoading) {
+        return <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
+    }
+    if (list.length === 0) {
+        return (
+            <EmptyState
+                icon={kind === 'post' ? <MessageSquare className="size-8" /> : <Megaphone className="size-8" />}
+                title={kind === 'post' ? t('announcements.emptyPostsTitle', { defaultValue: 'No posts yet' }) : t('announcements.emptyTitle', { defaultValue: 'No announcements' })}
+                description={kind === 'post' ? t('announcements.emptyPostsDesc', { defaultValue: 'Team posts will appear here.' }) : t('announcements.emptyDesc', { defaultValue: "You're all caught up." })}
+            />
+        )
+    }
     return (
-        // Constrain to a comfortable reading column so long announcements don't
-        // stretch edge-to-edge on wide screens (full width when embedded in a tab).
-        <div className={embedded ? 'w-full space-y-5' : 'mx-auto w-full max-w-3xl space-y-5'}>
-            {!embedded && (
-                <PageHeader
-                    title={t('announcements.title', { defaultValue: 'Announcements' })}
-                    subtitle={t('announcements.subtitle', { defaultValue: 'Company news and updates relevant to you.' })}
+        <div className="space-y-3">
+            {list.map((a) => (
+                <AnnouncementCard
+                    key={a.id}
+                    a={a}
+                    currentUserId={currentUserId}
+                    onMarkRead={(id) => markRead.mutate(id)}
+                    onAck={(id) => acknowledge.mutate(id, {
+                        onSuccess: () => toast.success(t('announcements.acknowledged', { defaultValue: 'Acknowledged' })),
+                        onError: (e: any) => toast.error(e?.message ?? t('common.error', { defaultValue: 'Something went wrong' })),
+                    })}
+                    ackPending={acknowledge.isPending}
                 />
-            )}
-
-            {isLoading ? (
-                <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div>
-            ) : list.length === 0 ? (
-                <EmptyState
-                    icon={<Megaphone className="size-8" />}
-                    title={t('announcements.emptyTitle', { defaultValue: 'No announcements' })}
-                    description={t('announcements.emptyDesc', { defaultValue: "You're all caught up." })}
-                />
-            ) : (
-                <div className="space-y-3">
-                    {list.map((a) => (
-                        <AnnouncementCard
-                            key={a.id}
-                            a={a}
-                            currentUserId={currentUserId}
-                            onMarkRead={(id) => markRead.mutate(id)}
-                            onAck={(id) => acknowledge.mutate(id, {
-                                onSuccess: () => toast.success(t('announcements.acknowledged', { defaultValue: 'Acknowledged' })),
-                                onError: (e: any) => toast.error(e?.message ?? t('common.error', { defaultValue: 'Something went wrong' })),
-                            })}
-                            ackPending={acknowledge.isPending}
-                        />
-                    ))}
-                    <div ref={sentinel} className="h-6" />
-                    {isFetchingNextPage && <div className="flex justify-center py-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>}
-                </div>
-            )}
+            ))}
+            <div ref={sentinel} className="h-6" />
+            {isFetchingNextPage && <div className="flex justify-center py-2 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>}
         </div>
     )
 }
@@ -174,10 +206,19 @@ function AnnouncementCard({ a, currentUserId, onMarkRead, onAck, ackPending }: {
                             {a.title ? <h3 className={cn('text-sm', unread ? 'font-semibold' : 'font-medium')}>{a.title}</h3> : null}
                         </div>
                         <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                            <Badge variant={p.variant} className="px-2 py-0.5 text-xs">{t(`announcements.priority.${a.priority}`, { defaultValue: p.label })}</Badge>
-                            <span>{t(`announcements.category.${a.category}`, { defaultValue: CATEGORY_LABEL[a.category] ?? a.category })}</span>
+                            {a.kind === 'post' ? (
+                                // Posts: a single neutral "Post" chip — priority/category are
+                                // an HR-announcement concept and don't apply to social posts.
+                                <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs"><MessageSquare className="size-3" />{t('announcements.postBadge', { defaultValue: 'Post' })}</Badge>
+                            ) : (
+                                <>
+                                    <Badge variant={p.variant} className="px-2 py-0.5 text-xs">{t(`announcements.priority.${a.priority}`, { defaultValue: p.label })}</Badge>
+                                    <span>{t(`announcements.category.${a.category}`, { defaultValue: CATEGORY_LABEL[a.category] ?? a.category })}</span>
+                                </>
+                            )}
+                            {/* Author — "who created" this, shown for both kinds. */}
                             {a.authorName && <span aria-hidden>·</span>}
-                            {a.authorName && <span>{a.authorName}</span>}
+                            {a.authorName && <span className="font-medium text-foreground/70">{a.authorName}</span>}
                             <span aria-hidden>·</span>
                             <span>{fmtDate(a.publishedAt ?? a.createdAt)}</span>
                         </div>
@@ -208,11 +249,23 @@ function AnnouncementCard({ a, currentUserId, onMarkRead, onAck, ackPending }: {
                         </div>
                     </div>
                 ) : a.body ? (
-                    <div
-                        ref={bodyRef}
-                        className={cn('mt-2.5 text-sm leading-relaxed text-foreground/80 [overflow-wrap:anywhere] [&_a]:text-primary [&_a]:underline', !expanded && 'line-clamp-3')}
-                        dangerouslySetInnerHTML={{ __html: sanitize(a.body) }}
-                    />
+                    // Posts are plain text (escaped server-side) — render with preserved
+                    // line breaks, never as HTML. Announcements carry HR-authored rich
+                    // HTML, sanitized before injection.
+                    a.kind === 'post' ? (
+                        <div
+                            ref={bodyRef}
+                            className={cn('mt-2.5 whitespace-pre-line text-sm leading-relaxed text-foreground/80 [overflow-wrap:anywhere]', !expanded && 'line-clamp-3')}
+                        >
+                            {a.body}
+                        </div>
+                    ) : (
+                        <div
+                            ref={bodyRef}
+                            className={cn('mt-2.5 text-sm leading-relaxed text-foreground/80 [overflow-wrap:anywhere] [&_a]:text-primary [&_a]:underline', !expanded && 'line-clamp-3')}
+                            dangerouslySetInnerHTML={{ __html: sanitize(a.body) }}
+                        />
+                    )
                 ) : null}
 
                 {(canExpand || a.requireAck || unread) && (

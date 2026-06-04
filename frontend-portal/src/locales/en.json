@@ -83,13 +83,19 @@
         "unpin": "Unpin",
         "pinned": "Post pinned",
         "unpinned": "Post unpinned",
-        "pinFailed": "Could not update pin"
+        "pinFailed": "Could not update pin",
+        "badge": "Post"
     },
     "announcements": {
         "title": "Announcements",
         "subtitle": "Company news and updates relevant to you.",
+        "tabAnnouncements": "Announcements",
+        "tabPosts": "Posts",
+        "postBadge": "Post",
         "emptyTitle": "No announcements",
         "emptyDesc": "You're all caught up.",
+        "emptyPostsTitle": "No posts yet",
+        "emptyPostsDesc": "Team posts will appear here.",
         "ack": "I have read this",
         "ackd": "Acknowledged",
         "acknowledged": "Acknowledged",
@@ -318,6 +324,7 @@
         "author": "Author",
         "react": "React",
         "pinned": "Pinned",
+        "announcementBadge": "Announcement",
         "addComment": "Add a comment",
         "commentsCountOne": "{{count}} Comment",
         "commentsCountOther": "{{count}} Comment(s)",

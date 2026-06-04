@@ -18,6 +18,11 @@ export const announcements = pgTable('announcements', {
     // recognition / emergency / system_maintenance / payroll / recruitment /
     // training / custom-*). Free text so tenants can add their own.
     category: text('category').notNull().default('general'),
+    // Distinguishes official HR announcements from employee social posts.
+    // 'post' = created via the employee portal (empty title, company-wide);
+    // 'announcement' = authored by HR in the admin app. Drives the portal's
+    // two-tab split (Announcements vs Posts) and per-card labelling.
+    kind: text('kind').notNull().default('announcement').$type<'announcement' | 'post'>(),
     priority: text('priority').notNull().default('normal').$type<'low' | 'normal' | 'high' | 'critical'>(),
     status: text('status').notNull().default('draft').$type<'draft' | 'scheduled' | 'published' | 'expired' | 'archived'>(),
     // 'all' = whole org; 'targeted' = resolved via announcement_audiences rows.
@@ -40,6 +45,7 @@ export const announcements = pgTable('announcements', {
     tenantIdx: index('idx_announcements_tenant').on(t.tenantId),
     statusIdx: index('idx_announcements_tenant_status').on(t.tenantId, t.status),
     pinnedIdx: index('idx_announcements_pinned').on(t.tenantId, t.pinned),
+    kindIdx: index('idx_announcements_tenant_kind').on(t.tenantId, t.kind),
     scheduleIdx: index('idx_announcements_publish_at').on(t.publishAt),
     expireIdx: index('idx_announcements_expire_at').on(t.expireAt),
 }))

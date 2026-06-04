@@ -74,7 +74,7 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         const [emp] = await db
             .select({ archived: employees.isArchived })
             .from(employees)
-            .where(eq(employees.id, user.employeeId))
+            .where(and(eq(employees.id, user.employeeId), eq(employees.tenantId, user.tenantId)))
             .limit(1)
         if (emp?.archived) {
             recordLoginEvent({

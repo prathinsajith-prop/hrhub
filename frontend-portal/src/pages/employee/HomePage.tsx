@@ -603,6 +603,19 @@ function AnnouncementCard({
                     <p className="truncate text-sm font-semibold text-foreground">{item.authorName ?? '—'}</p>
                     {dateLabel ? <p className="text-xs text-muted-foreground">{dateLabel}</p> : null}
                 </div>
+                {/* Kind chip — the home feed mixes posts and official announcements,
+                    so each card states which it is. */}
+                <span className={cn(
+                    'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1',
+                    item.kind === 'post'
+                        ? 'bg-muted text-muted-foreground ring-border'
+                        : 'bg-primary/10 text-primary ring-primary/20',
+                )}>
+                    {item.kind === 'post' ? <MessageCircle className="size-3" /> : <Megaphone className="size-3" />}
+                    {item.kind === 'post'
+                        ? t('post.badge', { defaultValue: 'Post' })
+                        : t('home.announcementBadge', { defaultValue: 'Announcement' })}
+                </span>
                 {item.pinned ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 ring-1 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900">
                         <Pin className="size-3" data-rtl-flip />

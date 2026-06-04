@@ -125,7 +125,7 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
         const employeeId = request.user.employeeId
         if (!employeeId) return reply.send({ data: [], total: 0, limit: 0, offset: 0, hasMore: false })
         await flipDueTransitions(request.user.tenantId)
-        const { category, limit = '20', offset = '0' } = (request.query ?? {}) as Record<string, string>
+        const { category, kind, limit = '20', offset = '0' } = (request.query ?? {}) as Record<string, string>
         const targeting = await loadTargeting(request.user.tenantId, employeeId)
         if (!targeting) return reply.send({ data: [], total: 0, limit: 0, offset: 0, hasMore: false })
         const lim = Math.min(Number(limit) || 20, 50), off = Number(offset) || 0
@@ -137,6 +137,10 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
             audienceMatchSql(targeting.emp, targeting.teamIds),
         ]
         if (category) conds.push(eq(announcements.category, category))
+        // Optional kind filter powers the portal's two-tab split: the
+        // Announcements tab requests kind=announcement, the Posts tab kind=post.
+        // Omitted = both (the unified home feed).
+        if (kind === 'announcement' || kind === 'post') conds.push(eq(announcements.kind, kind as never))
         const rows = await db.select({
             ...getTableColumns(announcements),
             totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
@@ -331,6 +335,7 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
                 title: '',
                 body,
                 category: 'general',
+                kind: 'post' as never,
                 priority: 'normal' as never,
                 status: 'published' as never,
                 audienceType: 'all' as never,

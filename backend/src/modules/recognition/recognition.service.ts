@@ -17,6 +17,15 @@ import {
     orgUnits,
 } from '../../db/schema/index.js'
 
+// Upper bound on points a single recognition may award. `points` is client-
+// supplied (portal employees and recruiters can submit it), so it is clamped to
+// a sane integer range to protect leaderboard / points-ledger integrity — an
+// unbounded value could mint an arbitrary balance.
+const MAX_RECOGNITION_POINTS = 1000
+function clampPoints(value: unknown): number {
+    return Math.min(MAX_RECOGNITION_POINTS, Math.max(0, Math.floor(Number(value ?? 0) || 0)))
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type Visibility = 'public' | 'team' | 'department' | 'branch' | 'manager' | 'hr' | 'private'
@@ -286,7 +295,7 @@ export async function createRecognition(
 
     const status: Status = requiresApproval ? 'pending' : 'published'
     const workflowState: WorkflowState = requiresApproval ? 'manager_review' : 'completed'
-    const points = Math.max(0, Number(input.points ?? 0) || 0)
+    const points = clampPoints(input.points)
 
     return db.transaction(async (tx) => {
         const now = new Date()
@@ -367,7 +376,7 @@ export async function updateRecognition(
         if (patch.visibility !== undefined) updates.visibility = patch.visibility
         if (patch.visibilityScopeId !== undefined) updates.visibilityScopeId = patch.visibilityScopeId
         if (patch.nominationType !== undefined) updates.nominationType = patch.nominationType
-        if (patch.points !== undefined) updates.points = Math.max(0, Number(patch.points) || 0)
+        if (patch.points !== undefined) updates.points = clampPoints(patch.points)
         if (patch.attachments !== undefined) updates.attachments = patch.attachments
         if (patch.commentsDisabled !== undefined) updates.commentsDisabled = patch.commentsDisabled
 

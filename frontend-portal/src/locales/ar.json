@@ -83,13 +83,19 @@
         "unpin": "إلغاء التثبيت",
         "pinned": "تم تثبيت المنشور",
         "unpinned": "تم إلغاء تثبيت المنشور",
-        "pinFailed": "تعذّر تحديث التثبيت"
+        "pinFailed": "تعذّر تحديث التثبيت",
+        "badge": "منشور"
     },
     "announcements": {
         "title": "الإعلانات",
         "subtitle": "أخبار الشركة والتحديثات التي تهمّك.",
+        "tabAnnouncements": "الإعلانات",
+        "tabPosts": "المنشورات",
+        "postBadge": "منشور",
         "emptyTitle": "لا توجد إعلانات",
         "emptyDesc": "لقد اطّلعت على كل شيء.",
+        "emptyPostsTitle": "لا توجد منشورات بعد",
+        "emptyPostsDesc": "ستظهر منشورات الفريق هنا.",
         "ack": "لقد قرأت هذا",
         "ackd": "تم الإقرار",
         "acknowledged": "تم الإقرار",
@@ -318,6 +324,7 @@
         "author": "الكاتب",
         "react": "تفاعل",
         "pinned": "مثبّت",
+        "announcementBadge": "إعلان",
         "addComment": "أضف تعليقًا",
         "commentsCountOne": "{{count}} تعليق",
         "commentsCountOther": "{{count}} تعليق(ات)",

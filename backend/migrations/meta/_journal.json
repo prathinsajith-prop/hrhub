@@ -631,6 +631,13 @@
       "when": 1782489600000,
       "tag": "0089_job_experience_years",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1782576000000,
+      "tag": "0090_announcement_kind",
+      "breakpoints": true
     }
   ]
 }

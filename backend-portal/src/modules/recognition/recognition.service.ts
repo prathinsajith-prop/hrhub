@@ -23,6 +23,15 @@ import {
     orgUnits,
 } from '../../db/schema/index.js'
 
+// Upper bound on points a single recognition may award. `points` comes from the
+// client (any employee with give-recognition permission can submit it), so it is
+// clamped to a sane integer range to protect leaderboard / points-ledger
+// integrity — without it, a crafted request could award an arbitrary balance.
+const MAX_RECOGNITION_POINTS = 1000
+function clampPoints(value: unknown): number {
+    return Math.min(MAX_RECOGNITION_POINTS, Math.max(0, Math.floor(Number(value ?? 0) || 0)))
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 export type Visibility = 'public' | 'team' | 'department' | 'branch' | 'manager' | 'hr' | 'private'
 export type NominationType = 'peer' | 'manager' | 'leadership' | 'self_nomination' | 'employee_of_month'
@@ -179,7 +188,7 @@ export async function createRecognition(
     const orgUnitIds = Array.from(new Set((input.orgUnitIds ?? []).filter(Boolean)))
     const status: Status = requiresApproval ? 'pending' : 'published'
     const workflowState: WorkflowState = requiresApproval ? 'manager_review' : 'completed'
-    const points = Math.max(0, Number(input.points ?? 0) || 0)
+    const points = clampPoints(input.points)
 
     return db.transaction(async (tx) => {
         const now = new Date()

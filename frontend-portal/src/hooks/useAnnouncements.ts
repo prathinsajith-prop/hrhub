@@ -7,6 +7,8 @@ export interface FeedAnnouncement {
     title: string
     body: string
     category: string
+    /** 'post' = employee-authored social post; 'announcement' = official HR notice. */
+    kind: 'announcement' | 'post'
     priority: 'low' | 'normal' | 'high' | 'critical'
     pinned: boolean
     requireAck: boolean
@@ -23,14 +25,16 @@ export interface FeedAnnouncement {
 
 interface FeedPage { data: FeedAnnouncement[]; total: number; limit: number; offset: number; hasMore: boolean }
 
-/** Announcements targeted to the signed-in employee. Pinned first, newest next. */
-export function useAnnouncementFeed(pageSize = 15) {
+/** Announcements targeted to the signed-in employee. Pinned first, newest next.
+ *  Pass `kind` to fetch only posts or only official announcements (the two-tab
+ *  split); omit it for the unified home feed (both). */
+export function useAnnouncementFeed(pageSize = 15, kind?: 'announcement' | 'post') {
     const tenantId = useAuthStore((s) => s.user?.tenantId)
     return useInfiniteQuery({
-        queryKey: ['portal', 'announcements', tenantId, pageSize],
+        queryKey: ['portal', 'announcements', tenantId, pageSize, kind ?? 'all'],
         initialPageParam: 0,
         queryFn: ({ pageParam }) =>
-            api.get<FeedPage>(`/announcements/feed?limit=${pageSize}&offset=${pageParam}`),
+            api.get<FeedPage>(`/announcements/feed?limit=${pageSize}&offset=${pageParam}${kind ? `&kind=${kind}` : ''}`),
         getNextPageParam: (last, all) => (last && last.hasMore ? all.reduce((s, p) => s + p.data.length, 0) : undefined),
         enabled: !!tenantId,
     })
