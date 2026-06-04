@@ -10,7 +10,7 @@ import { db } from '../../db/client.js'
 import { employees, orgUnits, shifts } from '../../db/schema/index.js'
 import { e403, e404 } from '../../lib/errors.js'
 import { paginationSchema, parseUuidParam, validate } from '../../lib/validation.js'
-import { buildTeammateScopeWhere, canViewTeammate, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
+import { buildTeammateScopeWhere, canViewTeammate, canAccessEmployee, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
 
 /**
  * Compute days-until-next-birthday in UTC, handling the year-end wrap so a
@@ -106,6 +106,38 @@ async function getEmployeeWithReportingTo(tenantId: string, id: string) {
                   weeklyOffDays: row.shiftWeeklyOffDays ?? [],
               }
             : null,
+    }
+}
+
+// Non-sensitive fields a same-department PEER may see on the basic-profile
+// screen. Explicit ALLOW-LIST (not a denylist) so newly-added sensitive columns
+// (salary, allowances, passport, Emirates ID, bank/IBAN, DOB, visa, labour card,
+// home address) can never leak by default. The full record is reserved for self
+// / reporting-subtree / HR via `canAccessEmployee`.
+function toBasicProfile(emp: NonNullable<Awaited<ReturnType<typeof getEmployeeWithReportingTo>>>) {
+    return {
+        id: emp.id,
+        employeeNo: emp.employeeNo,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        email: emp.email,
+        personalEmail: emp.personalEmail,
+        phone: emp.phone,
+        mobileNo: emp.mobileNo,
+        designation: emp.designation,
+        department: emp.department,
+        nationality: emp.nationality,
+        joinDate: emp.joinDate,
+        status: emp.status,
+        avatarUrl: emp.avatarUrl,
+        branchName: emp.branchName,
+        divisionName: emp.divisionName,
+        departmentName: emp.departmentName,
+        reportingToName: emp.reportingToName,
+        reportingToEmployeeNo: emp.reportingToEmployeeNo,
+        reportingToDesignation: emp.reportingToDesignation,
+        reportingToDepartment: emp.reportingToDepartment,
+        shift: emp.shift,
     }
 }
 
@@ -383,10 +415,17 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         return reply.send({ data: list })
     })
 
-    // GET /api/v1/employees/:id — basic profile for self, manager-subtree, or
-    // a same-department peer. Sensitive endpoints (documents, leave history,
-    // attendance, salary) keep using the stricter `canAccessEmployee` so peers
-    // can see each other's name/contact/role without exposing payroll or PII.
+    // GET /api/v1/employees/:id — profile for self, manager-subtree, or a
+    // same-department peer.
+    //
+    // ACCESS TIERS (the WHOLE employees row carries payroll + passport +
+    // Emirates ID + bank/IBAN, so the response is scoped to the caller's tier):
+    //   • Full access — self / reporting-subtree / HR (`canAccessEmployee`):
+    //     the complete record (the dedicated PII screens already trust these).
+    //   • Peer access — same-department colleague only (`canViewTeammate`):
+    //     a slim, PII-free basic profile (`toBasicProfile`).
+    // Previously this returned the full row to any same-department peer, leaking
+    // colleagues' salary / passport / Emirates ID / bank details.
     fastify.get('/:id', { ...auth }, async (request: any, reply: any) => {
         const id = parseUuidParam(request.params, 'id', reply)
         if (!id) return
@@ -395,9 +434,10 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         const employee = await getEmployeeWithReportingTo(user.tenantId, id)
         if (!employee) return reply.code(404).send(e404('Employee not found'))
 
-        if (!(await canViewTeammate(user, employee.id, request))) {
+        const fullAccess = await canAccessEmployee(user, employee.id, request)
+        if (!fullAccess && !(await canViewTeammate(user, employee.id, request))) {
             return reply.code(403).send(e403('Not authorized to view this employee'))
         }
-        return reply.send({ data: employee })
+        return reply.send({ data: fullAccess ? employee : toBasicProfile(employee) })
     })
 }

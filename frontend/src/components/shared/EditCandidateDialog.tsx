@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,30 @@ import { CandidateProfileFields, GenderSelect } from '@/components/shared/Candid
 import { ChipsField } from '@/components/shared/ChipsField'
 import type { EducationEntry, ExperienceEntry, Gender } from '@/components/shared/MultiEntryField'
 import type { Candidate } from '@/types'
+
+// Coerce nullable scalars to safe input values. The API may return `null` for
+// optional fields, and `String(null)` is "null" — which would render literally
+// inside the inputs. Treat null/undefined as empty. Module scope: pure + stable.
+const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
+const num = (v: unknown): string =>
+    v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '' : String(v)
+
+/** Initial form values for a candidate (or blanks when none). */
+function buildForm(c: Candidate | null) {
+    return {
+        name: str(c?.name),
+        email: str(c?.email),
+        phone: str(c?.phone),
+        nationality: str(c?.nationality),
+        address: str(c?.address),
+        gender: (c?.gender ?? '') as '' | Gender,
+        experience: num(c?.experience),
+        currentSalary: num(c?.currentSalary),
+        expectedSalary: num(c?.expectedSalary),
+        score: num(c?.score),
+        notes: str(c?.notes),
+    }
+}
 
 /**
  * Shared dialog for editing the editable fields of a candidate (job application).
@@ -30,23 +54,14 @@ export function EditCandidateDialog({
     onSaved?: () => void
 }) {
     const updateApplication = useUpdateApplication()
-    const [form, setForm] = useState({
-        name: '',
-        email: '',
-        phone: '',
-        nationality: '',
-        address: '',
-        gender: '' as '' | Gender,
-        experience: '',
-        currentSalary: '',
-        expectedSalary: '',
-        score: '',
-        notes: '',
-    })
-    const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
-    const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
-    const [skills, setSkills] = useState<string[]>([])
+    const [form, setForm] = useState(() => buildForm(candidate))
+    const [educationHistory, setEducationHistory] = useState<EducationEntry[]>(() => Array.isArray(candidate?.educationHistory) ? candidate.educationHistory : [])
+    const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>(() => Array.isArray(candidate?.experienceHistory) ? candidate.experienceHistory : [])
+    const [skills, setSkills] = useState<string[]>(() => Array.isArray(candidate?.skills) ? candidate.skills : [])
     const [skillInput, setSkillInput] = useState('')
+    // Track which candidate the form currently mirrors, so we can re-seed it
+    // when a DIFFERENT candidate is loaded into an already-open dialog.
+    const [syncedId, setSyncedId] = useState<string | null>(candidate?.id ?? null)
     const { data: tagSuggestions } = useJobTagSuggestions()
     const addSkill = (value?: string) => {
         const v = (value ?? skillInput).trim()
@@ -54,34 +69,18 @@ export function EditCandidateDialog({
         setSkillInput('')
     }
 
-    // Reset the form whenever a different candidate is loaded into the dialog.
-    useEffect(() => {
-        if (!candidate) return
-        // Helpers: coerce nullable scalars to safe input values.
-        // The API may return `null` for optional fields, and `String(null)` is "null"
-        // - which would render literally inside the inputs. Treat null/undefined as empty.
-        const str = (v: unknown): string => (v === null || v === undefined ? '' : String(v))
-        const num = (v: unknown): string =>
-            v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? '' : String(v)
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setForm({
-            name: str(candidate.name),
-            email: str(candidate.email),
-            phone: str(candidate.phone),
-            nationality: str(candidate.nationality),
-            address: str(candidate.address),
-            gender: (candidate.gender ?? '') as '' | Gender,
-            experience: num(candidate.experience),
-            currentSalary: num(candidate.currentSalary),
-            expectedSalary: num(candidate.expectedSalary),
-            score: num(candidate.score),
-            notes: str(candidate.notes),
-        })
+    // Re-seed the form when a different candidate arrives — synced DURING render
+    // (the project's preferred pattern, per CLAUDE.md) rather than in a post-render
+    // useEffect, so users never see a frame of the previous candidate's values.
+    // Guarded by id, so it never clobbers the user's in-progress edits.
+    if (candidate && candidate.id !== syncedId) {
+        setSyncedId(candidate.id)
+        setForm(buildForm(candidate))
         setEducationHistory(Array.isArray(candidate.educationHistory) ? candidate.educationHistory : [])
         setExperienceHistory(Array.isArray(candidate.experienceHistory) ? candidate.experienceHistory : [])
         setSkills(Array.isArray(candidate.skills) ? candidate.skills : [])
         setSkillInput('')
-    }, [candidate?.id, candidate])
+    }
 
     if (!candidate) return null
 
