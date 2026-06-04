@@ -260,15 +260,16 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         <Input
                             value={form.companySize}
                             onChange={e => setForm(f => ({ ...f, companySize: e.target.value }))}
-                            placeholder="e.g. 200–500 employees"
+                            placeholder="Company size"
                         />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Tell us about your needs</Label>
                         <textarea
                             rows={4}
+                            aria-label="Tell us about your needs"
                             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                            placeholder="Number of entities, payroll complexity, integrations…"
+                            placeholder="Tell us about your needs"
                             value={form.message}
                             onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
                         />
@@ -287,6 +288,13 @@ function EnterpriseDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
 // ─── Stat tile ────────────────────────────────────────────────────────────────
 
+const STAT_TILE_TONE_MAP = {
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
+    emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+    violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
+}
+
 function StatTile({ label, value, hint, icon: Icon, tone }: {
     label: string
     value: React.ReactNode
@@ -294,15 +302,9 @@ function StatTile({ label, value, hint, icon: Icon, tone }: {
     icon: React.ElementType
     tone: 'blue' | 'emerald' | 'amber' | 'violet'
 }) {
-    const toneMap = {
-        blue: 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400',
-        emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-        amber: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
-        violet: 'bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400',
-    }
     return (
         <div className="rounded-xl border bg-card p-4 flex items-start gap-3">
-            <div className={cn('size-9 rounded-lg flex items-center justify-center shrink-0', toneMap[tone])}>
+            <div className={cn('size-9 rounded-lg flex items-center justify-center shrink-0', STAT_TILE_TONE_MAP[tone])}>
                 <Icon className="size-4" />
             </div>
             <div className="min-w-0 flex-1">

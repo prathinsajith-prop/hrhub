@@ -142,7 +142,7 @@ export function ManagerHomePage() {
     return (
         <div className="space-y-6">
             {/* ── Greeting ───────────────────────────────────────────────── */}
-            <header className="flex flex-wrap items-end justify-between gap-3">
+            <header className="flex flex-wrap items-start sm:items-end justify-between gap-3">
                 <div className="min-w-0">
                     <p className="text-sm text-muted-foreground">
                         {t(`home.${greetingKey(new Date().getHours())}`)},
@@ -170,7 +170,7 @@ export function ManagerHomePage() {
                             : 'Your team is all set — nothing to review'}
                     </p>
                 </div>
-                <div className="text-right text-xs text-muted-foreground">
+                <div className="text-end text-xs text-muted-foreground">
                     <div>{formatDate(today, { weekday: 'long' })}</div>
                     <div className="text-sm font-semibold text-foreground">
                         {formatDate(today, { day: '2-digit', month: 'long', year: 'numeric' })}

@@ -88,9 +88,11 @@ export function getExpiryStatus(expiryDate: string): 'expired' | 'critical' | 'w
   return 'good'
 }
 
-export function getInitials(name: string): string {
-  return name
-    .split(' ')
+export function getInitials(name: string | null | undefined): string {
+  return (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
     .slice(0, 2)
     .map(n => n[0])
     .join('')

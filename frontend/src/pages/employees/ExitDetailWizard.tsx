@@ -503,7 +503,7 @@ function ApprovalStep({
                                 </p>
                                 <ul className="mt-1 space-y-0.5 text-[11px] text-amber-900 dark:text-amber-100/90">
                                     {readiness.pendingRequiredQuestions.slice(0, 3).map((q, i) => (
-                                        <li key={i} className="flex items-start gap-1.5">
+                                        <li key={`${i}-${q}`} className="flex items-start gap-1.5">
                                             <span className="size-1 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0 mt-1.5" />
                                             <span className="line-clamp-1">{q}</span>
                                         </li>

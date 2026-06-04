@@ -299,7 +299,7 @@ function AssetFormDialog({
                                 maxDecimals={2}
                                 value={form.purchaseCost ?? ''}
                                 onChange={e => set('purchaseCost', e.target.value || null)}
-                                placeholder="0.00"
+                                placeholder="Purchase cost"
                             />
                         </div>
                         <div className="col-span-2 space-y-1.5">
@@ -339,7 +339,10 @@ function AssignAssetDialog({
     const [notes, setNotes] = useState('')
     const [errors, setErrors] = useState<Record<string, string>>({})
 
-    useEffect(() => {
+    // Reset form fields when the dialog closes — state-during-render (no effect).
+    const [prevOpen, setPrevOpen] = useState(open)
+    if (open !== prevOpen) {
+        setPrevOpen(open)
         if (!open) {
             setEmployeeId('')
             setAssignedDate(new Date().toISOString().slice(0, 10))
@@ -347,7 +350,7 @@ function AssignAssetDialog({
             setNotes('')
             setErrors({})
         }
-    }, [open])
+    }
 
     async function handleSubmit(e: { preventDefault(): void }) {
         e.preventDefault()

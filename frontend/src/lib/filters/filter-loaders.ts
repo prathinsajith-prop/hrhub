@@ -73,8 +73,10 @@ export async function searchDepartments(q: string): Promise<FilterOption[]> {
 export async function searchDesignations(q: string): Promise<FilterOption[]> {
     const desigs = await getDesignations()
     const options: FilterOption[] = desigs
-        .filter(d => d.isActive)
-        .map(d => ({ value: d.name, label: d.name }))
+        .reduce<FilterOption[]>((acc, d) => {
+            if (d.isActive) acc.push({ value: d.name, label: d.name })
+            return acc
+        }, [])
         .sort((a, b) => a.label.localeCompare(b.label))
 
     if (!q.trim()) return options
@@ -128,7 +130,8 @@ export async function searchNationalities(q: string): Promise<FilterOption[]> {
         // fall through to simple filter
     }
     const lower = q.trim().toLowerCase()
-    return COUNTRY_LIST
-        .filter(c => c.name.toLowerCase().includes(lower))
-        .map(c => ({ value: c.name, label: `${c.emoji} ${c.name}` }))
+    return COUNTRY_LIST.reduce<FilterOption[]>((acc, c) => {
+        if (c.name.toLowerCase().includes(lower)) acc.push({ value: c.name, label: `${c.emoji} ${c.name}` })
+        return acc
+    }, [])
 }

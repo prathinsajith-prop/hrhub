@@ -13,6 +13,12 @@ import {
     getComplaintStats,
 } from './complaints.service.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee, notifyRoles } from '../notifications/notifications.service.js'
+import { sendEmail, complaintStatusEmail } from '../../plugins/email.js'
+import { db } from '../../db/index.js'
+import { employees } from '../../db/schema/index.js'
+import { and, eq } from 'drizzle-orm'
+import { loadEnv } from '../../config/env.js'
 
 const createSchema = z.object({
     title: z.string().min(3).max(200),
@@ -84,6 +90,10 @@ export async function complaintsRoutes(fastify: any) {
         const data = await acknowledgeComplaint(req.user.tenantId, req.params.id)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found or already acknowledged' })
         audit(req, 'submit', req.params.id, { stage: 'acknowledged' })
+        notifyEmployee(req.user.tenantId, data.submittedByEmployeeId, {
+            type: 'info', title: 'Complaint acknowledged',
+            message: `Your complaint "${data.title}" is now under review.`, actionUrl: '/my/complaints',
+        }).catch(() => { })
         return reply.send({ data })
     })
 
@@ -112,6 +122,24 @@ export async function complaintsRoutes(fastify: any) {
         const data = await resolveComplaint(req.user.tenantId, req.params.id, parsed.data.resolutionNotes)
         if (!data) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found or already resolved' })
         audit(req, 'approve', req.params.id, { stage: 'resolved' })
+        notifyEmployee(req.user.tenantId, data.submittedByEmployeeId, {
+            type: 'success', title: 'Complaint resolved',
+            message: `Your complaint "${data.title}" has been resolved.`, actionUrl: '/my/complaints',
+        }).catch(() => { })
+        // Email the complainant (to themselves about their own case — safe even if anonymous).
+        if (data.submittedByEmployeeId) {
+            db.select({ email: employees.email, first: employees.firstName }).from(employees)
+                .where(and(eq(employees.tenantId, req.user.tenantId), eq(employees.id, data.submittedByEmployeeId))).limit(1)
+                .then(([emp]) => {
+                    if (emp?.email) {
+                        const appUrl = (loadEnv() as any).APP_URL ?? ''
+                        sendEmail({
+                            ...complaintStatusEmail({ recipientName: emp.first ?? 'there', title: data.title, status: 'resolved', note: parsed.data.resolutionNotes, actionUrl: appUrl ? `${appUrl}/my/complaints` : '' }),
+                            to: emp.email, tenantId: req.user.tenantId,
+                        }).catch(() => { })
+                    }
+                }).catch(() => { })
+        }
         return reply.send({ data })
     })
 
@@ -175,6 +203,11 @@ export async function complaintsRoutes(fastify: any) {
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Complaint not found' })
         if ('error' in result) return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: 'Complaint is not in draft state' })
         audit(req, 'submit', req.params.id, { stage: 'submitted' })
+        // In-app alert to HR (email to HR is already sent inside submitComplaint()).
+        notifyRoles(req.user.tenantId, ['hr_manager', 'super_admin'], {
+            type: 'warning', title: 'New complaint submitted',
+            message: `A ${(result as any).severity ?? ''} severity complaint was submitted.`, actionUrl: '/complaints',
+        }).catch(() => { })
         return reply.send({ data: result })
     })
 

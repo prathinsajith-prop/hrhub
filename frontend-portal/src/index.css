@@ -147,9 +147,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     /* `overflow-x: clip` clips horizontal overflow WITHOUT creating a scroll
-       container — which means descendant `position: sticky` (the TopBar,
-       SideNav) keeps working. Using `overflow-x: hidden` here (or on any
-       ancestor) would silently break both. */
+       container — which means descendant `position: sticky` (the sticky
+       TopBar) keeps working. Using `overflow-x: hidden` here (or on any
+       ancestor) would silently break it. */
     overflow-x: clip;
     text-rendering: optimizeLegibility;
   }

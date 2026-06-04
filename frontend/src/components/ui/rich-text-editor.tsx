@@ -3,8 +3,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
-import { useEffect, useCallback, useMemo } from 'react'
-import DOMPurify from 'dompurify'
+import { useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -241,26 +240,6 @@ export function RichTextEditor({
 }
 
 // ─── Read-only HTML display ───────────────────────────────────────────────────
-export function RichTextDisplay({
-  html,
-  className,
-}: {
-  html: string
-  className?: string
-}) {
-  const clean = useMemo(() => {
-    if (!html || html === '<p></p>') return null
-    return DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'a', 'code', 'pre'],
-      ALLOWED_ATTR: ['href', 'target', 'rel'],
-      FORCE_BODY: true,
-    })
-  }, [html])
-  if (!clean) return null
-  return (
-    <div
-      className={cn('prose-display text-sm text-muted-foreground leading-relaxed', className)}
-      dangerouslySetInnerHTML={{ __html: clean }}
-    />
-  )
-}
+// Re-exported from the standalone (tiptap-free) module so read-only surfaces can
+// import it cheaply, while existing imports from here keep working.
+export { RichTextDisplay } from './rich-text-display'

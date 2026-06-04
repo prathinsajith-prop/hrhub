@@ -213,6 +213,7 @@ export function CountrySelect({
                             <input
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
+                                aria-label="Search country"
                                 placeholder="Search country..."
                                 className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none focus:ring-1 focus:ring-ring"
                             />
@@ -278,7 +279,7 @@ export interface PhoneInputProps {
     ref?: Ref<HTMLInputElement>
 }
 
-export function PhoneInput({ value = '', onChange, defaultCountry = 'AE', placeholder = '50 123 4567', id, name, disabled, className, invalid, onValidate, ref }: PhoneInputProps) {
+export function PhoneInput({ value = '', onChange, defaultCountry = 'AE', placeholder = 'Phone number', id, name, disabled, className, invalid, onValidate, ref }: PhoneInputProps) {
     // Derive country + national digits from the current value.
     const { iso2, nationalDigits } = useMemo(() => {
         const trimmed = value.trim()

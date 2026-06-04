@@ -42,6 +42,7 @@ interface QuickActionProps {
 export function QuickAction({ icon: Icon, label, onClick }: QuickActionProps) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-border/70 bg-card p-5 text-center transition-all hover:border-primary/40 hover:bg-accent/40 hover:shadow-sm active:scale-[0.98]"
     >

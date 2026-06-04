@@ -1,5 +1,5 @@
 import { pgTable, uuid, text, integer, date, timestamp, index } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 
@@ -31,6 +31,7 @@ export const visaApplications = pgTable('visa_applications', {
     tenantStatusIdx: index('idx_visa_tenant_status').on(t.tenantId, t.status),
     tenantUrgencyIdx: index('idx_visa_tenant_urgency').on(t.tenantId, t.urgencyLevel),
     expiryIdx: index('idx_visa_expiry').on(t.expiryDate),
+    tenantCreatedIdx: index('idx_visa_applications_tenant_created').on(t.tenantId, t.createdAt).where(sql`${t.deletedAt} IS NULL`),
 }))
 
 export const visaApplicationsRelations = relations(visaApplications, ({ one }) => ({

@@ -1,10 +1,12 @@
 import * as XLSX from 'xlsx'
-import { listJobs, getJob, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
+import { listJobs, getJob, getJobTagSuggestions, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
+import { recommendCandidatesForJob, recommendJobsForCandidate } from './matching.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
 import { validate, createEmployeeSchema } from '../../lib/validation.js'
+import { parseOptionalCount, parseOptionalAmount } from '../../lib/applicant-numbers.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
 import { entities, tenants, orgUnits, employees } from '../../db/schema/index.js'
@@ -12,6 +14,9 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { uploadObject, buildS3Key, generateDownloadUrl } from '../../plugins/s3.js'
 import { fileTypeFromBuffer } from 'file-type'
 import { broadcastToTenant } from '../../lib/ws-registry.js'
+import { notifyRoles, getRecipientsByRoles } from '../notifications/notifications.service.js'
+import { sendEmail, applicationReceivedEmail, newApplicationAlertEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
 
 export default async function (fastify: any): Promise<void> {
     const auth = { preHandler: [fastify.authenticate] }
@@ -170,12 +175,35 @@ export default async function (fastify: any): Promise<void> {
         return reply.send(result)
     })
 
+    // GET /api/v1/jobs/tag-suggestions — distinct skills/qualifications used by
+    // the tenant's jobs, for the create/edit dialog type-ahead. Registered
+    // before /jobs/:id (static beats parametric in Fastify's router regardless,
+    // but keeping them adjacent makes the intent obvious).
+    fastify.get('/jobs/tag-suggestions', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
+        const data = await getJobTagSuggestions(request.user.tenantId)
+        return reply.send({ data })
+    })
+
     // GET /api/v1/jobs/:id
     fastify.get('/jobs/:id', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
         const { id } = request.params as { id: string }
         const job = await getJob(request.user.tenantId, id)
         if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
         return reply.send({ data: job })
+    })
+
+    // GET /api/v1/jobs/:id/recommended-candidates — talent-pool + cross-job matches
+    // for this role. Scores the deduped candidate pool (by email) against the job
+    // and returns the best fits who are NOT already in this job's pipeline.
+    fastify.get('/jobs/:id/recommended-candidates', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const limit = Math.min(Number(request.query?.limit) || 10, 50)
+        const result = await recommendCandidatesForJob(request.user.tenantId, id, limit)
+        if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
+        return reply.send(result)
     })
 
     // POST /api/v1/jobs
@@ -190,13 +218,17 @@ export default async function (fastify: any): Promise<void> {
                     title: { type: 'string' },
                     department: { type: 'string' },
                     location: { type: 'string' },
-                    type: { type: 'string', enum: ['full_time', 'part_time', 'contract'] },
+                    type: { type: 'string', enum: ['full_time', 'part_time', 'contract', 'internship', 'temporary', 'freelance'] },
+                    workplaceType: { type: 'string', enum: ['on_site', 'hybrid', 'remote'] },
                     openings: { type: 'integer', minimum: 1 },
+                    experienceYears: { type: 'integer', minimum: 0, nullable: true },
                     minSalary: { type: 'number' },
                     maxSalary: { type: 'number' },
                     industry: { type: 'string' },
                     description: { type: 'string' },
                     requirements: { type: 'array', items: { type: 'string' } },
+                    skills: { type: 'array', items: { type: 'string' } },
+                    qualifications: { type: 'array', items: { type: 'string' } },
                     closingDate: { type: 'string' },
                 },
             },
@@ -534,13 +566,19 @@ export default async function (fastify: any): Promise<void> {
             ...(b.department !== undefined && { department: b.department as string }),
             ...(b.location !== undefined && { location: b.location as string }),
             ...(b.type !== undefined && { type: b.type as never }),
+            ...(b.workplaceType !== undefined && { workplaceType: b.workplaceType as never }),
             ...(b.status !== undefined && { status: b.status as never }),
             ...(b.openings !== undefined && { openings: Number(b.openings) }),
+            ...(b.experienceYears !== undefined && {
+                experienceYears: b.experienceYears === null || b.experienceYears === '' ? null : Number(b.experienceYears),
+            }),
             ...(b.minSalary !== undefined && { minSalary: b.minSalary as string }),
             ...(b.maxSalary !== undefined && { maxSalary: b.maxSalary as string }),
             ...(b.industry !== undefined && { industry: b.industry as string }),
             ...(b.description !== undefined && { description: b.description as string }),
             ...(b.requirements !== undefined && { requirements: b.requirements as never }),
+            ...(b.skills !== undefined && { skills: b.skills as never }),
+            ...(b.qualifications !== undefined && { qualifications: b.qualifications as never }),
             ...(b.closingDate !== undefined && { closingDate: b.closingDate as string }),
         })
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
@@ -608,6 +646,22 @@ export default async function (fastify: any): Promise<void> {
         const { id } = request.params as { id: string }
         const result = await getApplication(request.user.tenantId, id)
         if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Candidate not found' })
+        // Wrapped as { data } for consistency with the list endpoint and the
+        // rest of the API. Existing frontend hooks must unwrap accordingly.
+        return reply.send({ data: result })
+    })
+
+    // GET /api/v1/applications/:id/recommended-jobs — open roles that fit this
+    // candidate (excluding the one they already applied to). Lets a recruiter
+    // move a strong applicant into another pipeline without re-sourcing.
+    fastify.get('/applications/:id/recommended-jobs', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const limit = Math.min(Number(request.query?.limit) || 10, 50)
+        const result = await recommendJobsForCandidate(request.user.tenantId, id, limit)
+        if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Candidate not found' })
         return reply.send(result)
     })
 
@@ -624,10 +678,45 @@ export default async function (fastify: any): Promise<void> {
                     email: { type: 'string', format: 'email' },
                     phone: { type: 'string' },
                     nationality: { type: 'string' },
+                    address: { type: 'string' },
+                    gender: { type: 'string', enum: ['male', 'female', 'other', 'prefer_not_to_say'] },
                     experience: { type: 'integer', minimum: 0 },
                     expectedSalary: { type: 'number', minimum: 0 },
                     currentSalary: { type: 'number', minimum: 0 },
                     notes: { type: 'string' },
+                    skills: { type: 'array', items: { type: 'string' } },
+                    educationHistory: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['school'],
+                            properties: {
+                                school: { type: 'string', minLength: 1 },
+                                degree: { type: 'string' },
+                                fieldOfStudy: { type: 'string' },
+                                startDate: { type: 'string' },
+                                endDate: { type: 'string' },
+                                current: { type: 'boolean' },
+                                summary: { type: 'string' },
+                            },
+                        },
+                    },
+                    experienceHistory: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['title'],
+                            properties: {
+                                title: { type: 'string', minLength: 1 },
+                                company: { type: 'string' },
+                                industry: { type: 'string' },
+                                summary: { type: 'string' },
+                                startDate: { type: 'string' },
+                                endDate: { type: 'string' },
+                                current: { type: 'boolean' },
+                            },
+                        },
+                    },
                 },
                 additionalProperties: false,
             },
@@ -738,6 +827,11 @@ export default async function (fastify: any): Promise<void> {
                     experience: { type: 'number' },
                     nationality: { type: 'string' },
                     phone: { type: 'string' },
+                    address: { type: 'string' },
+                    gender: { type: 'string', enum: ['male', 'female', 'other', 'prefer_not_to_say'] },
+                    skills: { type: 'array', items: { type: 'string' } },
+                    educationHistory: { type: 'array' },
+                    experienceHistory: { type: 'array' },
                 },
             },
         },
@@ -749,11 +843,16 @@ export default async function (fastify: any): Promise<void> {
             ...(b.email !== undefined && { email: b.email as string }),
             ...(b.phone !== undefined && { phone: b.phone as string }),
             ...(b.nationality !== undefined && { nationality: b.nationality as string }),
+            ...(b.address !== undefined && { address: b.address as string }),
+            ...(b.gender !== undefined && { gender: b.gender as never }),
             ...(b.experience !== undefined && { experience: Number(b.experience) }),
             ...(b.expectedSalary !== undefined && { expectedSalary: String(b.expectedSalary) }),
             ...(b.currentSalary !== undefined && { currentSalary: String(b.currentSalary) }),
             ...(b.notes !== undefined && { notes: b.notes as string }),
             ...(b.score !== undefined && { score: Number(b.score) }),
+            ...(b.skills !== undefined && { skills: b.skills as never }),
+            ...(b.educationHistory !== undefined && { educationHistory: b.educationHistory as never }),
+            ...(b.experienceHistory !== undefined && { experienceHistory: b.experienceHistory as never }),
         } as never)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
         recordActivity({ tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role, entityType: 'application', entityId: id, entityName: (updated as any).name ?? 'Candidate', action: 'update', ipAddress: (request as any).ip, userAgent: request.headers['user-agent'] }).catch(() => { })
@@ -817,6 +916,44 @@ export default async function (fastify: any): Promise<void> {
         }).catch(() => { })
         const downloadUrl = await generateDownloadUrl(s3Key, 3600, safeName)
         return reply.send({ data: { s3Key, downloadUrl } })
+    })
+
+    // POST /api/v1/applications/:id/photo — attach a candidate photo (e.g. one
+    // auto-extracted from the résumé). Stored as the candidate's avatar.
+    fastify.post('/applications/:id/photo', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin', 'pro_officer')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const app = await getApplication(request.user.tenantId, id)
+        if (!app) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Application not found' })
+
+        const part = await request.file()
+        if (!part) return reply.code(400).send({ message: 'No file provided' })
+        const chunks: Buffer[] = []
+        for await (const chunk of part.file) chunks.push(chunk as Buffer)
+        const buffer = Buffer.concat(chunks)
+        if (buffer.length > 2 * 1024 * 1024) return reply.code(413).send({ message: 'Image must be under 2 MB' })
+
+        const allowedImageMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+        }
+        const detected = await fileTypeFromBuffer(buffer)
+        const mime = detected?.mime ?? part.mimetype
+        if (!allowedImageMime[mime]) return reply.code(415).send({ message: 'Only JPEG, PNG or WebP images are accepted' })
+
+        const photoKey = buildS3Key(request.user.tenantId, `applications/${id}/photo`, `photo${allowedImageMime[mime]}`)
+        try {
+            await uploadObject(photoKey, buffer, mime)
+        } catch {
+            return reply.code(503).send({ message: 'File storage unavailable. Please try again.' })
+        }
+        const updated = await updateApplication(request.user.tenantId, id, { avatarUrl: photoKey } as never)
+        if (!updated) return reply.code(404).send({ message: 'Application not found' })
+        const downloadUrl = await generateDownloadUrl(photoKey, 86400)
+        return reply.send({ data: { s3Key: photoKey, downloadUrl } })
     })
 
     // POST /api/v1/applications/:id/convert-to-employee
@@ -1094,6 +1231,254 @@ export default async function (fastify: any): Promise<void> {
         reply.header('Content-Type', 'text/csv; charset=utf-8')
         reply.header('Content-Disposition', `attachment; filename="recruitment-export-${dateStr}.csv"`)
         return reply.send(lines.join('\r\n'))
+    })
+
+    // ── Public careers portal (NO AUTH) ───────────────────────────────────────
+    // Backs the shareable /careers/:companyCode pages. The tenant is resolved
+    // from the unique company code in the URL (visitors have no JWT). Browsing
+    // is lightly rate-limited; applying is tightly rate-limited to deter spam.
+    const browseLimit = { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }
+    const applyLimit = { config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }
+
+    // GET /api/v1/public/careers/:companyCode/jobs?limit=&offset=&q=&department=&location=&type=&workplaceType=
+    fastify.get('/public/careers/:companyCode/jobs', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode } = request.params as { companyCode: string }
+        const query = request.query as { limit?: string; offset?: string; q?: string; department?: string; location?: string; type?: string; workplaceType?: string }
+        const limit = Math.min(Math.max(Number(query.limit) || 25, 1), 50)
+        const offset = Math.max(Number(query.offset) || 0, 0)
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const page = await listPublicJobs(tenant.id, {
+            limit,
+            offset,
+            q: query.q?.trim() || undefined,
+            department: query.department?.trim() || undefined,
+            location: query.location?.trim() || undefined,
+            type: query.type?.trim() || undefined,
+            workplaceType: query.workplaceType?.trim() || undefined,
+        })
+        return reply.send({ data: { company: { name: tenant.name, companyCode: tenant.companyCode }, ...page } })
+    })
+
+    // GET /api/v1/public/careers/:companyCode/facets — distinct filter options
+    fastify.get('/public/careers/:companyCode/facets', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode } = request.params as { companyCode: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const facets = await getPublicJobFacets(tenant.id)
+        return reply.send({ data: facets })
+    })
+
+    // GET /api/v1/public/careers/:companyCode/tag-suggestions — skill/qualification
+    // catalog for the applicant form's type-ahead. Read-only: applicants pick from
+    // the tenant's curated vocabulary but never extend it.
+    fastify.get('/public/careers/:companyCode/tag-suggestions', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode } = request.params as { companyCode: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const data = await getJobTagSuggestions(tenant.id)
+        return reply.send({ data })
+    })
+
+    // GET /api/v1/public/careers/:companyCode/jobs/:jobId — single open job
+    fastify.get('/public/careers/:companyCode/jobs/:jobId', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode, jobId } = request.params as { companyCode: string; jobId: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const job = await getPublicJob(tenant.id, jobId)
+        if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found or no longer open' })
+        return reply.send({ data: { company: { name: tenant.name, companyCode: tenant.companyCode }, job } })
+    })
+
+    // POST /api/v1/public/careers/:companyCode/jobs/:jobId/apply — multipart apply
+    // Creates a job_applications row (stage 'received', source 'direct') and
+    // attaches the resume to S3. The candidate then appears in the authenticated
+    // recruitment kanban immediately (via the same WS broadcast as manual adds).
+    fastify.post('/public/careers/:companyCode/jobs/:jobId/apply', {
+        ...applyLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode, jobId } = request.params as { companyCode: string; jobId: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const job = await getPublicJob(tenant.id, jobId)
+        if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found or no longer open' })
+
+        // Parse multipart: candidate fields + a single resume file (held in memory).
+        const allowedMime: Record<string, string> = {
+            'application/pdf': '.pdf',
+            'application/msword': '.doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+        }
+        const allowedImageMime: Record<string, string> = {
+            'image/jpeg': '.jpg',
+            'image/png': '.png',
+            'image/webp': '.webp',
+        }
+        const fields: Record<string, string> = {}
+        let buffer: Buffer | null = null
+        let partMime = ''
+        // Optional candidate photo — extracted from the résumé client-side and
+        // sent alongside it. Never blocks the application if it's missing/invalid.
+        let photoBuffer: Buffer | null = null
+        for await (const part of request.parts()) {
+            if (part.type === 'file') {
+                const chunks: Buffer[] = []
+                for await (const chunk of part.file) chunks.push(chunk as Buffer)
+                const data = Buffer.concat(chunks)
+                if (part.fieldname === 'photo') {
+                    // Cap the photo at 2 MB; just skip it if oversized rather than failing the apply.
+                    if (!part.file.truncated && data.length > 0 && data.length <= 2 * 1024 * 1024) photoBuffer = data
+                    continue
+                }
+                buffer = data
+                partMime = part.mimetype
+                if (part.file.truncated || buffer.length > 5 * 1024 * 1024) {
+                    return reply.code(413).send({ statusCode: 413, error: 'Payload Too Large', message: 'Resume must be under 5 MB' })
+                }
+            } else {
+                fields[part.fieldname] = String(part.value ?? '')
+            }
+        }
+
+        const name = fields.name?.trim()
+        const email = fields.email?.trim()
+        if (!name || !email) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Name and email are required' })
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A valid email is required' })
+        if (!buffer || buffer.length === 0) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'A resume file is required' })
+
+        // Validate via magic bytes — never trust the client Content-Type.
+        const detected = await fileTypeFromBuffer(buffer)
+        const mime = detected?.mime ?? partMime
+        if (!allowedMime[mime]) return reply.code(415).send({ statusCode: 415, error: 'Unsupported Media Type', message: 'Only PDF or Word documents are accepted' })
+
+        let application: Awaited<ReturnType<typeof createApplication>>
+        try {
+            // address/gender are simple strings. educationHistory + experienceHistory
+            // arrive as JSON-stringified arrays (multipart only supports string
+            // values); parse defensively and reject malformed payloads silently
+            // (an HR review on the admin side can still capture the candidate).
+            const safeArray = <T,>(raw: string | undefined, validate: (v: any) => v is T): T[] => {
+                if (!raw) return []
+                try {
+                    const parsed = JSON.parse(raw)
+                    if (!Array.isArray(parsed)) return []
+                    return parsed.filter(validate)
+                } catch {
+                    return []
+                }
+            }
+            const eduHistory = safeArray<{ school: string }>(fields.educationHistory, (v: any): v is { school: string } => v && typeof v === 'object' && typeof v.school === 'string' && v.school.trim().length > 0)
+            const expHistory = safeArray<{ title: string }>(fields.experienceHistory, (v: any): v is { title: string } => v && typeof v === 'object' && typeof v.title === 'string' && v.title.trim().length > 0)
+            // skills arrives as a JSON-stringified string[]; keep non-empty trimmed tags.
+            const skills = safeArray<string>(fields.skills, (v: any): v is string => typeof v === 'string' && v.trim().length > 0)
+                .map((s) => s.trim())
+            const validGenders = ['male', 'female', 'other', 'prefer_not_to_say']
+            const genderRaw = fields.gender?.trim() ?? ''
+            const gender = validGenders.includes(genderRaw) ? genderRaw : null
+
+            application = await createApplication(tenant.id, jobId, {
+                name,
+                email,
+                phone: fields.phone?.trim() || null,
+                nationality: fields.nationality?.trim() || null,
+                address: fields.address?.trim() || null,
+                gender: gender as never,
+                // Keep a genuine 0; null out non-numeric free text (see parseOptional*).
+                experience: parseOptionalCount(fields.experience),
+                expectedSalary: parseOptionalAmount(fields.expectedSalary),
+                currentSalary: parseOptionalAmount(fields.currentSalary),
+                notes: fields.coverNote?.trim() || null,
+                skills: skills as never,
+                educationHistory: eduHistory as never,
+                experienceHistory: expHistory as never,
+                source: 'careers',
+                stage: 'received',
+            } as never)
+        } catch (err: any) {
+            if (err?.statusCode === 409) return reply.code(409).send({ statusCode: 409, error: 'Conflict', message: err.message })
+            throw err
+        }
+
+        // Attach the resume. A storage failure shouldn't lose the application —
+        // the candidate still lands in the pipeline, just without a resume.
+        const safeName = `resume${allowedMime[mime]}`
+        const s3Key = buildS3Key(tenant.id, `applications/${application.id}/resume`, safeName)
+        try {
+            await uploadObject(s3Key, buffer, mime)
+            await updateApplication(tenant.id, application.id, { resumeUrl: s3Key } as never)
+            application = { ...application, resumeUrl: s3Key } as never
+        } catch {
+            // Swallow — application is already persisted; HR can request the CV later.
+        }
+
+        // Attach the candidate photo (best-effort). Validated by magic bytes so a
+        // mislabelled or non-image part is silently ignored, never failing the apply.
+        if (photoBuffer) {
+            try {
+                const imgDetected = await fileTypeFromBuffer(photoBuffer)
+                const imgExt = imgDetected ? allowedImageMime[imgDetected.mime] : undefined
+                if (imgExt) {
+                    const photoKey = buildS3Key(tenant.id, `applications/${application.id}/photo`, `photo${imgExt}`)
+                    await uploadObject(photoKey, photoBuffer, imgDetected!.mime)
+                    await updateApplication(tenant.id, application.id, { avatarUrl: photoKey } as never)
+                    application = { ...application, avatarUrl: photoKey } as never
+                }
+            } catch {
+                // Swallow — photo is a nicety, not required.
+            }
+        }
+
+        recordActivity({
+            tenantId: tenant.id,
+            actorName: name,
+            actorRole: 'public',
+            entityType: 'application',
+            entityId: application.id,
+            entityName: name,
+            action: 'create',
+            metadata: { source: 'careers_portal', jobTitle: job.title },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        broadcastToTenant(tenant.id, {
+            type: 'recruitment:candidate-added',
+            payload: { applicationId: application.id, candidate: application, actorId: null, actorSocketId: null },
+        })
+
+        // Confirmation to the applicant + alert HR (in-app + email). All best-effort.
+        const appUrl = (loadEnv() as any).APP_URL ?? ''
+        sendEmail({ ...applicationReceivedEmail({ candidateName: name, jobTitle: job.title, companyName: tenant.name }), to: email, tenantId: tenant.id })
+            .catch(() => { })
+        notifyRoles(tenant.id, ['hr_manager', 'super_admin'], {
+            type: 'info',
+            title: 'New job application',
+            message: `${name} applied for ${job.title} (careers site)`,
+            actionUrl: '/recruitment',
+        }).catch(() => { })
+        getRecipientsByRoles(tenant.id, ['hr_manager', 'super_admin']).then((hr) => {
+            for (const u of hr) {
+                if (!u.email) continue
+                sendEmail({
+                    ...newApplicationAlertEmail({ recipientName: u.name ?? 'HR', candidateName: name, jobTitle: job.title, source: 'Careers site', actionUrl: appUrl ? `${appUrl}/recruitment` : '', companyName: tenant.name }),
+                    to: u.email, tenantId: tenant.id,
+                }).catch(() => { })
+            }
+        }).catch(() => { })
+
+        return reply.code(201).send({ data: { id: application.id } })
     })
 }
 

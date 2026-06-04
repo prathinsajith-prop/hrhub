@@ -175,7 +175,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                             </Label>
                             <NumericInput
                                 decimal={false}
-                                placeholder="e.g. 6"
+                                placeholder="Grade level"
                                 value={form.level}
                                 onChange={e => handleLevelChange(e.target.value)}
                             />
@@ -185,7 +185,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                                 {t('orgSettings.gradeLevels.codeLabel')} <span className="text-muted-foreground font-normal text-xs">{t('orgSettings.gradeLevels.codeHint')}</span>
                             </Label>
                             <Input
-                                placeholder="e.g. G6"
+                                placeholder="Grade code"
                                 value={form.code}
                                 onChange={e => handleCodeChange(e.target.value)}
                                 maxLength={10}
@@ -199,7 +199,7 @@ function GradeLevelModal({ open, editing, onOpenChange, onCreate, onUpdate, isPe
                             {t('orgSettings.gradeLevels.nameLabel')} <span className="text-destructive">*</span>
                         </Label>
                         <Input
-                            placeholder="e.g. Mid Level 1"
+                            placeholder="Grade name"
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                             maxLength={80}

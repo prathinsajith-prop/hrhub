@@ -84,6 +84,28 @@ describe('useUpdateUser', () => {
         await act(async () => { await result.current.mutateAsync({ id: 'u1', isActive: false, role: 'employee' }) })
         expect(apiMock.patch).toHaveBeenCalledWith('/settings/users/u1', { isActive: false, role: 'employee' })
     })
+
+    // Regression — the InviteEmployeeDialog reads from
+    // useEmployeeAccount (key starts with ['employees', ...]); without this
+    // invalidation a saved feature-flag change would still show the OLD value
+    // on reopen because the account query stayed cached with staleTime=30s.
+    it('invalidates BOTH the settings/users list AND the employees cache (so the account query refetches)', async () => {
+        apiMock.patch.mockResolvedValue({ data: { id: 'u1', portalPostEnabled: true } })
+        const client = new QueryClient({
+            defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+        })
+        // Spy on invalidateQueries so we can observe the keys the hook
+        // requested (regardless of whether queries are subscribed yet).
+        const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+        const wrapper = ({ children }: { children: React.ReactNode }) =>
+            React.createElement(QueryClientProvider, { client }, children)
+        const { result } = renderHook(() => useUpdateUser(), { wrapper })
+        await act(async () => { await result.current.mutateAsync({ id: 'u1', portalPostEnabled: true }) })
+        const calls = invalidateSpy.mock.calls.map((c) => c[0]?.queryKey)
+        expect(calls).toContainEqual(['settings', 'users'])
+        expect(calls).toContainEqual(['employees'])           // matches the InviteEmployeeDialog account query
+        expect(calls).toContainEqual(['auth-me-flags'])       // matches the admin user's own flag mirror
+    })
 })
 
 // ─── 2FA hooks ────────────────────────────────────────────────────────────────

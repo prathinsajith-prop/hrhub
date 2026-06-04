@@ -39,7 +39,8 @@ import { KpiCardCompact } from '@/components/shared/KpiCard'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils'
-import { useEmployees, useArchiveEmployee, useUpdateEmployeeStatus, exportEmployeesCsv } from '@/hooks/useEmployees'
+import { useEmployees, useArchiveEmployee, useRestoreEmployee, useEmployeeLifecycleCounts, useUpdateEmployeeStatus, exportEmployeesCsv } from '@/hooks/useEmployees'
+import { ApiError } from '@/lib/api'
 import { exportEmployees } from '@/lib/export'
 import { AddEmployeeDialog, EditEmployeeDialog } from '@/components/shared/action-dialogs'
 import { ExportDropdown } from '@/components/shared/ExportDropdown'
@@ -91,6 +92,7 @@ const statusVariant: Record<
 const ActionMenu = memo(function ActionMenu({
   employee,
   onDelete,
+  onRestore,
   onEdit,
   onInvite,
   onStatusChange,
@@ -98,6 +100,7 @@ const ActionMenu = memo(function ActionMenu({
 }: {
   employee: Employee
   onDelete: (e: Employee) => void
+  onRestore: (e: Employee) => void
   onEdit: (e: Employee) => void
   onInvite: (e: Employee) => void
   onStatusChange: (e: Employee, status: 'active' | 'suspended' | 'terminated') => void
@@ -169,19 +172,35 @@ const ActionMenu = memo(function ActionMenu({
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => onDelete(employee)}
-              className="text-muted-foreground focus:text-destructive focus:bg-destructive/10"
-            >
-              <Trash2 className="size-3.5 mr-2" />
-              Archive Record
-            </DropdownMenuItem>
+            {employee.isArchived ? (
+              <DropdownMenuItem
+                onClick={() => onRestore(employee)}
+                className="text-success focus:text-success focus:bg-success/10"
+              >
+                <RefreshCcw className="size-3.5 mr-2" />
+                Restore Record
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                onClick={() => onDelete(employee)}
+                className="text-muted-foreground focus:text-destructive focus:bg-destructive/10"
+              >
+                <Trash2 className="size-3.5 mr-2" />
+                Archive Record
+              </DropdownMenuItem>
+            )}
           </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 })
+
+const STATUS_CONFIG = {
+  active:     { label: 'Activate',  past: 'activated',  variant: 'success'     as const },
+  suspended:  { label: 'Suspend',   past: 'suspended',  variant: 'warning'     as const },
+  terminated: { label: 'Terminate', past: 'terminated', variant: 'destructive' as const },
+}
 
 export function EmployeesPage() {
   const { t } = useTranslation()
@@ -201,9 +220,12 @@ export function EmployeesPage() {
   }, [search.appliedFilters])
 
   const [offset, setOffset] = useState(0)
+  // Lifecycle scope for the Active/Archived/All status filter (composes with search + filters).
+  const [lifecycle, setLifecycle] = useState<'active' | 'archived' | 'all'>('active')
+  const { data: lifecycleCounts } = useEmployeeLifecycleCounts()
 
-  // Reset to page 1 whenever search or filters change.
-  const filterKey = (search.searchInput ?? '') + '||' + buildFilterQueryString(serverFilters)
+  // Reset to page 1 whenever search, filters, or lifecycle scope change.
+  const filterKey = (search.searchInput ?? '') + '||' + buildFilterQueryString(serverFilters) + '||' + lifecycle
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
   if (filterKey !== prevFilterKey) {
     setPrevFilterKey(filterKey)
@@ -215,6 +237,7 @@ export function EmployeesPage() {
     offset,
     search: search.searchInput || undefined,
     filters: serverFilters,
+    archived: lifecycle,
   })
   const total = empData?.total ?? 0
   const { data: orgUnits = [] } = useOrgUnits()
@@ -230,7 +253,10 @@ export function EmployeesPage() {
   const [statusTarget, setStatusTarget] = useState<{ employee: Employee; status: 'active' | 'suspended' | 'terminated' } | null>(null)
   const openStatusChange = useCallback((employee: Employee, status: 'active' | 'suspended' | 'terminated') => setStatusTarget({ employee, status }), [])
   const [addOpen, setAddOpen] = useState(false)
+  const [restoreTarget, setRestoreTarget] = useState<Employee | null>(null)
+  const [forceArchive, setForceArchive] = useState(false)
   const archiveEmployee = useArchiveEmployee()
+  const restoreEmployee = useRestoreEmployee()
   const updateStatus = useUpdateEmployeeStatus()
 
   async function handleExportCsv() {
@@ -249,24 +275,45 @@ export function EmployeesPage() {
   const probation = employees.filter((e: Employee) => e.contractType === 'probation').length
   const emiratis = employees.filter((e: Employee) => e.emiratisationCategory === 'emirati').length
 
-  const handleDelete = () => {
+  const handleDelete = (force = false) => {
     if (!deleteTarget) return
-    archiveEmployee.mutate(deleteTarget.id, {
+    const target = deleteTarget
+    archiveEmployee.mutate({ id: target.id, force }, {
       onSuccess: () => {
-        toast.success('Record archived', `${deleteTarget.fullName}'s record has been archived.`)
+        toast.success('Record archived', `${target.fullName}'s record has been archived.`)
         setDeleteTarget(null)
       },
-      onError: () => {
-        toast.error('Failed', 'Could not archive employee. Please try again.')
+      onError: (err) => {
+        // Protected account or blocking dependency → explain why; no force allowed.
+        // Non-blocking warnings (ARCHIVE_NEEDS_CONFIRM) → offer "Archive anyway".
+        const data = err instanceof ApiError ? (err.data as any) : null
+        const code = data?.code
+        const deps: Array<{ message: string }> = data?.dependencies ?? []
+        const detail = deps.length ? deps.map(d => `• ${d.message}`).join('\n') : (err as Error)?.message
+        if (code === 'ARCHIVE_NEEDS_CONFIRM') {
+          // Re-confirm with force. ConfirmDialog stays open; user clicks again to proceed.
+          toast.warning('Open items found', `${detail}\n\nClick Archive again to proceed anyway.`)
+          // Swap the confirm button to a forced archive on the next click.
+          setForceArchive(true)
+          return
+        }
+        toast.error(code === 'ARCHIVE_BLOCKED' || (typeof code === 'string' && code.startsWith('PROTECTED')) ? 'Cannot archive' : 'Failed', detail || 'Could not archive employee.')
         setDeleteTarget(null)
+        setForceArchive(false)
       },
     })
   }
 
-  const STATUS_CONFIG = {
-    active:     { label: 'Activate',  past: 'activated',  variant: 'success'     as const },
-    suspended:  { label: 'Suspend',   past: 'suspended',  variant: 'warning'     as const },
-    terminated: { label: 'Terminate', past: 'terminated', variant: 'destructive' as const },
+  const handleRestore = () => {
+    if (!restoreTarget) return
+    const target = restoreTarget
+    restoreEmployee.mutate(target.id, {
+      onSuccess: () => {
+        toast.success('Employee restored', `${target.fullName} is active again.`)
+        setRestoreTarget(null)
+      },
+      onError: () => toast.error('Failed', 'Could not restore employee. Please try again.'),
+    })
   }
 
   const handleStatusChange = () => {
@@ -425,7 +472,7 @@ export function EmployeesPage() {
       id: 'actions',
       header: '',
       cell: ({ row }) => (
-        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onEdit={setEditTarget} onInvite={setInviteTarget} onStatusChange={openStatusChange} canManage={canManage} />
+        <ActionMenu employee={row.original} onDelete={setDeleteTarget} onRestore={setRestoreTarget} onEdit={setEditTarget} onInvite={setInviteTarget} onStatusChange={openStatusChange} canManage={canManage} />
       ),
       size: 44,
     },
@@ -478,10 +525,30 @@ export function EmployeesPage() {
       <Card>
         <CardHeader className="flex-row items-start sm:items-center justify-between gap-3 flex-wrap">
           <div>
-            <CardTitle className="text-base">All Employees</CardTitle>
-            <CardDescription className="mt-0.5">
-              {employees.length} total records
-            </CardDescription>
+            <CardTitle className="text-base">
+              {lifecycle === 'archived' ? 'Archived Employees' : lifecycle === 'all' ? 'All Records' : 'Active Employees'}
+            </CardTitle>
+            <CardDescription className="mt-0.5">{total} record{total === 1 ? '' : 's'}</CardDescription>
+          </div>
+          {/* Lifecycle status filter — composes with search + filters */}
+          <div className="inline-flex items-center gap-1 rounded-lg border bg-muted/40 p-0.5">
+            {([
+              ['active', 'Active', lifecycleCounts?.data.active],
+              ['archived', 'Archived', lifecycleCounts?.data.archived],
+              ['all', 'All', lifecycleCounts?.data.all],
+            ] as const).map(([key, label, n]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setLifecycle(key)}
+                className={cn(
+                  'rounded-md px-3 py-1 text-xs font-medium transition-colors',
+                  lifecycle === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {label}{typeof n === 'number' ? ` (${n})` : ''}
+              </button>
+            ))}
           </div>
         </CardHeader>
         <CardContent>
@@ -509,22 +576,38 @@ export function EmployeesPage() {
                 >
                   Export
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  leftIcon={<Mail className="size-3.5" />}
-                  onClick={() => toast.info(`Email composed to ${selected.length} recipients`)}
-                >
-                  Email
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  leftIcon={<Trash2 className="size-3.5" />}
-                  onClick={() => toast.warning(`${selected.length} employees queued for termination review`)}
-                >
-                  Terminate
-                </Button>
+                {canManage && lifecycle === 'archived' ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<RefreshCcw className="size-3.5" />}
+                    onClick={async () => {
+                      let ok = 0
+                      for (const e of selected) {
+                        try { await restoreEmployee.mutateAsync(e.id); ok++ } catch { /* skip */ }
+                      }
+                      toast.success('Restored', `${ok} of ${selected.length} employee(s) restored.`)
+                    }}
+                  >
+                    Restore
+                  </Button>
+                ) : canManage && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    leftIcon={<Trash2 className="size-3.5" />}
+                    onClick={async () => {
+                      let ok = 0, blocked = 0
+                      for (const e of selected) {
+                        try { await archiveEmployee.mutateAsync({ id: e.id, force: true }); ok++ } catch { blocked++ }
+                      }
+                      if (ok) toast.success('Archived', `${ok} employee(s) archived.`)
+                      if (blocked) toast.warning('Some skipped', `${blocked} could not be archived (protected or blocked by dependencies).`)
+                    }}
+                  >
+                    Archive
+                  </Button>
+                )}
               </>
             )}
             serverPagination={{ total, offset, limit: PAGE_SIZE, onPageChange: setOffset, loading: isFetching }}
@@ -534,12 +617,26 @@ export function EmployeesPage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setForceArchive(false) } }}
         title="Archive Employee Record"
-        description={`Are you sure you want to archive ${deleteTarget?.fullName}'s record? This action removes them from all active lists.`}
-        confirmLabel="Archive"
-        onConfirm={handleDelete}
+        description={
+          forceArchive
+            ? `${deleteTarget?.fullName} has open items. Click Archive anyway to proceed — they'll be removed from active lists and their team memberships cleared.`
+            : `Are you sure you want to archive ${deleteTarget?.fullName}'s record? This removes them from active lists. They can be restored later from the Archived filter.`
+        }
+        confirmLabel={forceArchive ? 'Archive anyway' : 'Archive'}
+        onConfirm={() => handleDelete(forceArchive)}
         variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={!!restoreTarget}
+        onOpenChange={(open) => !open && setRestoreTarget(null)}
+        title="Restore Employee"
+        description={`Restore ${restoreTarget?.fullName} to active status? They'll reappear in active lists and regain access.`}
+        confirmLabel="Restore"
+        onConfirm={handleRestore}
+        variant="success"
       />
 
       {statusTarget && (

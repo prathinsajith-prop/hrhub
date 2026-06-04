@@ -279,7 +279,7 @@ function AddMappingDialog({
                         <Input
                             value={mapperId}
                             onChange={(e) => setMapperId(e.target.value)}
-                            placeholder={t('biometric.mapping.field.mapperIdPlaceholder', 'e.g. 101, BIO-A1, EMP_007') as string}
+                            placeholder={t('biometric.mapping.field.mapperIdPlaceholder', 'Device or system ID') as string}
                         />
                         <p className="text-[10px] text-muted-foreground">
                             {t('biometric.mapping.field.mapperIdHint', 'The exact ID the device or external system uses for this person.')}
@@ -291,7 +291,7 @@ function AddMappingDialog({
                         <Input
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
-                            placeholder={t('biometric.mapping.field.labelPlaceholder', 'e.g. Office finger reader') as string}
+                            placeholder={t('biometric.mapping.field.labelPlaceholder', 'Label') as string}
                         />
                     </div>
                 </div>
@@ -407,7 +407,7 @@ function EditMappingDialog({
                         <Input
                             value={mapperId}
                             onChange={(e) => setMapperId(e.target.value)}
-                            placeholder={t('biometric.mapping.field.mapperIdPlaceholder', 'e.g. 101, BIO-A1, EMP_007') as string}
+                            placeholder={t('biometric.mapping.field.mapperIdPlaceholder', 'Device or system ID') as string}
                             autoFocus
                         />
                         <p className="text-[10px] text-muted-foreground">
@@ -420,7 +420,7 @@ function EditMappingDialog({
                         <Input
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
-                            placeholder={t('biometric.mapping.field.labelPlaceholder', 'e.g. Office finger reader') as string}
+                            placeholder={t('biometric.mapping.field.labelPlaceholder', 'Label') as string}
                         />
                     </div>
                 </div>

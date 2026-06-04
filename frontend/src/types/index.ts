@@ -111,6 +111,8 @@ export interface Employee {
   branchId?: string
   joinDate: string
   status: EmployeeStatus
+  /** Lifecycle flag — true when the employee has been archived (soft-deleted). */
+  isArchived?: boolean
   basicSalary?: number
   totalSalary?: number
   housingAllowance?: number
@@ -176,41 +178,118 @@ export type JobStatus = 'draft' | 'open' | 'closed' | 'on_hold'
  */
 export type ApplicationStage = string
 
+export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary' | 'freelance'
+export type WorkplaceType = 'on_site' | 'hybrid' | 'remote'
+
 export interface Job {
   id: string
+  jobNo?: string | null
   title: string
   department: string
   location: string
-  type: 'full_time' | 'part_time' | 'contract'
+  type: EmploymentType
+  workplaceType: WorkplaceType
   status: JobStatus
   openings: number
+  /** Minimum years of experience the role expects. Null = no floor. */
+  experienceYears?: number | null
   applications: number
-  postedDate: string
+  /**
+   * Backend returns the DB column name (`createdAt`). `postedDate` is kept as
+   * a legacy alias used in a few older components and tests — both refer to
+   * the same value; prefer `createdAt` going forward.
+   */
+  createdAt: string
+  updatedAt: string
+  postedDate?: string
   closingDate: string
   minSalary: number
   maxSalary: number
   industry: IndustryType
   description: string
   requirements: string[]
+  skills: string[]
+  qualifications: string[]
 }
 
 export interface Candidate {
   id: string
   jobId: string
   jobTitle?: string
+  /** Human-readable requisition number (e.g. "JOB-0004") of the applied job. */
+  jobNo?: string | null
   name: string
   email: string
   phone: string
   nationality: string
   stage: ApplicationStage
+  /** Manual recruiter rating (0–100), free-form. Defaults to 0 / usually unset. */
   score: number
+  /** Auto fit-score (0–100) vs the job, computed by the matching engine. Present
+   *  only when the candidate is listed in a single-job context (job detail page). */
+  matchScore?: number
   appliedDate: string
   avatar?: string
+  avatarUrl?: string | null
   experience: number
   currentSalary?: number
   expectedSalary?: number
   notes?: string
   resumeUrl?: string | null
+  // Extended profile fields (migration 0081). Optional so older candidates
+  // without them keep working unchanged.
+  address?: string | null
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null
+  educationHistory?: Array<{ school: string; degree?: string; fieldOfStudy?: string; startDate?: string; endDate?: string; current?: boolean; summary?: string }>
+  experienceHistory?: Array<{ title: string; company?: string; industry?: string; summary?: string; startDate?: string; endDate?: string; current?: boolean }>
+  // Candidate's own skill tags (migration 0086) — distinct from the job's required skills.
+  skills?: string[]
+  // Origin of the candidate. 'direct' = added by HR · 'careers' = applied via the
+  // public careers portal · 'referral' = submitted by an employee via the portal.
+  source?: 'direct' | 'referral' | 'careers'
+  referredByEmployeeId?: string | null
+  referredByName?: string | null
+}
+
+// AI-assisted recruitment matching. `overall` and each dimension are 0–100
+// integers produced by the backend recommendation engine.
+export interface MatchDimensions {
+  skills?: number
+  qualification?: number
+  location?: number
+  industry?: number
+}
+
+// A candidate suggested for a given job (job → candidates).
+export interface RecommendedCandidate {
+  applicationId: string
+  name: string
+  email: string
+  avatar?: string
+  experience: number | null
+  stage: string
+  overall: number
+  dimensions: MatchDimensions
+  matchedSkills: string[]
+  missingSkills: string[]
+  strengths: string[]
+  appliedJobs: Array<{ id: string; title: string }>
+}
+
+// A job suggested for a given candidate/application (candidate → jobs).
+export interface RecommendedJob {
+  jobId: string
+  jobNo?: string | null
+  title: string
+  department: string | null
+  location: string | null
+  workplaceType: string
+  type: string
+  overall: number
+  dimensions: MatchDimensions
+  matchedSkills: string[]
+  missingSkills: string[]
+  strengths: string[]
 }
 
 // Visa

@@ -67,6 +67,8 @@ const EMPTY_FORM: FormState = {
     description: '',
 }
 
+const categories = ['harassment', 'pay_dispute', 'leave_dispute', 'working_conditions', 'discrimination', 'other'] as const
+
 function NewComplaintDialog({ onClose }: { onClose: () => void }) {
     const { t } = useTranslation()
     const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -95,8 +97,6 @@ function NewComplaintDialog({ onClose }: { onClose: () => void }) {
     })
 
     const isValid = form.title.trim().length >= 3 && form.description.trim().length >= 10
-
-    const categories = ['harassment', 'pay_dispute', 'leave_dispute', 'working_conditions', 'discrimination', 'other'] as const
 
     return (
         <Dialog open onOpenChange={onClose}>

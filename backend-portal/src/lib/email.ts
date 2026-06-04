@@ -88,6 +88,45 @@ function escape(str: string): string {
     return str.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }
 
+export function referralReceivedEmail(params: {
+    candidateName: string
+    jobTitle: string
+    jobNo?: string | null
+    referrerName: string
+    companyName: string
+}): EmailOptions {
+    const candidate = escape(params.candidateName)
+    const job = escape(params.jobTitle)
+    const jobNo = params.jobNo ? escape(params.jobNo) : ''
+    const referrer = escape(params.referrerName)
+    const company = escape(params.companyName)
+    const roleLine = jobNo ? `${job} (${jobNo})` : job
+    const html = `
+<!DOCTYPE html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#f7f8fb; padding:32px 16px; color:#0f172a;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="100%" style="max-width:560px; background:#ffffff; border-radius:16px; box-shadow:0 4px 16px rgba(99,102,241,0.08); overflow:hidden;">
+    <tr><td style="padding:32px 36px 0;">
+      <div style="display:inline-block; padding:6px 10px; border-radius:999px; background:linear-gradient(135deg,#6366f1,#0ea5e9); color:#fff; font-size:12px; font-weight:700; letter-spacing:0.04em;">${company}</div>
+    </td></tr>
+    <tr><td style="padding:18px 36px 24px;">
+      <h1 style="margin:0 0 12px; font-size:22px; font-weight:700; color:#0f172a;">You've been referred for a role</h1>
+      <p style="margin:0 0 14px; line-height:1.6; color:#334155;">Hi ${candidate},</p>
+      <p style="margin:0 0 18px; line-height:1.6; color:#334155;">
+        <strong>${referrer}</strong> has referred you for the <strong>${roleLine}</strong> position at <strong>${company}</strong>.
+        Our recruitment team has received your details and will be in touch if your profile matches the role.
+      </p>
+      <p style="margin:0; line-height:1.6; color:#64748b; font-size:13px;">
+        No action is needed right now. If you did not expect this, you can safely ignore this email.
+      </p>
+    </td></tr>
+    <tr><td style="padding:18px 36px 28px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:12px;">
+      Sent by ${company} via HRHub · This is an automated message.
+    </td></tr>
+  </table>
+</body></html>`.trim()
+    return { to: '', subject: `You've been referred for ${roleLine} at ${params.companyName}`, html }
+}
+
 export function passwordResetEmail(params: { name: string; resetUrl: string; expiresInMinutes: number }): EmailOptions {
     const { name, resetUrl, expiresInMinutes } = params
     const safeName = escape(name)

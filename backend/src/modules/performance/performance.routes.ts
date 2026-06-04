@@ -5,7 +5,34 @@ import { db } from '../../db/index.js'
 import { tenants, employees, performanceReviews } from '../../db/schema/index.js'
 import { eq, and, inArray } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
+import { sendEmail, performanceReviewEmail } from '../../plugins/email.js'
+import { loadEnv } from '../../config/env.js'
 import { asDate, asInt, asString, buildTemplateXlsx, validateRows } from '../../lib/bulk-import.js'
+
+// Notify + email the employee about a performance review (best-effort). Only
+// fires for meaningful states (submitted/acknowledged/completed) to avoid
+// pinging the employee about an HR draft.
+async function notifyReviewEmployee(tenantId: string, review: any): Promise<void> {
+    const status = String(review?.status ?? '')
+    if (!review?.employeeId || !['submitted', 'acknowledged', 'completed'].includes(status)) return
+    const period = review.reviewPeriod ?? 'your latest period'
+    notifyEmployee(tenantId, review.employeeId, {
+        type: status === 'completed' ? 'success' : 'info',
+        title: 'Performance review update',
+        message: `Your performance review for ${period} is now ${status}.`,
+        actionUrl: '/performance',
+    }).catch(() => { })
+    const [emp] = await db.select({ email: employees.email, first: employees.firstName })
+        .from(employees).where(and(eq(employees.tenantId, tenantId), eq(employees.id, review.employeeId))).limit(1)
+    if (emp?.email) {
+        const appUrl = (loadEnv() as any).APP_URL ?? ''
+        sendEmail({
+            ...performanceReviewEmail({ employeeName: emp.first ?? 'there', reviewPeriod: period, status, actionUrl: appUrl ? `${appUrl}/performance` : '' }),
+            to: emp.email, tenantId,
+        }).catch(() => { })
+    }
+}
 
 const createReviewSchema = z.object({
     employeeId: z.string().uuid(),
@@ -63,6 +90,7 @@ export async function performanceRoutes(fastify: any) {
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
         }
+        notifyReviewEmployee(request.user.tenantId, review).catch(() => { })
         return reply.code(201).send({ data: review })
     })
 
@@ -108,6 +136,7 @@ export async function performanceRoutes(fastify: any) {
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
         }
+        notifyReviewEmployee(request.user.tenantId, review).catch(() => { })
         return reply.send({ data: review })
     })
 

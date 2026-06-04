@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
 import {
   CalendarRange, Calendar, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon,
@@ -18,7 +19,13 @@ import { useAccountFlags } from '@/hooks/useMe'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { AttendanceMonthCalendar } from '@/components/shared/AttendanceMonthCalendar'
 import { MonthPicker } from '@/components/shared/MonthPicker'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { CompactEmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Select, SelectTrigger, SelectContent, SelectItem, SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -31,7 +38,6 @@ import {
 } from '@/lib/attendance/calendar'
 import { useLiveDuration } from '@/hooks/useLiveDuration'
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 // Geolocation acquisition lives in `lib/geolocation.ts` now — it
 // surfaces the actual failure reason ('denied' / 'timeout' / 'unavailable'
 // / 'unsupported') so the UI can be honest about what went wrong instead
@@ -42,10 +48,18 @@ import { acquireLocation, reverseGeocodeClient, type GeolocationFailureReason } 
 
 type ViewMode = 'timeline' | 'list' | 'calendar'
 
-export function EmployeeAttendancePage() {
-  const { t } = useTranslation()
+export function EmployeeAttendancePage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { t, i18n } = useTranslation()
   const user = useAuthStore((s) => s.user)
   const employeeId = user?.employeeId ?? undefined
+
+  // Locale-aware short weekday labels ("Sun" / "أحد"). Replaces the old
+  // hardcoded English array so the timeline/list day badges follow the
+  // active language. `weekday: 'short'` keeps them compact for the badge.
+  const weekdayFmt = useMemo(
+    () => new Intl.DateTimeFormat(i18n.language, { weekday: 'short' }),
+    [i18n.language],
+  )
 
   const today = useMemo(() => new Date(), [])
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(today))
@@ -71,12 +85,12 @@ export function EmployeeAttendancePage() {
         date: d,
         iso,
         cell,
-        label: { weekday: WEEKDAYS[d.getDay()], day: String(d.getDate()) },
+        label: { weekday: weekdayFmt.format(d), day: String(d.getDate()) },
         classification: classify(cell, d, todayDate),
       })
     }
     return out
-  }, [weekStart, myRow, today])
+  }, [weekStart, myRow, today, weekdayFmt])
 
   const stats = useMemo(() => computeStats(days), [days])
 
@@ -197,16 +211,12 @@ export function EmployeeAttendancePage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={t('attendance.title')} />
-
-      {/* Tabs row + week navigator + view switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-2">
-        <div className="flex gap-4">
-          <button type="button" className="p-1 text-sm font-semibold border-b-2 border-primary text-primary">
-            Attendance Summary
-          </button>
-        </div>
-      </div>
+      {!embedded && (
+        <PageHeader
+          title={t('attendance.title')}
+          subtitle={t('attendance.subtitle', { defaultValue: 'Track your check-ins, hours, and weekly attendance.' })}
+        />
+      )}
 
       {/* Stats strip — at-a-glance counters for the visible week. Moved
           above the calendar/list so the headline numbers land in the
@@ -215,13 +225,13 @@ export function EmployeeAttendancePage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 rounded-lg border bg-card px-2 py-1 shadow-sm">
-          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label="Previous week">
+          <Button size="icon" variant="ghost" className="size-9 sm:size-8" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label={t('attendance.prevWeek', { defaultValue: 'Previous week' })}>
             <ChevronLeft className="size-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label="Pick week">
+          <Button size="icon" variant="ghost" className="size-9 sm:size-8" onClick={() => setWeekStart(startOfWeek(new Date()))} aria-label={t('attendance.pickWeek', { defaultValue: 'Pick week' })}>
             <Calendar className="size-4" />
           </Button>
-          <Button size="icon" variant="ghost" className="size-7" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label="Next week">
+          <Button size="icon" variant="ghost" className="size-9 sm:size-8" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label={t('attendance.nextWeek', { defaultValue: 'Next week' })}>
             <ChevronRight className="size-4" />
           </Button>
           <span className="px-2 text-sm font-medium tabular-nums">
@@ -230,13 +240,13 @@ export function EmployeeAttendancePage() {
         </div>
 
         <div className="flex items-center gap-1 rounded-lg border bg-card p-1 shadow-sm">
-          <Button size="icon" variant={view === 'timeline' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('timeline')} aria-label="Timeline view">
+          <Button size="icon" variant={view === 'timeline' ? 'secondary' : 'ghost'} className="size-9 sm:size-8" onClick={() => setView('timeline')} aria-label={t('attendance.timelineView', { defaultValue: 'Timeline view' })}>
             <LayoutGrid className="size-3.5" />
           </Button>
-          <Button size="icon" variant={view === 'list' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('list')} aria-label="List view">
+          <Button size="icon" variant={view === 'list' ? 'secondary' : 'ghost'} className="size-9 sm:size-8" onClick={() => setView('list')} aria-label={t('attendance.listView', { defaultValue: 'List view' })}>
             <ListIcon className="size-3.5" />
           </Button>
-          <Button size="icon" variant={view === 'calendar' ? 'secondary' : 'ghost'} className="size-7" onClick={() => setView('calendar')} aria-label="Calendar view">
+          <Button size="icon" variant={view === 'calendar' ? 'secondary' : 'ghost'} className="size-9 sm:size-8" onClick={() => setView('calendar')} aria-label={t('attendance.calendarView', { defaultValue: 'Calendar view' })}>
             <CalendarDays className="size-3.5" />
           </Button>
         </div>
@@ -254,7 +264,8 @@ export function EmployeeAttendancePage() {
           with "Enable location" and "Continue anyway" actions so the user
           knows exactly what will happen. */}
       {punchAllowed && (
-        <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+        <Card>
+          <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-stretch justify-between gap-3">
             <div className="flex-1 min-w-[200px] self-center">
               <p className="text-sm font-semibold">{shiftBand}</p>
@@ -262,7 +273,9 @@ export function EmployeeAttendancePage() {
             <Input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder={isCheckedIn ? 'Add notes for check-out' : 'Add notes for check-in'}
+              placeholder={isCheckedIn
+                ? t('attendance.notesCheckOut', { defaultValue: 'Add notes for check-out' })
+                : t('attendance.notesCheckIn', { defaultValue: 'Add notes for check-in' })}
               className="flex-[2] min-w-[180px] h-9"
             />
             <PunchActionButton
@@ -285,7 +298,9 @@ export function EmployeeAttendancePage() {
                 const successLabel = isCheckedIn ? t('attendance.checkOut') : t('attendance.checkIn')
                 mutation.mutate(body, {
                   onSuccess: () => { toast.success(successLabel); setNote(''); void refreshGeo() },
-                  onError: (err: unknown) => toast.error((err as Error)?.message ?? `Could not ${isCheckedIn ? 'check out' : 'check in'}`),
+                  onError: (err: unknown) => toast.error((err as Error)?.message ?? (isCheckedIn
+                    ? t('attendance.checkOutFailed', { defaultValue: 'Could not check out' })
+                    : t('attendance.checkInFailed', { defaultValue: 'Could not check in' }))),
                 })
               }}
               loading={checkOut.isPending || checkIn.isPending}
@@ -295,7 +310,7 @@ export function EmployeeAttendancePage() {
           {/* Location strip — read-only preview of where the punch will be
               tagged. Renders coordinates as a Maps link so the employee can
               verify the GPS reading. Refresh re-queries the device. */}
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-1.5 text-xs">
             <span className="inline-flex items-center gap-1.5 text-muted-foreground">
               <MapPin className={cn(
                 'size-3.5',
@@ -311,22 +326,22 @@ export function EmployeeAttendancePage() {
                   "Location access is off" message led HR to believe
                   there was a permissions bug when in fact the device
                   was still trying to get a fix. */}
-              {geoState === 'pending' && <span>Resolving your location…</span>}
+              {geoState === 'pending' && <span>{t('attendance.geoPending', { defaultValue: 'Resolving your location…' })}</span>}
               {geoState === 'denied' && (
-                <span>Location is blocked. Your punch will be recorded without location — allow it for accurate tagging.</span>
+                <span>{t('attendance.geoDenied', { defaultValue: 'Location is blocked. Your punch will be recorded without location — allow it for accurate tagging.' })}</span>
               )}
               {geoState === 'timeout' && (
-                <span>GPS lock taking a while. Punch anyway — we&rsquo;ll try once more on the click.</span>
+                <span>{t('attendance.geoTimeout', { defaultValue: 'GPS lock taking a while. Punch anyway — we’ll try once more on the click.' })}</span>
               )}
               {geoState === 'unavailable' && (
-                <span>Location currently unavailable. Your punch will be recorded without location.</span>
+                <span>{t('attendance.geoUnavailable', { defaultValue: 'Location currently unavailable. Your punch will be recorded without location.' })}</span>
               )}
               {geoState === 'unsupported' && (
-                <span>This browser doesn&rsquo;t expose location. Your punch will be recorded without location.</span>
+                <span>{t('attendance.geoUnsupported', { defaultValue: "This browser doesn't expose location. Your punch will be recorded without location." })}</span>
               )}
               {geoState === 'ok' && geo && (
                 <>
-                  <span>Location:</span>
+                  <span>{t('attendance.geoLocation', { defaultValue: 'Location:' })}</span>
                   {/* Show the resolved place-name when reverse-geocoding
                       lands; fall back to coords while the geocode is in
                       flight or if it fails. Both states link to Google
@@ -345,8 +360,8 @@ export function EmployeeAttendancePage() {
                         : 'font-mono tabular-nums',
                     )}
                     title={geoName
-                      ? `${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)} — open in Google Maps`
-                      : 'Open in Google Maps'}
+                      ? `${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)} — ${t('attendance.openInMaps', { defaultValue: 'open in Google Maps' })}`
+                      : t('attendance.openInMapsTitle', { defaultValue: 'Open in Google Maps' })}
                   >
                     {geoName ?? `${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)}`}
                   </a>
@@ -361,16 +376,17 @@ export function EmployeeAttendancePage() {
                 disabled={geoState === 'pending'}
               >
                 {geoState === 'pending'
-                  ? 'Refreshing…'
+                  ? t('attendance.refreshing', { defaultValue: 'Refreshing…' })
                   : geoState === 'denied'
-                    ? 'Enable location'
+                    ? t('attendance.enableLocation', { defaultValue: 'Enable location' })
                     : geoState === 'timeout' || geoState === 'unavailable'
-                      ? 'Try again'
-                      : 'Refresh'}
+                      ? t('attendance.tryAgain', { defaultValue: 'Try again' })
+                      : t('attendance.refresh', { defaultValue: 'Refresh' })}
               </button>
             )}
           </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Body */}
@@ -464,6 +480,7 @@ function timeToPct(iso: string | null | undefined, startMin: number, span: numbe
  * All three are addressed below.
  */
 function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: DayInfo) => void; today: Date }) {
+    const { t } = useTranslation()
     const startMin = 8 * 60
     const endMin = 19 * 60
     const span = endMin - startMin
@@ -486,7 +503,7 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
         && d.getDate() === today.getDate()
 
     return (
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+        <Card className="overflow-hidden">
             {days.map((d) => {
                 const tone = statusTone(d.classification)
                 const checkInPct = timeToPct(d.cell?.checkIn, startMin, span)
@@ -500,38 +517,38 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
                         type="button"
                         onClick={() => onPick(d)}
                         className={cn(
-                            'relative group grid grid-cols-[3.75rem_5.5rem_1fr_5.5rem_5rem] sm:grid-cols-[4.5rem_6.5rem_1fr_6.5rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-3 border-b last:border-b-0 transition-colors text-left w-full',
+                            'relative group grid grid-cols-[3.75rem_5.5rem_1fr_5.5rem_5rem] sm:grid-cols-[4.5rem_6.5rem_1fr_6.5rem_5.5rem] items-center gap-2 sm:gap-3 px-3 py-3 border-b last:border-b-0 transition-colors text-start w-full',
                             todayRow ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/30',
                         )}
                     >
-                        {/* Today's row gets a left-edge accent stripe so the
+                        {/* Today's row gets a leading-edge accent stripe so the
                             current day pops without flooding the row with
                             colour. Replaces the old faint blue tint that was
                             easy to miss. */}
                         {todayRow && (
-                            <span className="absolute left-0 inset-y-2 w-1 rounded-full bg-primary" aria-hidden />
+                            <span className="absolute start-0 inset-y-2 w-1 rounded-full bg-primary" aria-hidden />
                         )}
 
                         {/* ── Day badge ────────────────────────────────── */}
                         <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{d.label.weekday}</p>
+                            <p className="text-xs uppercase tracking-wider text-muted-foreground">{d.label.weekday}</p>
                             <div className="flex items-center gap-1.5">
                                 <p className={cn('text-base font-bold tabular-nums', todayRow && 'text-primary')}>
                                     {d.label.day}
                                 </p>
                                 {todayRow && (
-                                    <span className="text-[9px] font-semibold uppercase tracking-wider text-primary/80 bg-primary/15 px-1 py-px rounded">
-                                        Today
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-primary/80 bg-primary/15 px-1 py-px rounded">
+                                        {t('attendance.today', { defaultValue: 'Today' })}
                                     </span>
                                 )}
                             </div>
                         </div>
 
                         {/* ── In time ─────────────────────────────────── */}
-                        <div className="text-left">
+                        <div className="text-start">
                             {d.cell?.checkIn ? (
                                 <>
-                                    <p className="text-[10px] uppercase tracking-wider text-emerald-700/80 dark:text-emerald-400/80 font-medium">In</p>
+                                    <p className="text-xs uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-medium">{t('attendance.in', { defaultValue: 'In' })}</p>
                                     <p className="text-sm font-semibold tabular-nums">{formatTime(d.cell.checkIn)}</p>
                                 </>
                             ) : (
@@ -574,8 +591,8 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
                             {checkInPct != null && d.cell?.checkIn && (
                                 <span
                                     className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 inline-flex items-center justify-center size-4 rounded-full bg-emerald-500 ring-2 ring-background shadow-sm text-white"
-                                    style={{ left: `${checkInPct}%` }}
-                                    title={`Check-in at ${formatTime(d.cell.checkIn)}`}
+                                    style={{ insetInlineStart: `${checkInPct}%` }}
+                                    title={t('attendance.checkInAt', { defaultValue: 'Check-in at {{time}}', time: formatTime(d.cell.checkIn) })}
                                 >
                                     <LogIn className="size-2.5" aria-hidden />
                                 </span>
@@ -583,8 +600,8 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
                             {checkOutPct != null && d.cell?.checkOut && (
                                 <span
                                     className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 inline-flex items-center justify-center size-4 rounded-full bg-rose-500 ring-2 ring-background shadow-sm text-white"
-                                    style={{ left: `${checkOutPct}%` }}
-                                    title={`Check-out at ${formatTime(d.cell.checkOut)}`}
+                                    style={{ insetInlineStart: `${checkOutPct}%` }}
+                                    title={t('attendance.checkOutAt', { defaultValue: 'Check-out at {{time}}', time: formatTime(d.cell.checkOut) })}
                                 >
                                     <LogOut className="size-2.5" aria-hidden />
                                 </span>
@@ -592,10 +609,10 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
                         </div>
 
                         {/* ── Out time ────────────────────────────────── */}
-                        <div className="text-right">
+                        <div className="text-end">
                             {d.cell?.checkOut ? (
                                 <>
-                                    <p className="text-[10px] uppercase tracking-wider text-rose-700/80 dark:text-rose-400/80 font-medium">Out</p>
+                                    <p className="text-xs uppercase tracking-wider text-rose-700 dark:text-rose-400 font-medium">{t('attendance.out', { defaultValue: 'Out' })}</p>
                                     <p className="text-sm font-semibold tabular-nums">{formatTime(d.cell.checkOut)}</p>
                                 </>
                             ) : (
@@ -604,11 +621,11 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
                         </div>
 
                         {/* ── Hours worked (compact) ──────────────────── */}
-                        <div className="text-right">
+                        <div className="text-end">
                             <p className="text-base font-bold tabular-nums">
                                 {formatHrsCompact(d.cell?.hoursWorked, d.cell?.checkIn, d.cell?.checkOut)}
                             </p>
-                            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Hours</p>
+                            <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('attendance.hours', { defaultValue: 'Hours' })}</p>
                         </div>
                     </button>
                 )
@@ -630,24 +647,25 @@ function TimelineView({ days, onPick, today }: { days: DayInfo[]; onPick: (d: Da
                 <span />
                 <span />
             </div>
-        </div>
+        </Card>
     )
 }
 
 // ─── List view ────────────────────────────────────────────────────────────
 
 function ListView({ days }: { days: DayInfo[] }) {
+  const { t } = useTranslation()
   return (
-    <div className="rounded-xl border bg-card shadow-sm overflow-hidden overflow-x-auto">
+    <Card className="overflow-hidden overflow-x-auto">
       <table className="w-full text-sm min-w-[800px]">
         <thead className="bg-muted/50">
-          <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-            <th className="px-4 py-2.5 font-medium">Date</th>
-            <th className="px-4 py-2.5 font-medium">First In</th>
-            <th className="px-4 py-2.5 font-medium">Last Out</th>
-            <th className="px-4 py-2.5 font-medium">Total Hours</th>
-            <th className="px-4 py-2.5 font-medium">Status</th>
-            <th className="px-4 py-2.5 font-medium">Shift(s)</th>
+          <tr className="text-start text-xs uppercase tracking-wider text-muted-foreground">
+            <th className="px-4 py-2.5 font-medium text-start">{t('attendance.colDate', { defaultValue: 'Date' })}</th>
+            <th className="px-4 py-2.5 font-medium text-start">{t('attendance.colFirstIn', { defaultValue: 'First In' })}</th>
+            <th className="px-4 py-2.5 font-medium text-start">{t('attendance.colLastOut', { defaultValue: 'Last Out' })}</th>
+            <th className="px-4 py-2.5 font-medium text-start">{t('attendance.colTotalHours', { defaultValue: 'Total Hours' })}</th>
+            <th className="px-4 py-2.5 font-medium text-start">{t('attendance.colStatus', { defaultValue: 'Status' })}</th>
+            <th className="px-4 py-2.5 font-medium text-start">{t('attendance.colShifts', { defaultValue: 'Shift(s)' })}</th>
           </tr>
         </thead>
         <tbody className="divide-y">
@@ -669,13 +687,13 @@ function ListView({ days }: { days: DayInfo[] }) {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-muted-foreground">General</td>
+                <td className="px-4 py-2.5 text-muted-foreground">{t('attendance.shiftGeneral', { defaultValue: 'General' })}</td>
               </tr>
             )
           })}
         </tbody>
       </table>
-    </div>
+    </Card>
   )
 }
 
@@ -684,47 +702,44 @@ function ListView({ days }: { days: DayInfo[] }) {
 function MonthCalendar({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
   const { data, isLoading } = useAttendanceCalendar(month, 'me')
   return (
-    <div className="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
-      <MonthPicker value={month} onChange={setMonth} />
-      <AttendanceMonthCalendar data={data} loading={isLoading} />
-    </div>
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <MonthPicker value={month} onChange={setMonth} />
+        <AttendanceMonthCalendar data={data} loading={isLoading} />
+      </CardContent>
+    </Card>
   )
 }
 
 // ─── Footer stats ─────────────────────────────────────────────────────────
 
 function FooterStats({ stats, shift }: { stats: AttendanceWeekStats; shift: string }) {
+  const { t } = useTranslation()
   const entries = [
     // Alphabetical by label — mirrors the order used in the main HR app so
     // employees see the same arrangement everywhere.
-    { label: 'Holidays', value: stats.holidays, tone: 'bg-sky-500' },
-    { label: 'On Duty', value: stats.onDuty, tone: 'bg-violet-500' },
-    { label: 'Paid leave', value: stats.paidLeave, tone: 'bg-amber-500' },
-    { label: 'Payable Days', value: stats.payable, tone: 'bg-emerald-500' },
-    { label: 'Present', value: stats.present, tone: 'bg-green-500' },
-    { label: 'Weekend', value: stats.weekend, tone: 'bg-blue-400' },
+    { label: t('attendance.statHolidays', { defaultValue: 'Holidays' }), value: stats.holidays, tone: 'bg-sky-500' },
+    { label: t('attendance.statOnDuty', { defaultValue: 'On Duty' }), value: stats.onDuty, tone: 'bg-violet-500' },
+    { label: t('attendance.statPaidLeave', { defaultValue: 'Paid leave' }), value: stats.paidLeave, tone: 'bg-amber-500' },
+    { label: t('attendance.statPayableDays', { defaultValue: 'Payable Days' }), value: stats.payable, tone: 'bg-emerald-500' },
+    { label: t('attendance.statPresent', { defaultValue: 'Present' }), value: stats.present, tone: 'bg-green-500' },
+    { label: t('attendance.statWeekend', { defaultValue: 'Weekend' }), value: stats.weekend, tone: 'bg-blue-400' },
   ]
   return (
-    <div className="rounded-xl border bg-card shadow-sm">
-      <div className="flex flex-wrap items-stretch gap-4 px-4 py-3">
-        <div className="flex flex-col text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <span className="border-l-2 border-blue-500 ps-2 text-foreground">Days</span>
-          <span className="border-l-2 border-transparent ps-2 mt-1">Hours</span>
-        </div>
+    <Card>
+      <CardContent className="flex flex-wrap items-stretch gap-4 px-4 py-3">
         {entries.map((e) => (
-          <div key={e.label} className="flex items-center gap-2 border-l border-border/60 ps-3">
+          <div key={e.label} className="flex items-center gap-2 border-s border-border/60 ps-3 first:border-s-0 first:ps-0">
             <span className={cn('w-1 h-8 rounded-full', e.tone)} />
             <div>
               <p className="text-xs font-medium text-muted-foreground">{e.label}</p>
-              <p className="text-sm font-semibold tabular-nums">
-                {e.value}{' '}<span className="text-xs text-muted-foreground font-normal">Day</span>
-              </p>
+              <p className="text-sm font-semibold tabular-nums">{e.value}</p>
             </div>
           </div>
         ))}
         <div className="ms-auto self-center text-xs text-muted-foreground">{shift}</div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -732,18 +747,18 @@ function FooterStats({ stats, shift }: { stats: AttendanceWeekStats; shift: stri
 
 // Hero icons + tone for the centered status panel. Keeps the body of the
 // modal from feeling empty when there are no punches to show.
-function statusHero(klass: DayClassification): {
+function statusHero(klass: DayClassification, t: TFunction): {
   icon: typeof Calendar
   tone: string
   title: string
   body: string
 } {
   switch (klass) {
-    case 'weekend': return { icon: CalendarDays, tone: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30', title: 'Weekend', body: 'No work scheduled for this day.' }
-    case 'holiday': return { icon: CalendarDays, tone: 'text-sky-600 bg-sky-50 dark:bg-sky-950/30', title: 'Public holiday', body: 'Office is closed today.' }
-    case 'on_leave': return { icon: CalendarRange, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30', title: 'On leave', body: 'You are on an approved leave.' }
-    case 'future': return { icon: Calendar, tone: 'text-muted-foreground bg-muted/40', title: 'Future date', body: 'Attendance not recorded yet.' }
-    case 'absent': return { icon: X, tone: 'text-rose-600 bg-rose-50 dark:bg-rose-950/30', title: 'Marked absent', body: 'You were marked absent for the day.' }
+    case 'weekend': return { icon: CalendarDays, tone: 'text-amber-700 bg-amber-50 dark:bg-amber-950/30', title: t('attendance.heroWeekendTitle', { defaultValue: 'Weekend' }), body: t('attendance.heroWeekendBody', { defaultValue: 'No work scheduled for this day.' }) }
+    case 'holiday': return { icon: CalendarDays, tone: 'text-sky-600 bg-sky-50 dark:bg-sky-950/30', title: t('attendance.heroHolidayTitle', { defaultValue: 'Public holiday' }), body: t('attendance.heroHolidayBody', { defaultValue: 'Office is closed today.' }) }
+    case 'on_leave': return { icon: CalendarRange, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30', title: t('attendance.heroLeaveTitle', { defaultValue: 'On leave' }), body: t('attendance.heroLeaveBody', { defaultValue: 'You are on an approved leave.' }) }
+    case 'future': return { icon: Calendar, tone: 'text-muted-foreground bg-muted/40', title: t('attendance.heroFutureTitle', { defaultValue: 'Future date' }), body: t('attendance.heroFutureBody', { defaultValue: 'Attendance not recorded yet.' }) }
+    case 'absent': return { icon: X, tone: 'text-rose-600 bg-rose-50 dark:bg-rose-950/30', title: t('attendance.heroAbsentTitle', { defaultValue: 'Marked absent' }), body: t('attendance.heroAbsentBody', { defaultValue: 'You were marked absent for the day.' }) }
     case 'present':
     case 'late':
     case 'short':
@@ -788,6 +803,7 @@ function PunchActionButton({
    *  always runs its own high-accuracy acquisition. */
   onEnableLocation?: () => Promise<{ latitude: number; longitude: number } | null>
 }) {
+  const { t } = useTranslation()
   // While the click-time acquisition is in flight we count up the seconds
   // so users see *something is happening*. A silent button that loads for
   // 15 seconds reads as "broken" — a counting label reads as "working
@@ -802,7 +818,9 @@ function PunchActionButton({
     return () => clearInterval(id)
   }, [acquiring])
 
-  const label = isCheckedIn ? 'Check-out' : 'Check-in'
+  const label = isCheckedIn
+    ? t('attendance.checkOutAction', { defaultValue: 'Check-out' })
+    : t('attendance.checkInAction', { defaultValue: 'Check-in' })
   const colorClass = isCheckedIn
     ? 'bg-rose-600 hover:bg-rose-700 text-white'
     : 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -846,9 +864,11 @@ function PunchActionButton({
   }
 
   const buttonLabel = acquiring
-    ? `Locking GPS… ${elapsed}s`
+    ? t('attendance.lockingGps', { defaultValue: 'Locking GPS… {{seconds}}s', seconds: elapsed })
     : label
-  const buttonSubLabel = acquiring ? 'Up to 20 seconds' : liveTimer
+  const buttonSubLabel = acquiring
+    ? t('attendance.upTo20s', { defaultValue: 'Up to 20 seconds' })
+    : liveTimer
 
   return (
     <Button
@@ -875,9 +895,10 @@ function DayDetailDialog({
   manualEntryAllowed: boolean
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const cell = info.cell
   const klass = info.classification
-  const hero = statusHero(klass)
+  const hero = statusHero(klass, t)
   const HeroIcon = hero.icon
   const headerDate = `${info.label.weekday}, ${formatDayLabel(info.date)}`
 
@@ -889,6 +910,12 @@ function DayDetailDialog({
 
   const addManual = useAddManualPunch()
   const deletePunch = useDeletePunch()
+
+  // Punch pending deletion — drives the ConfirmDialog so a stray click on
+  // the In/Out trash control no longer wipes a punch without confirmation.
+  const [pendingDelete, setPendingDelete] = useState<
+    { punch: AttendancePunch; kind: 'in' | 'out' } | null
+  >(null)
 
   const [manualOpen, setManualOpen] = useState(false)
   const [mIn, setMIn] = useState('')
@@ -904,13 +931,27 @@ function DayDetailDialog({
     setMOut(''); setMOutOffset('0'); setMOutNotes('')
   }
 
+  const confirmDelete = () => {
+    if (!pendingDelete) return
+    const { punch, kind } = pendingDelete
+    deletePunch.mutate({ id: punch.id, employeeId }, {
+      onSuccess: () => {
+        toast.success(kind === 'in'
+          ? t('attendance.checkInRemoved', { defaultValue: 'Check-in removed' })
+          : t('attendance.checkOutRemoved', { defaultValue: 'Check-out removed' }))
+        setPendingDelete(null)
+      },
+      onError: (err: unknown) => toast.error((err as Error)?.message ?? t('attendance.removeFailed', { defaultValue: 'Could not remove' })),
+    })
+  }
+
   const submitManual = () => {
     if (!/^\d{2}:\d{2}$/.test(mIn)) {
-      toast.error('Enter check-in time as HH:MM')
+      toast.error(t('attendance.invalidCheckInTime', { defaultValue: 'Enter check-in time as HH:MM' }))
       return
     }
     if (mOut && !/^\d{2}:\d{2}$/.test(mOut)) {
-      toast.error('Enter check-out time as HH:MM')
+      toast.error(t('attendance.invalidCheckOutTime', { defaultValue: 'Enter check-out time as HH:MM' }))
       return
     }
     addManual.mutate(
@@ -925,8 +966,8 @@ function DayDetailDialog({
         outNotes: mOutNotes || undefined,
       },
       {
-        onSuccess: () => { toast.success('Entry added'); resetManual() },
-        onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not add entry'),
+        onSuccess: () => { toast.success(t('attendance.entryAdded', { defaultValue: 'Entry added' })); resetManual() },
+        onError: (err: unknown) => toast.error((err as Error)?.message ?? t('attendance.entryFailed', { defaultValue: 'Could not add entry' })),
       },
     )
   }
@@ -954,7 +995,7 @@ function DayDetailDialog({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <DialogTitle className="text-lg font-semibold leading-tight">{headerDate}</DialogTitle>
+                <DialogTitle className="font-display text-lg font-semibold leading-tight">{headerDate}</DialogTitle>
                 {isSpecial && (
                   <span className={cn(
                     'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
@@ -990,12 +1031,12 @@ function DayDetailDialog({
                   {leaveType ? `${hero.title} · ${leaveType}` : holidayName ? `${hero.title} · ${holidayName}` : hero.title}
                 </p>
                 {hero.body && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{hero.body}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{hero.body}</p>
                 )}
               </div>
               {klass === 'absent' && (
                 <Button asChild size="sm" variant="outline" className="shrink-0">
-                  <Link to={ROUTES.employeeLeave}>Apply Leave</Link>
+                  <Link to={ROUTES.employeeLeave}>{t('attendance.applyLeave', { defaultValue: 'Apply Leave' })}</Link>
                 </Button>
               )}
             </div>
@@ -1006,31 +1047,29 @@ function DayDetailDialog({
               <div className="size-11 rounded-full bg-background flex items-center justify-center shadow-sm">
                 <HeroIcon className="size-5" />
               </div>
-              <p className="text-base font-semibold">
+              <p className="font-display text-base font-semibold">
                 {leaveType ? `${hero.title} · ${leaveType}` : holidayName ? `${hero.title} · ${holidayName}` : hero.title}
               </p>
               {hero.body && <p className="text-xs text-muted-foreground max-w-[320px]">{hero.body}</p>}
               {klass === 'absent' && (
                 <Button asChild variant="outline" size="sm" className="mt-2">
-                  <Link to={ROUTES.employeeLeave}>Apply Leave</Link>
+                  <Link to={ROUTES.employeeLeave}>{t('attendance.applyLeave', { defaultValue: 'Apply Leave' })}</Link>
                 </Button>
               )}
             </div>
           )}
 
-          {/* Punch pair list (screenshot 10 style) */}
+          {/* Punch pair list */}
           {pairs.length > 0 && (
             <ul className="space-y-2">
               {pairs.map((p, idx) => (
-                <li
-                  key={p.inPunch?.id ?? p.outPunch?.id ?? idx}
-                  className="rounded-xl border bg-card overflow-hidden"
-                >
+                <li key={p.inPunch?.id ?? p.outPunch?.id ?? idx}>
+                  <Card className="overflow-hidden">
                   <div className="grid grid-cols-[1fr_auto_1fr] items-center px-4 py-3 gap-3">
                     {/* IN */}
                     <div className="flex flex-col">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                        Check-in
+                      <span className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                        {t('attendance.checkInLabel', { defaultValue: 'Check-in' })}
                       </span>
                       {p.inPunch ? (
                         <>
@@ -1048,9 +1087,9 @@ function DayDetailDialog({
                     <span className="hidden sm:block border-t border-dashed border-muted-foreground/40 w-12" />
 
                     {/* OUT */}
-                    <div className="flex flex-col items-end text-right">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-rose-700 dark:text-rose-400">
-                        Check-out
+                    <div className="flex flex-col items-end text-end">
+                      <span className="text-xs font-medium uppercase tracking-wider text-rose-700 dark:text-rose-400">
+                        {t('attendance.checkOutLabel', { defaultValue: 'Check-out' })}
                       </span>
                       {p.outPunch ? (
                         <>
@@ -1060,45 +1099,44 @@ function DayDetailDialog({
                           <PunchMeta punch={p.outPunch} align="end" />
                         </>
                       ) : (
-                        <span className="text-sm text-muted-foreground/70 italic">In progress</span>
+                        <span className="text-sm text-muted-foreground/70 italic">{t('attendance.inProgress', { defaultValue: 'In progress' })}</span>
                       )}
                     </div>
                   </div>
 
                   {/* Per-pair actions */}
                   <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Pair {idx + 1} · {p.duration}
+                    <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                      {t('attendance.session', { defaultValue: 'Session {{n}}', n: idx + 1 })} · {p.duration}
                     </span>
                     <div className="flex items-center gap-1">
                       {p.inPunch && (
-                        <button
+                        <Button
                           type="button"
-                          onClick={() => deletePunch.mutate({ id: p.inPunch!.id, employeeId }, {
-                            onSuccess: () => toast.success('Check-in removed'),
-                            onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not remove'),
-                          })}
-                          className="text-[10px] text-rose-600 hover:underline flex items-center gap-1 px-1.5 py-0.5"
-                          aria-label="Delete check-in"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPendingDelete({ punch: p.inPunch!, kind: 'in' })}
+                          className="h-7 gap-1 px-1.5 text-xs text-rose-600 hover:text-rose-700"
+                          aria-label={t('attendance.deleteCheckIn', { defaultValue: 'Delete check-in' })}
                         >
-                          <Trash2 className="size-3" /> In
-                        </button>
+                          <Trash2 className="size-3" /> {t('attendance.in', { defaultValue: 'In' })}
+                        </Button>
                       )}
                       {p.outPunch && (
-                        <button
+                        <Button
                           type="button"
-                          onClick={() => deletePunch.mutate({ id: p.outPunch!.id, employeeId }, {
-                            onSuccess: () => toast.success('Check-out removed'),
-                            onError: (err: unknown) => toast.error((err as Error)?.message ?? 'Could not remove'),
-                          })}
-                          className="text-[10px] text-rose-600 hover:underline flex items-center gap-1 px-1.5 py-0.5"
-                          aria-label="Delete check-out"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPendingDelete({ punch: p.outPunch!, kind: 'out' })}
+                          className="h-7 gap-1 px-1.5 text-xs text-rose-600 hover:text-rose-700"
+                          aria-label={t('attendance.deleteCheckOut', { defaultValue: 'Delete check-out' })}
                         >
-                          <Trash2 className="size-3" /> Out
-                        </button>
+                          <Trash2 className="size-3" /> {t('attendance.out', { defaultValue: 'Out' })}
+                        </Button>
                       )}
                     </div>
                   </div>
+                  </Card>
                 </li>
               ))}
             </ul>
@@ -1106,9 +1144,10 @@ function DayDetailDialog({
 
           {/* Empty-pairs state for working days */}
           {pairs.length === 0 && !showHero && (
-            <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
-              No check-ins recorded for this day.
-            </div>
+            <CompactEmptyState
+              icon={CalendarDays}
+              message={t('attendance.noPunches', { defaultValue: 'No check-ins recorded for this day.' })}
+            />
           )}
 
           {/* Manual entry expandable — only when HR has not revoked the
@@ -1120,21 +1159,22 @@ function DayDetailDialog({
               className="w-full rounded-xl border border-dashed py-2.5 text-xs font-medium text-primary hover:bg-muted/40 transition-colors flex items-center justify-center gap-1.5"
             >
               <Plus className="size-3.5" />
-              Add Check-in / Check-out Entry
+              {t('attendance.addEntry', { defaultValue: 'Add Check-in / Check-out Entry' })}
             </button>
           ) : (
-            <div className="rounded-xl border bg-card p-4 space-y-3">
-              <p className="text-sm font-semibold">Add manual entry</p>
+            <Card>
+              <CardContent className="space-y-3 p-4">
+              <p className="font-display text-sm font-semibold">{t('attendance.addManualEntry', { defaultValue: 'Add manual entry' })}</p>
               <div className="grid grid-cols-2 gap-3">
                 <ManualTimeField
-                  label="Check-in"
+                  label={t('attendance.checkInLabel', { defaultValue: 'Check-in' })}
                   value={mIn} onChange={setMIn}
                   offset={mInOffset} onOffsetChange={setMInOffset}
                   notes={mInNotes} onNotesChange={setMInNotes}
                   tone="emerald"
                 />
                 <ManualTimeField
-                  label="Check-out"
+                  label={t('attendance.checkOutLabel', { defaultValue: 'Check-out' })}
                   value={mOut} onChange={setMOut}
                   offset={mOutOffset} onOffsetChange={setMOutOffset}
                   notes={mOutNotes} onNotesChange={setMOutNotes}
@@ -1142,30 +1182,48 @@ function DayDetailDialog({
                 />
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
-                <Button size="sm" variant="ghost" onClick={resetManual}>Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={resetManual}>{t('common.cancel')}</Button>
                 <Button size="sm" onClick={submitManual} loading={addManual.isPending}>
-                  Save entry
+                  {t('attendance.saveEntry', { defaultValue: 'Save entry' })}
                 </Button>
               </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         <div className="border-t bg-muted/30 px-6 py-4 grid grid-cols-3 gap-3">
-          <div className="border-l-2 border-emerald-500 ps-2.5">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">First Check-In</p>
+          <div className="border-s-2 border-emerald-500 ps-2.5">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{t('attendance.firstCheckIn', { defaultValue: 'First Check-In' })}</p>
             <p className="text-sm font-semibold tabular-nums mt-1">{firstIn ? formatTime(firstIn) : (cell?.checkIn ? formatTime(cell.checkIn) : '—')}</p>
           </div>
-          <div className="border-l-2 border-rose-500 ps-2.5">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Last Check-Out</p>
+          <div className="border-s-2 border-rose-500 ps-2.5">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{t('attendance.lastCheckOut', { defaultValue: 'Last Check-Out' })}</p>
             <p className="text-sm font-semibold tabular-nums mt-1">{lastOut ? formatTime(lastOut) : (cell?.checkOut ? formatTime(cell.checkOut) : '—')}</p>
           </div>
-          <div className="border-l-2 border-blue-500 ps-2.5 text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total Hours</p>
+          <div className="border-s-2 border-blue-500 ps-2.5 text-end">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">{t('attendance.totalHours', { defaultValue: 'Total Hours' })}</p>
             <p className="text-sm font-semibold tabular-nums mt-1">{totalHours || formatHoursWorked(cell?.hoursWorked, cell?.checkIn, cell?.checkOut)}</p>
           </div>
         </div>
       </DialogContent>
+
+      {/* Confirmation gate for punch deletion — replaces the old
+          fire-on-click trash links which could wipe a punch with no
+          "are you sure?" beat. */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => { if (!o) setPendingDelete(null) }}
+        variant="destructive"
+        title={pendingDelete?.kind === 'out'
+          ? t('attendance.deleteCheckOutTitle', { defaultValue: 'Delete this check-out?' })
+          : t('attendance.deleteCheckInTitle', { defaultValue: 'Delete this check-in?' })}
+        description={t('attendance.deletePunchDesc', { defaultValue: 'This punch will be permanently removed from the day.' })}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={confirmDelete}
+        loading={deletePunch.isPending}
+      />
     </Dialog>
   )
 }
@@ -1228,6 +1286,7 @@ function sumPairHours(pairs: PunchPair[]): string {
 }
 
 function PunchMeta({ punch, align = 'start' }: { punch: AttendancePunch; align?: 'start' | 'end' }) {
+  const { t } = useTranslation()
   const items: ReactNode[] = []
   // Prefer the human-readable location label. When only coordinates exist,
   // render them as a tappable Maps link so HR can verify the punch site
@@ -1247,7 +1306,7 @@ function PunchMeta({ punch, align = 'start' }: { punch: AttendancePunch; align?:
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 tabular-nums text-foreground/70 hover:text-primary hover:underline"
-        title="Open in Maps"
+        title={t('attendance.openInMapsShort', { defaultValue: 'Open in Maps' })}
       >
         <MapPin className="size-3" />
         {Number(punch.latitude).toFixed(3)}, {Number(punch.longitude).toFixed(3)}
@@ -1263,7 +1322,7 @@ function PunchMeta({ punch, align = 'start' }: { punch: AttendancePunch; align?:
   return (
     <p
       className={cn(
-        'mt-0.5 text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5',
+        'mt-0.5 text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5',
         align === 'end' && 'justify-end',
       )}
     >
@@ -1284,12 +1343,13 @@ function ManualTimeField({
   onNotesChange: (v: string) => void
   tone: 'emerald' | 'rose'
 }) {
+  const { t } = useTranslation()
   const toneClass = tone === 'emerald'
     ? 'text-emerald-700 dark:text-emerald-400'
     : 'text-rose-700 dark:text-rose-400'
   return (
     <div className="space-y-1.5">
-      <p className={cn('text-[10px] font-medium uppercase tracking-wider', toneClass)}>{label}</p>
+      <p className={cn('text-xs font-medium uppercase tracking-wider', toneClass)}>{label}</p>
       <div className="flex items-center gap-1.5">
         <Input
           type="time"
@@ -1297,20 +1357,23 @@ function ManualTimeField({
           onChange={(e) => onChange(e.target.value)}
           className="h-8 text-xs"
         />
-        <select
-          value={offset}
-          onChange={(e) => onOffsetChange(e.target.value as '0' | '1')}
-          className="h-8 rounded-md border bg-background px-1.5 text-xs"
-          aria-label={`${label} day offset`}
-        >
-          <option value="0">Same Day</option>
-          <option value="1">Next Day</option>
-        </select>
+        <Select value={offset} onValueChange={(v) => onOffsetChange(v as '0' | '1')}>
+          <SelectTrigger
+            className="h-8 w-auto gap-1 px-1.5 text-xs"
+            aria-label={t('attendance.dayOffsetAria', { defaultValue: '{{label}} day offset', label })}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">{t('attendance.sameDay', { defaultValue: 'Same Day' })}</SelectItem>
+            <SelectItem value="1">{t('attendance.nextDay', { defaultValue: 'Next Day' })}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <Input
         value={notes}
         onChange={(e) => onNotesChange(e.target.value)}
-        placeholder="Notes (optional)"
+        placeholder={t('attendance.notesOptional', { defaultValue: 'Notes (optional)' })}
         className="h-7 text-xs"
       />
     </div>

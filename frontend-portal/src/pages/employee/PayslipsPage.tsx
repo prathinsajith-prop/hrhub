@@ -1,14 +1,17 @@
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Printer, Receipt } from 'lucide-react'
 
 import { useMyPayslips, usePayslipDetail } from '@/hooks/usePayslips'
 import { useMyEmployee } from '@/hooks/useMe'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { GlassCard } from '@/components/shared/GlassCard'
 import { BankDetailsCard } from '@/components/shared/BankDetailsCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -18,6 +21,32 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { formatCurrency, monthName } from '@/lib/utils'
+
+// ─── Payroll run status → tone + localized label ─────────────────────────────
+// Maps the free-form `runStatus` enum to a Badge variant and a translated
+// label so the raw underscore enum never reaches the UI. Unknown statuses
+// fall back to a neutral "Processed" label.
+type RunStatusBadge = { variant: 'default' | 'secondary' | 'success' | 'warning'; label: string }
+
+function runStatusBadge(status: string, t: TFunction): RunStatusBadge {
+    switch (status) {
+        case 'draft':
+            return { variant: 'warning', label: t('payslips.runStatus.draft', { defaultValue: 'Draft' }) }
+        case 'processing':
+            return { variant: 'secondary', label: t('payslips.runStatus.processing', { defaultValue: 'Processing' }) }
+        case 'approved':
+            return { variant: 'secondary', label: t('payslips.runStatus.approved', { defaultValue: 'Approved' }) }
+        case 'wps_submitted':
+            return {
+                variant: 'secondary',
+                label: t('payslips.runStatus.wpsSubmitted', { defaultValue: 'WPS submitted' }),
+            }
+        case 'paid':
+            return { variant: 'success', label: t('payslips.runStatus.paid', { defaultValue: 'Paid' }) }
+        default:
+            return { variant: 'secondary', label: t('payslips.runStatus.processed', { defaultValue: 'Processed' }) }
+    }
+}
 
 export function EmployeePayslipsPage() {
     const { t } = useTranslation()
@@ -43,33 +72,36 @@ export function EmployeePayslipsPage() {
                 <EmptyState icon={<Receipt className="size-8" />} title={t('payslips.noPayslips')} />
             ) : (
                 <div className="space-y-2.5">
-                    {data.map((p) => (
-                        <Card key={p.id} className="border-border/70 transition-all hover:border-primary/40 hover:shadow-md">
-                            <CardContent className="flex items-center justify-between gap-3 p-4">
-                                <div>
-                                    <div className="font-display text-base font-semibold">
-                                        {monthName(p.month)} {p.year}
+                    {data.map((p) => {
+                        const status = runStatusBadge(p.runStatus, t)
+                        return (
+                            <Card key={p.id} className="border-border/70 transition-colors hover:border-primary/30">
+                                <CardContent className="flex items-center justify-between gap-3 p-4">
+                                    <div className="min-w-0">
+                                        <div className="font-display text-base font-semibold">
+                                            {monthName(p.month)} {p.year}
+                                        </div>
+                                        <Badge variant={status.variant} className="mt-1.5">
+                                            {status.label}
+                                        </Badge>
                                     </div>
-                                    <div className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">
-                                        {p.runStatus}
+                                    <div className="text-end">
+                                        <div className="font-display text-lg font-bold tabular-figures">
+                                            {formatCurrency(p.netSalary)}
+                                        </div>
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto p-0 text-xs"
+                                            onClick={() => setSelectedId(p.id)}
+                                        >
+                                            {t('payslips.view')}
+                                        </Button>
                                     </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="font-display text-lg font-bold tabular-figures">
-                                        {formatCurrency(p.netSalary)}
-                                    </div>
-                                    <Button
-                                        variant="link"
-                                        size="sm"
-                                        className="h-auto p-0 text-xs"
-                                        onClick={() => setSelectedId(p.id)}
-                                    >
-                                        {t('payslips.view')}
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
+                                </CardContent>
+                            </Card>
+                        )
+                    })}
                 </div>
             )}
 
@@ -92,7 +124,7 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                     <Skeleton className="h-64" />
                 ) : (
                     <div className="space-y-4">
-                        <div className="rounded-xl border border-border bg-gradient-to-br from-indigo-50 to-sky-50 p-4 dark:from-indigo-950/30 dark:to-sky-950/20">
+                        <GlassCard tone="primary" className="p-4">
                             <div className="flex items-start justify-between gap-2">
                                 <div>
                                     <div className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -104,13 +136,15 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                                     <div className="text-xs text-muted-foreground">{t('payslips.net')}</div>
                                 </div>
                                 {data.daysWorked != null && (
-                                    <div className="text-right">
-                                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Days worked</div>
+                                    <div className="text-end">
+                                        <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                                            {t('payslips.daysWorked', { defaultValue: 'Days worked' })}
+                                        </div>
                                         <div className="font-display text-lg font-semibold tabular-figures">{data.daysWorked}</div>
                                     </div>
                                 )}
                             </div>
-                        </div>
+                        </GlassCard>
 
                         {/* Grouped Earnings → Additions → Deductions → Net so the
                             employee can see at a glance where each Dirham came from.
@@ -119,7 +153,9 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                             {/* Earnings — dynamic from the catalog breakdown
                                 snapshot when present, otherwise the four
                                 named columns (legacy payslips). */}
-                            <SectionLabel tone="neutral">Earnings</SectionLabel>
+                            <SectionLabel tone="neutral">
+                                {t('payslips.earnings', { defaultValue: 'Earnings' })}
+                            </SectionLabel>
                             {(() => {
                                 // Same priority order as the admin payslip
                                 // breakdown — Basic first, then statutory
@@ -145,15 +181,27 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                                 }
                                 return (
                                     <>
-                                        <Row label="Basic" value={formatCurrency(data.basicSalary)} />
+                                        <Row
+                                            label={t('payslips.basic', { defaultValue: 'Basic' })}
+                                            value={formatCurrency(data.basicSalary)}
+                                        />
                                         {Number(data.housingAllowance) > 0 && (
-                                            <Row label="Housing" value={formatCurrency(data.housingAllowance)} />
+                                            <Row
+                                                label={t('payslips.housing', { defaultValue: 'Housing' })}
+                                                value={formatCurrency(data.housingAllowance)}
+                                            />
                                         )}
                                         {Number(data.transportAllowance) > 0 && (
-                                            <Row label="Transport" value={formatCurrency(data.transportAllowance)} />
+                                            <Row
+                                                label={t('payslips.transport', { defaultValue: 'Transport' })}
+                                                value={formatCurrency(data.transportAllowance)}
+                                            />
                                         )}
                                         {Number(data.otherAllowances) > 0 && (
-                                            <Row label="Other allowances" value={formatCurrency(data.otherAllowances)} />
+                                            <Row
+                                                label={t('payslips.otherAllowances', { defaultValue: 'Other allowances' })}
+                                                value={formatCurrency(data.otherAllowances)}
+                                            />
                                         )}
                                     </>
                                 )
@@ -162,17 +210,19 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                             {/* Additions — only render when there's anything */}
                             {(Number(data.overtime ?? 0) > 0 || Number(data.commission ?? 0) > 0) && (
                                 <>
-                                    <SectionLabel tone="positive">Additions</SectionLabel>
+                                    <SectionLabel tone="positive">
+                                        {t('payslips.additions', { defaultValue: 'Additions' })}
+                                    </SectionLabel>
                                     {Number(data.overtime ?? 0) > 0 && (
                                         <Row
-                                            label="Overtime"
+                                            label={t('payslips.overtime', { defaultValue: 'Overtime' })}
                                             value={`+ ${formatCurrency(data.overtime ?? '0')}`}
                                             tone="positive"
                                         />
                                     )}
                                     {Number(data.commission ?? 0) > 0 && (
                                         <Row
-                                            label="Commission / Bonus"
+                                            label={t('payslips.commissionBonus', { defaultValue: 'Commission / Bonus' })}
                                             value={`+ ${formatCurrency(data.commission ?? '0')}`}
                                             tone="positive"
                                         />
@@ -186,35 +236,51 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
                             {/* Deductions — itemised so the total isn't an opaque sum */}
                             {Number(data.deductions) > 0 && (
                                 <>
-                                    <SectionLabel tone="negative">Deductions</SectionLabel>
+                                    <SectionLabel tone="negative">
+                                        {t('payslips.deductions', { defaultValue: 'Deductions' })}
+                                    </SectionLabel>
                                     {Number(data.unpaidLeaveDeduction ?? 0) > 0 && (
                                         <Row
-                                            label={`Loss of pay (${data.unpaidLeaveDays ?? 0} day${
-                                                (data.unpaidLeaveDays ?? 0) === 1 ? '' : 's'
-                                            })`}
+                                            label={t(
+                                                (data.unpaidLeaveDays ?? 0) === 1
+                                                    ? 'payslips.lossOfPay_one'
+                                                    : 'payslips.lossOfPay_other',
+                                                {
+                                                    count: data.unpaidLeaveDays ?? 0,
+                                                    defaultValue: 'Loss of pay ({{count}} day(s))',
+                                                },
+                                            )}
                                             value={`- ${formatCurrency(data.unpaidLeaveDeduction ?? '0')}`}
                                             tone="negative"
                                         />
                                     )}
                                     {Number(data.sickHalfPayDeduction ?? 0) > 0 && (
                                         <Row
-                                            label={`Sick half-pay (${data.sickHalfPayDays ?? 0} day${
-                                                (data.sickHalfPayDays ?? 0) === 1 ? '' : 's'
-                                            })`}
+                                            label={t(
+                                                (data.sickHalfPayDays ?? 0) === 1
+                                                    ? 'payslips.sickHalfPay_one'
+                                                    : 'payslips.sickHalfPay_other',
+                                                {
+                                                    count: data.sickHalfPayDays ?? 0,
+                                                    defaultValue: 'Sick half-pay ({{count}} day(s))',
+                                                },
+                                            )}
                                             value={`- ${formatCurrency(data.sickHalfPayDeduction ?? '0')}`}
                                             tone="negative"
                                         />
                                     )}
                                     {Number(data.loanDeduction ?? 0) > 0 && (
                                         <Row
-                                            label="Loan repayment"
+                                            label={t('payslips.loanRepayment', { defaultValue: 'Loan repayment' })}
                                             value={`- ${formatCurrency(data.loanDeduction ?? '0')}`}
                                             tone="negative"
                                         />
                                     )}
                                     {Number(data.otherDeduction ?? 0) > 0 && (
                                         <Row
-                                            label="Other manual deductions"
+                                            label={t('payslips.otherManualDeductions', {
+                                                defaultValue: 'Other manual deductions',
+                                            })}
                                             value={`- ${formatCurrency(data.otherDeduction ?? '0')}`}
                                             tone="negative"
                                         />
@@ -234,7 +300,12 @@ function PayslipDialog({ id, onClose }: { id: string | null; onClose: () => void
 
                         {data.bankName || data.iban ? (
                             <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-                                <div>Paid to {data.bankName ?? '—'}</div>
+                                <div>
+                                    {t('payslips.paidTo', {
+                                        bank: data.bankName ?? '—',
+                                        defaultValue: 'Paid to {{bank}}',
+                                    })}
+                                </div>
                                 {data.iban ? <div className="mt-0.5 font-mono">{data.iban}</div> : null}
                             </div>
                         ) : null}
@@ -258,7 +329,7 @@ function SectionLabel({ tone, children }: { tone: 'neutral' | 'positive' | 'nega
                 ? 'text-rose-700 dark:text-rose-300'
                 : 'text-muted-foreground'
     return (
-        <div className={`pt-1 text-[10px] font-bold uppercase tracking-widest ${color}`}>
+        <div className={`pt-1 text-xs font-bold uppercase tracking-widest ${color}`}>
             {children}
         </div>
     )

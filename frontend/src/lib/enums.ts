@@ -217,10 +217,23 @@ export const JOB_STATUS_LABELS: Record<string, string> = {
 }
 
 // ─── Recruitment – employment type ──────────────────────────────────────────
+// Extended with internship / temporary / freelance in migration 0078 so a
+// single Employment Type select covers the full range of job postings.
 export const EMPLOYMENT_TYPE_LABELS: Record<string, string> = {
     full_time: 'Full Time',
     part_time: 'Part Time',
     contract: 'Contract',
+    internship: 'Internship',
+    temporary: 'Temporary',
+    freelance: 'Freelance',
+}
+
+// ─── Recruitment – workplace type ───────────────────────────────────────────
+// Where the work is performed. Independent of the employment contract type.
+export const WORKPLACE_TYPE_LABELS: Record<string, string> = {
+    on_site: 'On-site',
+    hybrid: 'Hybrid',
+    remote: 'Remote',
 }
 
 // ─── Recruitment – application stage ────────────────────────────────────────

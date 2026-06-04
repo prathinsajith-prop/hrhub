@@ -1,8 +1,8 @@
 import { useEffect, useRef, useMemo, useState, memo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { labelFor } from '@/lib/enums'
-import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, FileText, XCircle, Upload } from 'lucide-react'
+import { Plus, Briefcase, Users, Clock, TrendingUp, Star, Mail, Phone, Eye, Edit2, UserCheck, RefreshCcw, LayoutList, LayoutGrid, ChevronRight, Loader2, AlertCircle, Upload, ArrowUpRight } from 'lucide-react'
 import { BulkImportJobsDialog } from './BulkImportJobsDialog'
 import { BulkImportCandidatesDialog } from './BulkImportCandidatesDialog'
 import {
@@ -28,7 +28,9 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { cn, formatCurrency, formatDate, getInitials, onActivate, splitFullName } from '@/lib/utils'
-import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { useJobs, useApplications, useKanbanStage, useUpdateApplicationStage, useUpdateJob, useCreateJob, useCreateApplication, useConvertCandidateToEmployee, useUploadResume, useUploadCandidatePhoto, useRecruitmentStages, useJobTagSuggestions } from '@/hooks/useRecruitment'
+import { ResumeUpload } from '@/components/shared/ResumeUpload'
+import type { ParsedResume } from '@/lib/resume-parser'
 import { DEFAULT_STAGES, kanbanStages as filterKanbanStages, resolveStageColor, stageByKey, type RecruitmentStage } from '@/lib/recruitmentStages'
 import { StageBadge } from '@/components/shared/StageBadge'
 import { useRecruitmentSocket } from '@/hooks/useRecruitmentSocket'
@@ -40,7 +42,12 @@ import { Label } from '@/components/ui/primitives'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { Textarea } from '@/components/ui/textarea'
 import { NewJobDialog, EditJobDialog, AddEmployeeDialog, type EmpForm } from '@/components/shared/action-dialogs'
+import { ChipsField } from '@/components/shared/ChipsField'
+import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
+import { MatchScoreBadge } from '@/components/shared/RecommendationBits'
 import { EditCandidateDialog } from '@/components/shared/EditCandidateDialog'
+import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
+import type { EducationEntry, ExperienceEntry } from '@/components/shared/MultiEntryField'
 import { useSearchFilters } from '@/hooks/useSearchFilters'
 import { type FilterConfig, buildFilterQueryString } from '@/lib/filters'
 import { searchDepartments, searchNationalities } from '@/lib/filters/filter-loaders'
@@ -63,7 +70,14 @@ const JOB_FILTERS: FilterConfig[] = [
   { name: 'closingDate', label: 'Closing date', type: 'date_range', field: 'closingDate' },
 ]
 
+const CANDIDATE_SOURCE_OPTIONS = [
+  { value: 'careers', label: 'Careers site' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'direct', label: 'Added by HR' },
+]
+
 const CANDIDATE_FILTERS: FilterConfig[] = [
+  { name: 'source', label: 'Source', type: 'multi_select', field: 'source', options: CANDIDATE_SOURCE_OPTIONS },
   { name: 'nationality', label: 'Nationality', type: 'autocomplete', field: 'nationality', onSearch: searchNationalities, placeholder: 'Search nationalities…' },
   { name: 'experience', label: 'Experience (yrs)', type: 'number_range', field: 'experience', min: 0 },
   { name: 'expectedSalary', label: 'Expected salary (AED)', type: 'number_range', field: 'expectedSalary', min: 0, prefix: 'AED' },
@@ -103,13 +117,29 @@ const CandidateCard = memo(function CandidateCard({
   const isDragging = draggable && drag.isDragging
   const cardDragProps = draggable && !isDragOverlay ? { ...drag.attributes, ...drag.listeners } : {}
 
+  // A click on the card body opens the candidate profile — the card's primary
+  // action. Previously only the small Eye icon navigated, so users clicked the
+  // body (nothing happened) or hit the full-width "Move to next stage" button
+  // and accidentally advanced the candidate. `draggedRef` swallows the click
+  // that fires on pointer-up after a real drag-drop, so dragging never also
+  // navigates. The drag sensor's 200ms delay keeps a genuine click a click.
+  const draggedRef = useRef(false)
+  useEffect(() => { if (isDragging) draggedRef.current = true }, [isDragging])
+  const handleCardClick = () => {
+    if (isDragOverlay) return
+    if (draggedRef.current) { draggedRef.current = false; return }
+    navigate(`/recruitment/candidates/${candidate.id}`)
+  }
+
   return (
     <div
       ref={draggable ? drag.setNodeRef : undefined}
       {...cardDragProps}
+      onClick={handleCardClick}
       className={cn(
         'bg-card rounded-xl border border-border p-3 shadow-sm hover:shadow-md transition-shadow select-none',
-        draggable && !isDragOverlay && 'cursor-grab active:cursor-grabbing',
+        !isDragOverlay && 'cursor-pointer',
+        draggable && !isDragOverlay && 'active:cursor-grabbing',
         isDragging && !isDragOverlay && 'opacity-20 pointer-events-none',
         isDragOverlay && 'ring-2 ring-primary shadow-xl cursor-grabbing',
       )}
@@ -117,6 +147,9 @@ const CandidateCard = memo(function CandidateCard({
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Avatar className="size-8 shrink-0">
+            {(candidate.avatarUrl ?? candidate.avatar) && (
+              <img src={(candidate.avatarUrl ?? candidate.avatar) as string} alt={candidate.name} className="object-cover" />
+            )}
             <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">{getInitials(candidate.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
@@ -156,10 +189,26 @@ const CandidateCard = memo(function CandidateCard({
 
       {(candidate.jobTitle || candidate.experience !== undefined) && (
         <div className="flex items-center gap-1.5 mb-2 px-0.5">
-          <Briefcase className="size-3 text-muted-foreground shrink-0" />
-          <p className="text-[10px] text-foreground/80 font-medium truncate flex-1">
-            {candidate.jobTitle ?? 'Open Position'}
-          </p>
+          {candidate.jobTitle ? (
+            // Job link — opens the job's detail page. stopPropagation on both
+            // pointer-down (so it doesn't start a card drag) and click (so it
+            // doesn't trigger the card's navigate-to-candidate).
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); navigate(`/recruitment/jobs/${candidate.jobId}`) }}
+              title={candidate.jobTitle}
+              className="group/job flex items-center gap-1 min-w-0 flex-1 text-[10px] font-medium text-foreground/80 hover:text-primary"
+            >
+              <Briefcase className="size-3 shrink-0" />
+              <span className="truncate">{candidate.jobTitle}</span>
+              <ArrowUpRight className="size-2.5 shrink-0 opacity-0 transition-opacity group-hover/job:opacity-70" data-rtl-flip />
+            </button>
+          ) : (
+            <p className="flex items-center gap-1 min-w-0 flex-1 text-[10px] font-medium text-foreground/80">
+              <Briefcase className="size-3 shrink-0" /><span className="truncate">Open Position</span>
+            </p>
+          )}
           {candidate.experience !== undefined && (
             <span className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-0.5">
               <Clock className="size-2.5" />{candidate.experience}y
@@ -167,6 +216,10 @@ const CandidateCard = memo(function CandidateCard({
           )}
         </div>
       )}
+
+      <div className="mb-2">
+        <CandidateSourceBadge source={candidate.source} referredByName={candidate.referredByName} />
+      </div>
 
       <div className="space-y-1 mb-3 bg-muted/40 rounded-lg p-2">
         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-0">
@@ -335,7 +388,10 @@ const buildJobColumns = (onEdit: (job: Job) => void): ColumnDef<Job>[] => [
     header: 'Position',
     cell: ({ row: { original: j } }) => (
       <div>
-        <p className="font-medium text-sm text-foreground">{j.title}</p>
+        <div className="flex items-center gap-2">
+          {j.jobNo && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground">{j.jobNo}</span>}
+          <p className="font-medium text-sm text-foreground">{j.title}</p>
+        </div>
         <p className="text-[11px] text-muted-foreground">{j.department} &middot; {j.location}</p>
       </div>
     ),
@@ -391,16 +447,50 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [nationality, setNationality] = useState('')
+  const [address, setAddress] = useState('')
+  const [gender, setGender] = useState<'' | 'male' | 'female' | 'other' | 'prefer_not_to_say'>('')
   const [experience, setExperience] = useState('')
   const [expectedSalary, setExpectedSalary] = useState('')
+  const [currentSalary, setCurrentSalary] = useState('')
   const [notes, setNotes] = useState('')
+  const [educationHistory, setEducationHistory] = useState<EducationEntry[]>([])
+  const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
+  const [skills, setSkills] = useState<string[]>([])
+  const [skillInput, setSkillInput] = useState('')
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [photo, setPhoto] = useState<Blob | null>(null)
+  const addSkill = (value?: string) => {
+    const v = (value ?? skillInput).trim()
+    if (v && !skills.some(s => s.toLowerCase() === v.toLowerCase())) setSkills(s => [...s, v])
+    setSkillInput('')
+  }
+  const { data: tagSuggestions } = useJobTagSuggestions()
   const createApp = useCreateApplication()
   const uploadResume = useUploadResume()
+  const uploadPhoto = useUploadCandidatePhoto()
 
   const reset = () => {
     setJobId(''); setName(''); setEmail(''); setPhone(''); setNationality('')
-    setExperience(''); setExpectedSalary(''); setNotes(''); setResumeFile(null)
+    setAddress(''); setGender('')
+    setExperience(''); setExpectedSalary(''); setCurrentSalary(''); setNotes(''); setResumeFile(null); setPhoto(null)
+    setEducationHistory([]); setExperienceHistory([]); setSkills([]); setSkillInput('')
+  }
+
+  // Pre-fill empty fields from the parsed résumé; never overwrite what's typed.
+  // Parsed skills/links the form doesn't expose are appended to notes as a
+  // lossless "Parsed:" block so HR keeps the context.
+  const handleParsed = (p: ParsedResume) => {
+    if (p.name) setName(prev => prev || p.name!)
+    if (p.email) setEmail(prev => prev || p.email!)
+    if (p.phone) setPhone(prev => prev || p.phone!)
+    if (p.nationality) setNationality(prev => prev || p.nationality!)
+    if (p.address) setAddress(prev => prev || p.address!)
+    if (p.experienceYears != null) setExperience(prev => prev || String(p.experienceYears))
+    if (p.education.length) setEducationHistory(prev => prev.length ? prev : p.education)
+    if (p.experience.length) setExperienceHistory(prev => prev.length ? prev : p.experience)
+    if (p.skills.length) setSkills(prev => prev.length ? prev : p.skills)
+    const parsedBlock = buildCandidateParsedNote(p)
+    if (parsedBlock) setNotes(prev => prev || parsedBlock)
   }
 
   const handleSave = async () => {
@@ -415,9 +505,15 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           email: email.trim(),
           phone: phone.trim() || undefined,
           nationality: nationality.trim() || undefined,
+          address: address.trim() || undefined,
+          gender: gender || undefined,
           experience: experience ? Number(experience) : undefined,
           expectedSalary: expectedSalary ? Number(expectedSalary) : undefined,
+          currentSalary: currentSalary ? Number(currentSalary) : undefined,
           notes: notes.trim() || undefined,
+          skills: skills.length > 0 ? skills : undefined,
+          educationHistory: educationHistory.length > 0 ? educationHistory : undefined,
+          experienceHistory: experienceHistory.length > 0 ? experienceHistory : undefined,
         },
       })
       const newId = (result as { data?: { id?: string } })?.data?.id
@@ -433,6 +529,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           return
         }
       }
+      // Photo (auto-extracted from the résumé) is best-effort — never block on it.
+      if (photo && newId) {
+        try { await uploadPhoto.mutateAsync({ id: newId, photo }) } catch { /* ignore */ }
+      }
       toast.success('Candidate added', `${name.trim()} added to the pipeline.`)
       reset()
       onOpenChange(false)
@@ -444,11 +544,21 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o) }}>
-      <DialogContent size="md">
+      <DialogContent size="lg">
         <DialogHeader>
           <DialogTitle>Add Candidate</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-4">
+          {/* Résumé first — upload to auto-fill the fields below */}
+          <div className="space-y-1.5">
+            <Label>Resume</Label>
+            <ResumeUpload file={resumeFile} onFile={setResumeFile} onParsed={handleParsed} onPhoto={setPhoto} />
+          </div>
+          <div className="relative flex items-center gap-3 py-0.5">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">or enter details manually</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
           <div className="space-y-1.5">
             <Label required>Job</Label>
             <Select value={jobId || undefined} onValueChange={setJobId}>
@@ -467,11 +577,11 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label required>Full name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Candidate name" />
             </div>
             <div className="space-y-1.5">
               <Label required>Email</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" />
             </div>
             <div className="space-y-1.5">
               <Label>Phone</Label>
@@ -486,6 +596,10 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               />
             </div>
             <div className="space-y-1.5">
+              <Label>Gender</Label>
+              <GenderSelect value={gender} onChange={setGender} />
+            </div>
+            <div className="space-y-1.5">
               <Label>Experience (years)</Label>
               <NumericInput decimal={false} value={experience} onChange={(e) => setExperience(e.target.value)} />
             </div>
@@ -493,50 +607,71 @@ function AddCandidateDialog({ open, onOpenChange, jobs }: { open: boolean; onOpe
               <Label>Expected salary (AED)</Label>
               <NumericInput value={expectedSalary} onChange={(e) => setExpectedSalary(e.target.value)} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Current salary (AED)</Label>
+              <NumericInput value={currentSalary} onChange={(e) => setCurrentSalary(e.target.value)} />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Notes</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Source, recruiter remarks, etc." />
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Notes" />
           </div>
-          <div className="space-y-1.5">
-            <Label>Resume</Label>
-            <Label className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg border border-dashed border-border cursor-pointer transition-colors',
-              'hover:border-primary/50 hover:bg-primary/5',
-              resumeFile && 'border-primary/40 bg-primary/5',
-            )}>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                className="sr-only"
-                onChange={e => setResumeFile(e.target.files?.[0] ?? null)}
+
+          {/* Address (full width) · Experience[] · Education[] — Gender is up top. */}
+          <div className="pt-4 border-t border-border/60">
+            <CandidateProfileFields
+              address={address}
+              onAddressChange={setAddress}
+              gender={gender}
+              onGenderChange={setGender}
+              education={educationHistory}
+              onEducationChange={setEducationHistory}
+              experience={experienceHistory}
+              onExperienceChange={setExperienceHistory}
+              compact
+              showGender={false}
+            />
+            <div className="pt-4">
+              <ChipsField
+                label="Skills"
+                optional
+                chips={skills}
+                onRemove={(v) => setSkills(prev => prev.filter(x => x !== v))}
+                inputValue={skillInput}
+                onInputChange={setSkillInput}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
+                onAdd={addSkill}
+                onAddValue={addSkill}
+                suggestions={tagSuggestions?.skills}
+                placeholder="Add a skill · Press Enter"
+                chipClassName="bg-sky-100 text-sky-700"
               />
-              <FileText className={cn('size-4 shrink-0', resumeFile ? 'text-primary' : 'text-muted-foreground')} />
-              <span className={cn('text-sm truncate', resumeFile ? 'text-foreground' : 'text-muted-foreground')}>
-                {resumeFile ? resumeFile.name : 'Attach resume (PDF, DOC, DOCX)'}
-              </span>
-              {resumeFile && (
-                <button
-                  type="button"
-                  onClick={e => { e.preventDefault(); setResumeFile(null) }}
-                  className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
-                  aria-label="Remove resume"
-                >
-                  <XCircle className="size-4" />
-                </button>
-              )}
-            </Label>
+            </div>
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending} leftIcon={<Plus className="size-3.5" />}>
+          <Button onClick={handleSave} loading={createApp.isPending || uploadResume.isPending || uploadPhoto.isPending} leftIcon={<Plus className="size-3.5" />}>
             Add to pipeline
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * Lossless capture of résumé-parsed fields the candidate dialog doesn't expose
+ * as structured inputs (social/portfolio links). Skills now have a dedicated
+ * field, so they're no longer dumped here. Returns a single "Parsed:" block we
+ * pre-fill into the free-text notes; empty string when nothing useful was found.
+ */
+function buildCandidateParsedNote(p: ParsedResume): string {
+  const lines: string[] = []
+  if (p.linkedin) lines.push(`LinkedIn: ${p.linkedin}`)
+  if (p.github) lines.push(`GitHub: ${p.github}`)
+  if (p.portfolio) lines.push(`Portfolio: ${p.portfolio}`)
+  return lines.length > 0 ? `Parsed:\n${lines.join('\n')}` : ''
 }
 
 /**
@@ -587,6 +722,35 @@ function ConvertCandidateDialog({
   )
 }
 
+/**
+ * The "Job" cell for the candidate list. One clickable unit (no boxed badges —
+ * those forced the title to truncate and read heavy): the job title as a link
+ * with a ↗ icon, and the `#`-prefixed requisition number directly beneath it.
+ * stopPropagation so clicking opens the JOB, not the candidate profile the row
+ * navigates to.
+ */
+function JobLinkCell({ jobId, jobTitle, jobNo }: { jobId: string; jobTitle?: string; jobNo?: string | null }) {
+  const navigate = useNavigate()
+  if (!jobTitle) return <span className="text-[11px] text-muted-foreground/30">—</span>
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); navigate(`/recruitment/jobs/${jobId}`) }}
+      title={`${jobTitle}${jobNo ? ` · ${jobNo}` : ''}`}
+      className="group/job flex flex-col items-start gap-0.5 min-w-0 max-w-full text-start"
+    >
+      <span className="inline-flex max-w-full items-center gap-1 text-[11px] font-medium text-foreground/90 transition-colors group-hover/job:text-primary">
+        <Briefcase className="size-3 shrink-0 text-muted-foreground transition-colors group-hover/job:text-primary" />
+        <span className="truncate group-hover/job:underline">{jobTitle}</span>
+        <ArrowUpRight className="size-3 shrink-0 opacity-50 transition-opacity group-hover/job:opacity-100" data-rtl-flip />
+      </span>
+      {jobNo && (
+        <span className="ps-4 text-[10px] font-medium tabular-nums text-muted-foreground/60">#{jobNo}</span>
+      )}
+    </button>
+  )
+}
+
 const CandidateListRow = memo(function CandidateListRow({
   candidate,
   stage,
@@ -619,16 +783,15 @@ const CandidateListRow = memo(function CandidateListRow({
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
             {candidate.nationality && <span className="text-[11px] text-muted-foreground">{candidate.nationality}</span>}
             {candidate.experience > 0 && <span className="text-[11px] text-muted-foreground">{candidate.experience}y exp</span>}
-            {candidate.jobTitle && (
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Briefcase className="size-3 shrink-0" />{candidate.jobTitle}
-              </span>
-            )}
+            <CandidateSourceBadge source={candidate.source} referredByName={candidate.referredByName} />
           </div>
         </div>
       </div>
       {/* Fixed-width data columns - match sticky header widths */}
       <div className="hidden sm:flex items-center gap-3 shrink-0">
+        <div className="w-44 min-w-0">
+          <JobLinkCell jobId={candidate.jobId} jobTitle={candidate.jobTitle} jobNo={candidate.jobNo} />
+        </div>
         <div className="w-[90px]">
           {stage && (
             <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border max-w-full', color.bgClass)}>
@@ -637,10 +800,12 @@ const CandidateListRow = memo(function CandidateListRow({
             </span>
           )}
         </div>
-        <div className="w-10 flex justify-center">
+        <div className="w-14 flex justify-center">
           {candidate.score > 0
             ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span className="font-medium">{candidate.score}</span></div>
-            : <span className="text-[11px] text-muted-foreground/30">—</span>
+            : typeof candidate.matchScore === 'number' && candidate.matchScore > 0
+              ? <MatchScoreBadge score={candidate.matchScore} compact />
+              : <span className="text-[11px] text-muted-foreground/30">—</span>
           }
         </div>
         <div className="w-20 text-right text-[11px] text-muted-foreground">
@@ -651,12 +816,17 @@ const CandidateListRow = memo(function CandidateListRow({
         </div>
       </div>
       <div className="flex sm:hidden items-center gap-2 flex-wrap">
+        <JobLinkCell jobId={candidate.jobId} jobTitle={candidate.jobTitle} jobNo={candidate.jobNo} />
         {stage && (
           <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border', color.bgClass)}>
             <span className={cn('size-1.5 rounded-full shrink-0', color.dotClass)} />{stage.label}
           </span>
         )}
-        {candidate.score > 0 && <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span>{candidate.score}</span></div>}
+        {candidate.score > 0
+          ? <div className="flex items-center gap-0.5 text-[11px] text-amber-600"><Star className="size-3 fill-amber-400 text-amber-400" /><span>{candidate.score}</span></div>
+          : typeof candidate.matchScore === 'number' && candidate.matchScore > 0
+            ? <MatchScoreBadge score={candidate.matchScore} compact />
+            : null}
         {candidate.expectedSalary != null && <span className="text-[11px] text-muted-foreground">{formatCurrency(candidate.expectedSalary)}</span>}
         <span className="text-[11px] text-muted-foreground">{formatDate(candidate.appliedDate)}</span>
       </div>
@@ -677,6 +847,7 @@ const CandidateListRow = memo(function CandidateListRow({
 export function RecruitmentPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Real-time: subscribe to all recruitment WS events for this tenant
   useRecruitmentSocket()
@@ -711,7 +882,13 @@ export function RecruitmentPage() {
     }
     return map
   }, [kanbanStagesList])
-  const [activeTab, setActiveTab] = useState('pipeline')
+  // Tab state is URL-driven: /recruitment/jobs lands on Job Listings, /recruitment
+  // on Candidate Pipeline. Lets users deep-link / share the Jobs view and keeps
+  // back-button behaviour intact.
+  const activeTab = location.pathname.startsWith('/recruitment/jobs') ? 'jobs' : 'pipeline'
+  const setActiveTab = (id: string) => {
+    navigate(id === 'jobs' ? '/recruitment/jobs' : '/recruitment', { replace: false })
+  }
   const [pipelineView, setPipelineView] = useState<'kanban' | 'list'>('kanban')
   const [listStageFilter, setListStageFilter] = useState<ApplicationStage | 'all'>('all')
   const [jobDialogOpen, setJobDialogOpen] = useState(false)
@@ -1010,8 +1187,9 @@ export function RecruitmentPage() {
                       <div className="sticky top-0 z-10 hidden sm:flex items-center gap-3 px-4 py-2 border-b bg-card/95 backdrop-blur-sm">
                         <div className="flex-1 min-w-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Candidate</div>
                         <div className="flex items-center gap-3 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          <span className="w-44">Job</span>
                           <span className="w-[90px]">Stage</span>
-                          <span className="w-10 text-center">Score</span>
+                          <span className="w-14 text-center">Score</span>
                           <span className="w-20 text-right">Salary</span>
                           <span className="w-[70px] text-right">Applied</span>
                         </div>
@@ -1076,12 +1254,15 @@ export function RecruitmentPage() {
                         department: r.department,
                         location: r.location,
                         type: r.type,
+                        workplaceType: r.workplaceType,
                         status: 'draft',
                         openings: r.openings,
                         minSalary: r.minSalary,
                         maxSalary: r.maxSalary,
                         description: r.description,
                         requirements: r.requirements,
+                        skills: r.skills,
+                        qualifications: r.qualifications,
                         closingDate: r.closingDate,
                       })))
                       toast.success(`${selected.length} job(s) duplicated`, 'Draft copies created.')

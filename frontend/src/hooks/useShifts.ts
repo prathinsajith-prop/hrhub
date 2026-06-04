@@ -33,9 +33,10 @@ export function useShiftOptions() {
     const { data = [] } = useShifts()
     return useMemo(() => {
         const list = Array.isArray(data) ? data : []
-        return list
-            .filter(s => s.isActive)
-            .map(s => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` }))
+        return list.reduce<Array<{ value: string; label: string }>>((acc, s) => {
+            if (s.isActive) acc.push({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` })
+            return acc
+        }, [])
     }, [data])
 }
 

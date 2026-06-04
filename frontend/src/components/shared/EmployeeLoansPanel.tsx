@@ -58,6 +58,11 @@ function RejectDialog({ open, onClose, onConfirm, isPending }: {
  *
  * Exported so the global Loans & Advances page can use the same modal.
  */
+function monthLabel(period: string) {
+    const d = new Date(period)
+    return d.toLocaleDateString('en-AE', { month: 'short', year: 'numeric' })
+}
+
 export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
     loan: EmployeeLoan
     open: boolean
@@ -68,11 +73,6 @@ export function LoanScheduleDialog({ loan, open, onClose, canManage }: {
     const recordPayment = useRecordLoanPayment()
     const entries = data?.data ?? []
     const [payTarget, setPayTarget] = useState<LoanScheduleEntry | null>(null)
-
-    const monthLabel = (period: string) => {
-        const d = new Date(period)
-        return d.toLocaleDateString('en-AE', { month: 'short', year: 'numeric' })
-    }
 
     const confirmPay = () => {
         if (!payTarget) return

@@ -513,6 +513,163 @@ export function payslipEmail(params: {
     return { to: '', subject: `Your payslip for ${h(month)} — ${h(companyName)}`, html: layout(content, '#2563eb', companyName, `Your ${month} payslip from ${companyName} is ready`) }
 }
 
+// ── Recruitment / careers ──────────────────────────────────────────────────
+export function applicationReceivedEmail(params: { candidateName: string; jobTitle: string; companyName: string }): EmailOptions {
+    const { candidateName, jobTitle, companyName } = params
+    const content = `
+      ${banner('Application Received', '#eff6ff', '#2563eb', '#1d4ed8')}
+      ${heading('Thanks for applying!')}
+      ${p(`Hi ${h(candidateName)},`)}
+      ${p(`We've received your application for <strong>${h(jobTitle)}</strong> at <strong>${h(companyName)}</strong>. Our hiring team will review it and reach out if your profile matches the role.`, true)}
+      ${p('No further action is needed right now. We appreciate your interest.', true)}
+    `
+    return { to: '', subject: `We received your application — ${h(jobTitle)}`, html: layout(content, '#2563eb', companyName, `Your application for ${jobTitle} was received`) }
+}
+
+export function newApplicationAlertEmail(params: { recipientName: string; candidateName: string; jobTitle: string; source: string; actionUrl: string; companyName?: string }): EmailOptions {
+    const { recipientName, candidateName, jobTitle, source, actionUrl, companyName } = params
+    const content = `
+      ${heading('New Job Application')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${p(`A new candidate has applied. Review them in the recruitment pipeline.`, true)}
+      ${dataTable([['Candidate', candidateName], ['Position', jobTitle], ['Source', source]])}
+      ${btn('Review candidate', actionUrl)}
+    `
+    return { to: '', subject: `New application: ${h(candidateName)} — ${h(jobTitle)}`, html: layout(content, '#2563eb', companyName, `New application for ${jobTitle}`) }
+}
+
+export function interviewInvitationEmail(params: { recipientName: string; candidateName: string; jobTitle: string; interviewType: string; scheduledAt: string; companyName?: string; forCandidate?: boolean }): EmailOptions {
+    const { recipientName, candidateName, jobTitle, interviewType, scheduledAt, companyName, forCandidate } = params
+    const intro = forCandidate
+        ? `You have been invited to an interview for <strong>${h(jobTitle)}</strong>.`
+        : `An interview has been scheduled for candidate <strong>${h(candidateName)}</strong> (${h(jobTitle)}).`
+    const content = `
+      ${banner('Interview Scheduled', '#eff6ff', '#2563eb', '#1d4ed8')}
+      ${heading('Interview Scheduled')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${p(intro, true)}
+      ${dataTable([['Position', jobTitle], ['Type', interviewType], ['Scheduled for', scheduledAt]])}
+      ${p('Please be available at the scheduled time.', true)}
+    `
+    return { to: '', subject: `Interview scheduled — ${h(jobTitle)}`, html: layout(content, '#2563eb', companyName, `Interview for ${jobTitle}`) }
+}
+
+// ── Expiry alerts (contract + passport) ─────────────────────────────────────
+export function contractExpiryAlertEmail(params: { recipientName: string; employeeName: string; expiryDate: string; daysRemaining: number; actionUrl: string; companyName?: string }): EmailOptions {
+    const { recipientName, employeeName, expiryDate, daysRemaining, actionUrl, companyName } = params
+    const accent = daysRemaining <= 30 ? '#dc2626' : '#f59e0b'
+    const content = `
+      ${banner(`Contract expires in ${h(String(daysRemaining))} day(s)`, '#fff7ed', accent, '#9a3412')}
+      ${heading('Employment Contract Expiring')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${p(`The employment contract for <strong>${h(employeeName)}</strong> is approaching its end date. Review and action renewal or offboarding as needed.`, true)}
+      ${dataTable([['Employee', employeeName], ['Contract end', expiryDate], ['Days remaining', String(daysRemaining)]])}
+      ${btn('View employee', actionUrl, accent)}
+    `
+    return { to: '', subject: `Contract expiry: ${h(employeeName)} — ${h(String(daysRemaining))} days`, html: layout(content, accent, companyName, `${employeeName}'s contract expires in ${daysRemaining} days`) }
+}
+
+export function passportExpiryAlertEmail(params: { recipientName: string; employeeName: string; expiryDate: string; daysRemaining: number; actionUrl: string; companyName?: string }): EmailOptions {
+    const { recipientName, employeeName, expiryDate, daysRemaining, actionUrl, companyName } = params
+    const accent = daysRemaining <= 30 ? '#dc2626' : daysRemaining <= 90 ? '#f59e0b' : '#2563eb'
+    const content = `
+      ${banner(`Passport expires in ${h(String(daysRemaining))} day(s)`, '#fff7ed', accent, '#9a3412')}
+      ${heading('Passport Expiring')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${p(`The passport for <strong>${h(employeeName)}</strong> is approaching expiry. UAE visa/labour processes require a valid passport — plan renewal early.`, true)}
+      ${dataTable([['Employee', employeeName], ['Passport expiry', expiryDate], ['Days remaining', String(daysRemaining)]])}
+      ${btn('View employee', actionUrl, accent)}
+    `
+    return { to: '', subject: `Passport expiry: ${h(employeeName)} — ${h(String(daysRemaining))} days`, html: layout(content, accent, companyName, `${employeeName}'s passport expires in ${daysRemaining} days`) }
+}
+
+// ── Complaints (status to complainant) ──────────────────────────────────────
+export function complaintStatusEmail(params: { recipientName: string; title: string; status: string; note?: string; actionUrl: string; companyName?: string }): EmailOptions {
+    const { recipientName, title, status, note, actionUrl, companyName } = params
+    const resolved = status.toLowerCase() === 'resolved'
+    const accent = resolved ? '#059669' : '#2563eb'
+    const content = `
+      ${banner(resolved ? 'Complaint Resolved' : 'Complaint Update', resolved ? '#ecfdf5' : '#eff6ff', accent, resolved ? '#047857' : '#1d4ed8')}
+      ${heading('Update on your submission')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${p(`Your complaint <strong>"${h(title)}"</strong> is now <strong>${h(status)}</strong>.`, true)}
+      ${note ? dataTable([['Note', note]]) : ''}
+      ${btn('View details', actionUrl, accent)}
+    `
+    return { to: '', subject: `Your complaint is ${h(status)}`, html: layout(content, accent, companyName, `Your complaint "${title}" is ${status}`) }
+}
+
+// ── Travel (submitted to approver / decision to requester) ──────────────────
+export function travelStatusEmail(params: { recipientName: string; travelNo: string; destination: string; status: string; reason?: string; actionUrl: string; companyName?: string; forApprover?: boolean }): EmailOptions {
+    const { recipientName, travelNo, destination, status, reason, actionUrl, companyName, forApprover } = params
+    const approved = status.toLowerCase() === 'approved'
+    const accent = approved ? '#059669' : status.toLowerCase() === 'rejected' ? '#dc2626' : '#2563eb'
+    const intro = forApprover
+        ? `A travel request awaits your review.`
+        : `Your travel request <strong>${h(travelNo)}</strong> is now <strong>${h(status)}</strong>.`
+    const content = `
+      ${heading(forApprover ? 'Travel Request Submitted' : 'Travel Request Update')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${p(intro, true)}
+      ${dataTable([['Request', travelNo], ['Destination', destination], ['Status', status], ...(reason ? [['Reason', reason] as [string, string]] : [])])}
+      ${btn(forApprover ? 'Review request' : 'View request', actionUrl, accent)}
+    `
+    return { to: '', subject: forApprover ? `Travel request ${h(travelNo)} submitted` : `Travel request ${h(travelNo)} ${h(status)}`, html: layout(content, accent, companyName, `Travel ${travelNo} ${status}`) }
+}
+
+// ── Performance / Training (to employee) ────────────────────────────────────
+export function performanceReviewEmail(params: { employeeName: string; reviewPeriod: string; status: string; actionUrl: string; companyName?: string }): EmailOptions {
+    const { employeeName, reviewPeriod, status, actionUrl, companyName } = params
+    const content = `
+      ${heading('Performance Review Update')}
+      ${p(`Hi ${h(employeeName)},`)}
+      ${p(`Your performance review for <strong>${h(reviewPeriod)}</strong> is now <strong>${h(status)}</strong>.`, true)}
+      ${btn('View review', actionUrl)}
+    `
+    return { to: '', subject: `Your performance review — ${h(reviewPeriod)}`, html: layout(content, '#2563eb', companyName, `Performance review ${status}`) }
+}
+
+export function trainingAssignedEmail(params: { employeeName: string; title: string; startDate: string; actionUrl: string; companyName?: string }): EmailOptions {
+    const { employeeName, title, startDate, actionUrl, companyName } = params
+    const content = `
+      ${banner('Training Assigned', '#eff6ff', '#2563eb', '#1d4ed8')}
+      ${heading('You have a new training')}
+      ${p(`Hi ${h(employeeName)},`)}
+      ${p(`You've been enrolled in <strong>${h(title)}</strong>.`, true)}
+      ${dataTable([['Training', title], ['Starts', startDate]])}
+      ${btn('View training', actionUrl)}
+    `
+    return { to: '', subject: `Training assigned: ${h(title)}`, html: layout(content, '#2563eb', companyName, `New training: ${title}`) }
+}
+
+// ── Employee transfer / membership changes ──────────────────────────────────
+export function transferEmail(params: { employeeName: string; toDepartment?: string; transferDate: string; actionUrl: string; companyName?: string }): EmailOptions {
+    const { employeeName, toDepartment, transferDate, actionUrl, companyName } = params
+    const content = `
+      ${banner('Transfer Recorded', '#eff6ff', '#2563eb', '#1d4ed8')}
+      ${heading('You have been transferred')}
+      ${p(`Hi ${h(employeeName)},`)}
+      ${p(`A transfer has been recorded on your profile, effective <strong>${h(transferDate)}</strong>.`, true)}
+      ${dataTable([...(toDepartment ? [['New department', toDepartment] as [string, string]] : []), ['Effective', transferDate]])}
+      ${btn('View profile', actionUrl)}
+    `
+    return { to: '', subject: 'Your transfer has been recorded', html: layout(content, '#2563eb', companyName, `Transfer effective ${transferDate}`) }
+}
+
+export function membershipChangeEmail(params: { recipientName: string; workspaceName: string; change: 'role_changed' | 'removed'; role?: string }): EmailOptions {
+    const { recipientName, workspaceName, change, role } = params
+    const removed = change === 'removed'
+    const accent = removed ? '#dc2626' : '#2563eb'
+    const content = `
+      ${heading(removed ? 'Workspace Access Removed' : 'Your Role Was Updated')}
+      ${p(`Hi ${h(recipientName)},`)}
+      ${removed
+            ? p(`Your access to <strong>${h(workspaceName)}</strong> on HRHub has been removed. If you believe this is a mistake, contact your administrator.`, true)
+            : p(`Your role in <strong>${h(workspaceName)}</strong> has been updated to <strong>${h(role ?? '')}</strong>.`, true)}
+    `
+    return { to: '', subject: removed ? `Access removed — ${h(workspaceName)}` : `Your role changed — ${h(workspaceName)}`, html: layout(content, accent, workspaceName, removed ? 'Workspace access removed' : 'Your role was updated') }
+}
+
 export function mailTestEmail(params: { recipientName: string }): EmailOptions {
     const content = `
       ${banner('Mail Configuration Verified', '#ecfdf5', '#10b981', '#047857')}

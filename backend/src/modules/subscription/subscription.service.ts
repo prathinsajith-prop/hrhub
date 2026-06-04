@@ -92,7 +92,7 @@ let _stripe: Stripe | null = null
 function getStripe(): Stripe | null {
     const env = loadEnv()
     if (!env.STRIPE_SECRET_KEY) return null
-    if (!_stripe) _stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2026-04-22.dahlia' })
+    if (!_stripe) _stripe = new Stripe(env.STRIPE_SECRET_KEY, { apiVersion: '2026-05-27.dahlia' })
     return _stripe
 }
 
@@ -122,6 +122,7 @@ export async function getQuotaInfo(tenantId: string) {
         .select({
             subscriptionPlan: tenants.subscriptionPlan,
             employeeQuota: tenants.employeeQuota,
+            subscriptionExpiresAt: tenants.subscriptionExpiresAt,
         })
         .from(tenants)
         .where(eq(tenants.id, tenantId))
@@ -130,23 +131,32 @@ export async function getQuotaInfo(tenantId: string) {
     if (!tenant) throw Object.assign(new Error('Tenant not found'), { statusCode: 404 })
 
     const plan = tenant.subscriptionPlan as PlanKey
-    const quota: number | null = plan === 'enterprise' ? null : (tenant.employeeQuota ?? FREE_PLAN_QUOTA)
+    // A paid plan whose term has lapsed reverts to the free-tier quota for the
+    // purpose of *adding* employees — existing staff are untouched, but no new
+    // adds beyond the free limit until the subscription is renewed.
+    const expired = plan !== 'starter' && plan !== 'enterprise'
+        && !!tenant.subscriptionExpiresAt && tenant.subscriptionExpiresAt < new Date()
+    const quota: number | null = plan === 'enterprise'
+        ? null
+        : expired ? FREE_PLAN_QUOTA : (tenant.employeeQuota ?? FREE_PLAN_QUOTA)
     const current = await countActiveEmployees(tenantId)
     const canAdd = quota === null || current < quota
 
-    return { plan, quota, current, canAdd }
+    return { plan, quota, current, canAdd, expired }
 }
 
 export async function enforceEmployeeQuota(tenantId: string): Promise<void> {
     const info = await getQuotaInfo(tenantId)
     if (!info.canAdd) {
         const planName = PLAN_DISPLAY[info.plan]?.name ?? info.plan
+        const message = info.expired
+            ? `Your ${planName} subscription has expired, so new employees are limited to the free tier ` +
+              `(up to ${info.quota}, currently ${info.current}). Please renew to add more.`
+            : `Employee limit reached. Your ${planName} plan allows up to ${info.quota} employees ` +
+              `(currently ${info.current}). Please upgrade to add more.`
         const err = Object.assign(
-            new Error(
-                `Employee limit reached. Your ${planName} plan allows up to ${info.quota} employees ` +
-                `(currently ${info.current}). Please upgrade to add more.`,
-            ),
-            { statusCode: 402, code: 'QUOTA_EXCEEDED', quota: info.quota, current: info.current, plan: info.plan },
+            new Error(message),
+            { statusCode: 402, code: info.expired ? 'SUBSCRIPTION_EXPIRED' : 'QUOTA_EXCEEDED', quota: info.quota, current: info.current, plan: info.plan },
         )
         throw err
     }
@@ -240,6 +250,25 @@ export async function activateProfessionalFromWebhook(
     stripeSessionId?: string,
     action: 'upgrade' | 'quota_update' = 'upgrade',
 ): Promise<void> {
+    // Idempotency: Stripe retries webhooks, so the same checkout session can
+    // arrive more than once. If we've already recorded an activation for this
+    // session, skip — otherwise we'd double-log events / re-send invoices.
+    if (stripeSessionId) {
+        const [seen] = await db
+            .select({ id: subscriptionEvents.id })
+            .from(subscriptionEvents)
+            .where(and(
+                eq(subscriptionEvents.tenantId, tenantId),
+                eq(subscriptionEvents.stripeSessionId, stripeSessionId),
+                inArray(subscriptionEvents.eventType, ['plan_activated', 'quota_updated'] as never[]),
+            ))
+            .limit(1)
+        if (seen) {
+            log.info({ tenantId, stripeSessionId }, 'subscription: duplicate webhook ignored (already activated)')
+            return
+        }
+    }
+
     const [tenant] = await db
         .select({ subscriptionPlan: tenants.subscriptionPlan })
         .from(tenants)

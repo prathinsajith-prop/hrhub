@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
 import {
     listAssets,
     getAsset,
@@ -269,6 +270,12 @@ export default async function assetsRoutes(fastify: any): Promise<void> {
                 },
                 ipAddress: (request as any).ip,
                 userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            notifyEmployee(request.user.tenantId, body.employeeId, {
+                type: 'info',
+                title: 'Asset assigned to you',
+                message: `${asset?.name ?? 'An asset'} has been assigned to you${body.expectedReturnDate ? ` (due back ${body.expectedReturnDate})` : ''}.`,
+                actionUrl: '/me/profile',
             }).catch(() => { })
         }
 

@@ -7,7 +7,7 @@ import { api, ApiError } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { useViewModeStore } from '@/store/viewModeStore'
 import { ROUTES, ADMIN_APP_URL } from '@/lib/routes'
-import { canSwitchToManager, canUsePortal, isAdminRoleOnly } from '@/lib/permissions'
+import { canUsePortal, isAdminRoleOnly } from '@/lib/permissions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -77,9 +77,10 @@ export function LoginPage() {
             return
         }
         login(user, tenant, accessToken, refreshToken, keepSignedIn)
-        const canManage = canSwitchToManager(user)
-        setMode(canManage ? 'manager' : 'employee')
-        navigate(canManage ? ROUTES.managerHome : ROUTES.employeeHome, { replace: true })
+        // The manager/employee view switch was removed from the header, so the
+        // portal always opens in employee view (resets any stale persisted mode).
+        setMode('employee')
+        navigate(ROUTES.employeeHome, { replace: true })
     }
 
     // `mfa` flag matters because the 2FA challenge also returns 401 on a wrong
@@ -308,7 +309,7 @@ export function LoginPage() {
                                     inputMode="email"
                                     value={email}
                                     onChange={(e) => onEmailChange(e.target.value)}
-                                    placeholder="you@company.com"
+                                    placeholder="Email address"
                                     autoComplete="email"
                                     autoCapitalize="off"
                                     autoCorrect="off"

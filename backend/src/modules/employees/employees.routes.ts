@@ -1,6 +1,8 @@
 import {
     listEmployees, getEmployee, createEmployee,
-    updateEmployee, archiveEmployee, getExpiringVisas, getOrgChart,
+    updateEmployee, archiveEmployee, unarchiveEmployee,
+    assertEmployeeArchivable, getEmployeeArchiveDependencies,
+    getExpiringVisas, getOrgChart,
     generateNextEmployeeNo,
 } from './employees.service.js'
 import { validate, createEmployeeSchema, updateEmployeeSchema, listEmployeesSchema } from '../../lib/validation.js'
@@ -44,6 +46,7 @@ export default async function (fastify: any): Promise<void> {
             search: query.search,
             status: query.status,
             department: managerEmployeeId ? undefined : query.department,
+            archived: (query as any).archived,
             managerEmployeeId,
             filter: (query as any).filter,
             limit: query.limit,
@@ -290,6 +293,7 @@ export default async function (fastify: any): Promise<void> {
                 createdAt: users.createdAt,
                 attendancePunchEnabled: users.attendancePunchEnabled,
                 attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+                portalPostEnabled: users.portalPostEnabled,
             })
             .from(users)
             .where(and(eq(users.employeeId, id), eq(users.tenantId, request.user.tenantId)))
@@ -647,12 +651,55 @@ export default async function (fastify: any): Promise<void> {
         return reply.send({ data: updated })
     })
 
-    // DELETE /api/v1/employees/:id
+    // GET /api/v1/employees/lifecycle-counts — active vs archived counts for the status filter
+    fastify.get('/lifecycle-counts', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const tenantId = request.user.tenantId
+        const [a, r] = await Promise.all([
+            listEmployees({ tenantId, archived: 'active', limit: 1, offset: 0 }),
+            listEmployees({ tenantId, archived: 'archived', limit: 1, offset: 0 }),
+        ])
+        return reply.send({ data: { active: a.total, archived: r.total, all: a.total + r.total } })
+    })
+
+    // GET /api/v1/employees/:id/archive-dependencies — preview before archiving
+    fastify.get('/:id/archive-dependencies', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const dependencies = await getEmployeeArchiveDependencies(request.user.tenantId, id)
+        return reply.send({ data: { dependencies, blocking: dependencies.some(d => d.blocking) } })
+    })
+
+    // DELETE /api/v1/employees/:id — archive (soft). Protected-user + dependency guarded.
+    // `?force=true` proceeds past non-blocking warnings (warn-and-continue mode).
     fastify.delete('/:id', {
         preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
         schema: { tags: ['Employees'] },
     }, async (request, reply) => {
         const { id } = request.params as { id: string }
+        const force = (request.query as any)?.force === 'true' || (request.query as any)?.force === true
+
+        // 1. Protected accounts (self, last super_admin/owner) can never be archived.
+        try {
+            await assertEmployeeArchivable(request.user.tenantId, id, { userId: request.user.id, employeeId: request.user.employeeId })
+        } catch (err: any) {
+            return reply.code(err?.statusCode ?? 409).send({ statusCode: err?.statusCode ?? 409, error: 'Conflict', code: err?.code, message: err.message })
+        }
+
+        // 2. Dependency validation. Blocking deps always stop; warnings need `force`.
+        const dependencies = await getEmployeeArchiveDependencies(request.user.tenantId, id)
+        const blocking = dependencies.filter(d => d.blocking)
+        if (blocking.length > 0) {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', code: 'ARCHIVE_BLOCKED', message: 'Cannot archive — unresolved dependencies.', dependencies })
+        }
+        if (dependencies.length > 0 && !force) {
+            return reply.code(409).send({ statusCode: 409, error: 'Conflict', code: 'ARCHIVE_NEEDS_CONFIRM', message: 'This employee has open items. Archive anyway?', dependencies })
+        }
+
         const archived = await archiveEmployee(request.user.tenantId, id)
         if (!archived) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Employee not found' })
         recordActivity({
@@ -664,10 +711,35 @@ export default async function (fastify: any): Promise<void> {
             entityId: archived.id,
             entityName: `${archived.firstName} ${archived.lastName}`,
             action: 'delete',
+            metadata: { kind: 'lifecycle', subKind: 'archive', previousStatus: 'active', newStatus: 'terminated', forced: force, dependencies: dependencies.map(d => d.type) },
             ipAddress: (request as any).ip,
             userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(204).send()
+    })
+
+    // POST /api/v1/employees/:id/restore — unarchive back to active
+    fastify.post('/:id/restore', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Employees'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const restored = await unarchiveEmployee(request.user.tenantId, id)
+        if (!restored) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Archived employee not found' })
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'employee',
+            entityId: restored.id,
+            entityName: `${restored.firstName} ${restored.lastName}`,
+            action: 'update',
+            metadata: { kind: 'lifecycle', subKind: 'restore', previousStatus: 'terminated', newStatus: 'active' },
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: restored })
     })
 
     // POST /api/v1/employees/bulk-import

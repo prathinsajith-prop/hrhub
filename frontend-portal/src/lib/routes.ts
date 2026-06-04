@@ -10,8 +10,15 @@ export const ROUTES = {
     employeeLeave: '/me/leave',
     employeePayslips: '/me/payslips',
     employeeAttendance: '/me/attendance',
+    employeeWork: '/me/work',
     employeeDocuments: '/me/documents',
     employeePerformance: '/me/performance',
+    employeeReferrals: '/me/referrals',
+    employeeAnnouncements: '/me/announcements',
+    employeeRecognition: '/me/recognition',
+    employeeRecognitionDetail: (id = ':id') => `/me/recognition/${id}`,
+    employeeReports: '/me/reports',
+    employeeGoals: '/me/goals',
     notifications: '/notifications',
 
     // Manager mode (dept_head only)

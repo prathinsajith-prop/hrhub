@@ -56,7 +56,7 @@ function RequestLoanDialog({ onClose }: { onClose: () => void }) {
                                 aria-invalid={!!errors.amount}
                                 value={form.amount}
                                 onChange={e => { setForm(f => ({ ...f, amount: e.target.value })); setErrors(er => ({ ...er, amount: '' })) }}
-                                placeholder="0.00"
+                                placeholder="Amount"
                             />
                         </FormField>
                         <FormField label={`${t('loans.monthlyDeduction')} (AED)`} required error={errors.monthlyDeduction}>
@@ -65,7 +65,7 @@ function RequestLoanDialog({ onClose }: { onClose: () => void }) {
                                 aria-invalid={!!errors.monthlyDeduction}
                                 value={form.monthlyDeduction}
                                 onChange={e => { setForm(f => ({ ...f, monthlyDeduction: e.target.value })); setErrors(er => ({ ...er, monthlyDeduction: '' })) }}
-                                placeholder="0.00"
+                                placeholder="Monthly deduction"
                             />
                         </FormField>
                     </div>

@@ -1,9 +1,10 @@
 import { eq, and, desc, isNull, sql, getTableColumns, ne, inArray } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { recruitmentJobs, jobApplications, recruitmentStages } from '../../db/schema/index.js'
+import { recruitmentJobs, jobApplications, recruitmentStages, employees, tenants, recruitmentSkills, recruitmentQualifications } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
+import { scoreMatch } from './matching.engine.js'
 import { buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
 import type { InferInsertModel } from 'drizzle-orm'
 
@@ -26,6 +27,7 @@ const APP_FIELD_MAP = {
     score: jobApplications.score,
     experience: jobApplications.experience,
     expectedSalary: jobApplications.expectedSalary,
+    source: jobApplications.source,
 }
 const APP_ALLOWED = new Set(Object.keys(APP_FIELD_MAP))
 
@@ -43,8 +45,26 @@ export async function listJobs(tenantId: string, params: { status?: string; depa
         .search(q, recruitmentJobs.title, recruitmentJobs.department)
         .filter(filter, JOB_FIELD_MAP, JOB_ALLOWED)
 
-    const rows = await db.select({ ...getTableColumns(recruitmentJobs), totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+    // Live applicant count per job. `recruitment_jobs` has no `applications`
+    // counter column, so the list (and its "Applications" table column) must
+    // compute it — otherwise every row shows 0. Pre-aggregated subquery (one
+    // row per job) LEFT JOINed in, so COUNT(*) OVER() still counts jobs, not
+    // applications. Counts only non-deleted applications, tenant-scoped to use
+    // idx_applications_tenant. Mirrors the memberCount pattern in listTeams.
+    const appCounts = db
+        .select({ jobId: jobApplications.jobId, count: sql<number>`COUNT(*)`.as('count') })
+        .from(jobApplications)
+        .where(and(eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
+        .groupBy(jobApplications.jobId)
+        .as('ac')
+
+    const rows = await db.select({
+        ...getTableColumns(recruitmentJobs),
+        applications: sql<number>`COALESCE(${appCounts.count}, 0)::int`,
+        totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
+    })
         .from(recruitmentJobs)
+        .leftJoin(appCounts, eq(recruitmentJobs.id, appCounts.jobId))
         .where(conds.where())
         .orderBy(desc(recruitmentJobs.createdAt))
         .limit(limit).offset(offset)
@@ -60,6 +80,162 @@ export async function getJob(tenantId: string, id: string) {
     return row ?? null
 }
 
+/**
+ * Distinct skills + qualifications already used across the tenant's jobs.
+ * Powers the type-ahead suggestions in the job create/edit dialogs so HR reuses
+ * consistent tags instead of inventing case/spelling variants. De-duplicated
+ * case-insensitively (first-seen casing wins) and sorted alphabetically.
+ */
+/**
+ * Skill + qualification suggestions for the recruitment UIs. Reads the dedicated
+ * per-tenant catalog tables (migration 0088) — a single indexed lookup each,
+ * already de-duplicated and alphabetised — instead of unnesting every job's
+ * jsonb arrays at request time. Used by the job dialogs, the public careers
+ * apply form, and the portal referral form.
+ */
+export async function getJobTagSuggestions(tenantId: string) {
+    const [skills, qualifications] = await Promise.all([
+        db.select({ name: recruitmentSkills.name }).from(recruitmentSkills)
+            .where(eq(recruitmentSkills.tenantId, tenantId)).orderBy(recruitmentSkills.name),
+        db.select({ name: recruitmentQualifications.name }).from(recruitmentQualifications)
+            .where(eq(recruitmentQualifications.tenantId, tenantId)).orderBy(recruitmentQualifications.name),
+    ])
+    return { skills: skills.map((r) => r.name), qualifications: qualifications.map((r) => r.name) }
+}
+
+/**
+ * Upsert a job's skills/qualifications into the per-tenant catalogs. This is the
+ * ONLY writer of the catalog — résumé-upload areas (candidate add, public
+ * careers, referral) read suggestions but never add to it. Conflicts on the
+ * case-insensitive unique index are ignored (first-seen casing is preserved).
+ */
+async function upsertJobCatalog(
+    tenantId: string,
+    tags: { skills?: unknown; qualifications?: unknown },
+    conn: typeof db = db,
+) {
+    const skills = dedupeTags(tags.skills)
+    const qualifications = dedupeTags(tags.qualifications)
+    if (skills && skills.length > 0) {
+        await conn.insert(recruitmentSkills)
+            .values(skills.map((name) => ({ tenantId, name })))
+            .onConflictDoNothing()
+    }
+    if (qualifications && qualifications.length > 0) {
+        await conn.insert(recruitmentQualifications)
+            .values(qualifications.map((name) => ({ tenantId, name })))
+            .onConflictDoNothing()
+    }
+}
+
+/* ─── Public careers portal (unauthenticated) ─────────────────────────────────
+ * These functions back the public /careers/:companyCode pages. A visitor has no
+ * JWT, so the tenant is resolved from the unique, shareable `companyCode`. Only
+ * `open` jobs and a safe subset of columns are ever exposed — internal fields
+ * (postedBy, deletedAt, etc.) never leave the service layer.
+ */
+
+/** Resolve a tenant from its public company code. Returns null if unknown. */
+export async function getPublicTenantByCode(companyCode: string) {
+    const code = companyCode.trim()
+    if (!code) return null
+    const [row] = await db.select({ id: tenants.id, name: tenants.name, companyCode: tenants.companyCode })
+        .from(tenants)
+        .where(eq(tenants.companyCode, code))
+        .limit(1)
+    return row ?? null
+}
+
+// Public-safe column projection — never expose postedBy/deletedAt/tenantId.
+const PUBLIC_JOB_COLUMNS = {
+    id: recruitmentJobs.id,
+    jobNo: recruitmentJobs.jobNo,
+    title: recruitmentJobs.title,
+    department: recruitmentJobs.department,
+    location: recruitmentJobs.location,
+    type: recruitmentJobs.type,
+    workplaceType: recruitmentJobs.workplaceType,
+    openings: recruitmentJobs.openings,
+    experienceYears: recruitmentJobs.experienceYears,
+    minSalary: recruitmentJobs.minSalary,
+    maxSalary: recruitmentJobs.maxSalary,
+    industry: recruitmentJobs.industry,
+    description: recruitmentJobs.description,
+    requirements: recruitmentJobs.requirements,
+    skills: recruitmentJobs.skills,
+    qualifications: recruitmentJobs.qualifications,
+    closingDate: recruitmentJobs.closingDate,
+    createdAt: recruitmentJobs.createdAt,
+}
+
+/** Paginated, filterable list of a tenant's publicly visible (open) jobs. */
+export async function listPublicJobs(
+    tenantId: string,
+    params: { limit: number; offset: number; q?: string; department?: string; location?: string; type?: string; workplaceType?: string },
+) {
+    const { limit, offset, q, department, location, type, workplaceType } = params
+
+    const conds = Conditions.create()
+        .tenant(recruitmentJobs.tenantId, tenantId)
+        .notDeleted(recruitmentJobs.deletedAt)
+        .match(recruitmentJobs.status, 'open')
+        .match(recruitmentJobs.department, department)
+        .match(recruitmentJobs.location, location)
+        .match(recruitmentJobs.type, type)
+        .match(recruitmentJobs.workplaceType, workplaceType)
+        .search(q, recruitmentJobs.title, recruitmentJobs.department, recruitmentJobs.location)
+
+    const rows = await db.select({ ...PUBLIC_JOB_COLUMNS, totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount') })
+        .from(recruitmentJobs)
+        .where(conds.where())
+        .orderBy(desc(recruitmentJobs.createdAt))
+        .limit(limit).offset(offset)
+
+    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
+    const jobs = rows.map(({ totalCount: _totalCount, ...job }) => job)
+    return { jobs, total, limit, offset, hasMore: offset + limit < total }
+}
+
+/** Distinct filter facets (departments, locations, types, workplace) across open jobs. */
+export async function getPublicJobFacets(tenantId: string) {
+    const rows = await db.select({
+        department: recruitmentJobs.department,
+        location: recruitmentJobs.location,
+        type: recruitmentJobs.type,
+        workplaceType: recruitmentJobs.workplaceType,
+    })
+        .from(recruitmentJobs)
+        .where(and(
+            eq(recruitmentJobs.tenantId, tenantId),
+            eq(recruitmentJobs.status, 'open' as never),
+            isNull(recruitmentJobs.deletedAt),
+        ))
+
+    const uniqSorted = (vals: (string | null)[]) =>
+        [...new Set(vals.filter((v): v is string => !!v && v.trim() !== ''))].sort((a, b) => a.localeCompare(b))
+
+    return {
+        departments: uniqSorted(rows.map(r => r.department)),
+        locations: uniqSorted(rows.map(r => r.location)),
+        types: uniqSorted(rows.map(r => r.type)),
+        workplaceTypes: uniqSorted(rows.map(r => r.workplaceType)),
+    }
+}
+
+/** Fetch a single open job for the public detail page. Null if not open/found. */
+export async function getPublicJob(tenantId: string, id: string) {
+    const [row] = await db.select(PUBLIC_JOB_COLUMNS)
+        .from(recruitmentJobs)
+        .where(and(
+            eq(recruitmentJobs.id, id),
+            eq(recruitmentJobs.tenantId, tenantId),
+            eq(recruitmentJobs.status, 'open' as never),
+            isNull(recruitmentJobs.deletedAt),
+        ))
+        .limit(1)
+    return row ?? null
+}
+
 export async function softDeleteJob(tenantId: string, id: string) {
     const [row] = await db.update(recruitmentJobs)
         .set(withTimestamp({ deletedAt: new Date() }))
@@ -68,16 +244,72 @@ export async function softDeleteJob(tenantId: string, id: string) {
     return row ?? null
 }
 
+/**
+ * Next per-tenant requisition number, e.g. "JOB-0001". Derives the next value
+ * from the highest existing JOB-#### for the tenant. Job creation is
+ * low-frequency and the (tenant_id, job_no) partial-unique index is the
+ * backstop, so a plain max+1 is sufficient (no dedicated sequence table).
+ */
+export async function generateNextJobNo(tenantId: string, conn: typeof db = db): Promise<string> {
+    const [row] = await conn
+        .select({ max: sql<number>`COALESCE(MAX(CAST(NULLIF(regexp_replace(${recruitmentJobs.jobNo}, '\\D', '', 'g'), '') AS INTEGER)), 0)` })
+        .from(recruitmentJobs)
+        .where(eq(recruitmentJobs.tenantId, tenantId))
+    const next = Number(row?.max ?? 0) + 1
+    return `JOB-${String(next).padStart(4, '0')}`
+}
+
+/**
+ * Trim, drop empties, and de-duplicate a tag list case-insensitively
+ * (first-seen casing wins) — e.g. ["React", "  react ", "", "REACT"] → ["React"].
+ * Returns undefined for non-arrays so callers can omit the field from the update.
+ */
+function dedupeTags(list: unknown): string[] | undefined {
+    if (!Array.isArray(list)) return undefined
+    const seen = new Map<string, string>() // lowercase → first-seen original casing
+    for (const raw of list) {
+        const val = typeof raw === 'string' ? raw.trim() : ''
+        if (!val) continue
+        const key = val.toLowerCase()
+        if (!seen.has(key)) seen.set(key, val)
+    }
+    return [...seen.values()]
+}
+
+/**
+ * Normalise a job's tag arrays (skills / qualifications / requirements) so no
+ * duplicate listings are ever persisted — regardless of entry path (form, bulk
+ * import, or direct API). Only includes fields actually present on `data`.
+ */
+function normalizeJobTags(data: { skills?: unknown; qualifications?: unknown; requirements?: unknown }) {
+    const out: Record<string, string[]> = {}
+    const skills = dedupeTags(data.skills)
+    const qualifications = dedupeTags(data.qualifications)
+    const requirements = dedupeTags(data.requirements)
+    if (skills) out.skills = skills
+    if (qualifications) out.qualifications = qualifications
+    if (requirements) out.requirements = requirements
+    return out
+}
+
 export async function createJob(tenantId: string, data: Omit<NewJob, 'tenantId' | 'id'>) {
-    const [row] = await db.insert(recruitmentJobs).values({ ...data, tenantId }).returning()
+    const jobNo = await generateNextJobNo(tenantId)
+    const [row] = await db.insert(recruitmentJobs)
+        .values({ ...data, ...normalizeJobTags(data), tenantId, jobNo } as never)
+        .returning()
+    // Feed the tag catalogs from the job's skills/qualifications.
+    await upsertJobCatalog(tenantId, data)
     return row
 }
 
 export async function updateJob(tenantId: string, id: string, data: Partial<NewJob>) {
     const [row] = await db.update(recruitmentJobs)
-        .set(withTimestamp(data))
+        .set(withTimestamp({ ...data, ...normalizeJobTags(data) }))
         .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
         .returning()
+    if (row && (data.skills !== undefined || data.qualifications !== undefined)) {
+        await upsertJobCatalog(tenantId, data)
+    }
     return row ?? null
 }
 
@@ -96,18 +328,51 @@ export async function listApplications(tenantId: string, params: { jobId?: strin
         ...getTableColumns(jobApplications),
         totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
         jobTitle: recruitmentJobs.title,
+        // Human-readable requisition number (e.g. JOB-0004) shown beside the job
+        // link in the candidate list.
+        jobNo: recruitmentJobs.jobNo,
+        // Referrer name for the "Referred by" badge (null for direct applications).
+        referredByName: sql<string | null>`CASE WHEN ${employees.id} IS NOT NULL THEN ${employees.firstName} || ' ' || ${employees.lastName} ELSE NULL END`,
     })
         .from(jobApplications)
         .leftJoin(recruitmentJobs, eq(jobApplications.jobId, recruitmentJobs.id))
+        .leftJoin(employees, eq(jobApplications.referredByEmployeeId, employees.id))
         .where(conds.where())
         .orderBy(desc(jobApplications.createdAt))
         .limit(limit).offset(offset)
 
     const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    const data = await Promise.all(rows.map(async r => ({
-        ...r,
-        resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
-    })))
+
+    // Auto fit-score every candidate against the job they applied to. The manual
+    // `score` column is a free-form recruiter rating that's almost always 0, so
+    // the Score column read blank for everyone. We attach `matchScore` (0–100)
+    // from the shared matching engine instead. Works for both a single-job
+    // listing (job detail page) and the cross-job list (each candidate is bound
+    // to one jobId): batch-fetch the page's distinct jobs in ONE query, then
+    // score in memory — no per-row query / no N+1.
+    const jobIdsToScore = jobId ? [jobId] : [...new Set(rows.map(r => r.jobId))]
+    const jobRows = jobIdsToScore.length
+        ? await db.select({
+            id: recruitmentJobs.id,
+            skills: recruitmentJobs.skills,
+            qualifications: recruitmentJobs.qualifications,
+            industry: recruitmentJobs.industry,
+            location: recruitmentJobs.location,
+            workplaceType: recruitmentJobs.workplaceType,
+        }).from(recruitmentJobs)
+            .where(and(eq(recruitmentJobs.tenantId, tenantId), inArray(recruitmentJobs.id, jobIdsToScore)))
+        : []
+    const jobById = new Map(jobRows.map(j => [j.id, j]))
+
+    const data = await Promise.all(rows.map(async r => {
+        const jr = jobById.get(r.jobId)
+        return {
+            ...r,
+            resumeUrl: (await resolveAvatarUrl(r.resumeUrl)) ?? r.resumeUrl,
+            avatar: (await resolveAvatarUrl(r.avatarUrl)) ?? undefined,
+            matchScore: jr ? scoreMatch(jr, r).overall : undefined,
+        }
+    }))
     return { data, total, limit, offset, hasMore: offset + limit < total }
 }
 
@@ -141,7 +406,11 @@ export async function getApplication(tenantId: string, id: string) {
         .where(and(eq(jobApplications.id, id), eq(jobApplications.tenantId, tenantId), isNull(jobApplications.deletedAt)))
         .limit(1)
     if (!row) return null
-    return { ...row, resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl }
+    return {
+        ...row,
+        resumeUrl: (await resolveAvatarUrl(row.resumeUrl)) ?? row.resumeUrl,
+        avatar: (await resolveAvatarUrl(row.avatarUrl)) ?? undefined,
+    }
 }
 
 export async function updateApplicationStage(tenantId: string, id: string, stage: string) {

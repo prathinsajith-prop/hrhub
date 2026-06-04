@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { parseUuidParam } from '../../lib/validation.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
 import {
     listLoans,
     getLoan,
@@ -152,6 +153,11 @@ export default async function loansRoutes(fastify: any): Promise<void> {
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
             }).catch(() => { })
+            notifyEmployee(request.user.tenantId, (updated as any).employeeId, {
+                type: 'success',
+                title: 'Loan approved',
+                message: `Your loan request for AED ${Number(updated.amount).toLocaleString()} has been approved.`,
+            }).catch(() => { })
         }
         return reply.send({ data: updated })
     })
@@ -188,6 +194,11 @@ export default async function loansRoutes(fastify: any): Promise<void> {
                 metadata: { kind: 'loan', subKind: 'reject', loanId: updated.id, amount: Number(updated.amount), notes: body.notes ?? null },
                 ipAddress: request.ip,
                 userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+            notifyEmployee(request.user.tenantId, (updated as any).employeeId, {
+                type: 'warning',
+                title: 'Loan request declined',
+                message: `Your loan request for AED ${Number(updated.amount).toLocaleString()} was not approved.${body.notes ? ` Reason: ${body.notes}` : ''}`,
             }).catch(() => { })
         }
         return reply.send({ data: updated })

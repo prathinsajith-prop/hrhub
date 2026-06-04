@@ -148,6 +148,7 @@ export function RequiredDocsManager({
                         <Label className="flex items-center gap-1.5 text-xs cursor-pointer">
                             <input
                                 type="checkbox"
+                                aria-label="Mandatory"
                                 checked={isMandatory}
                                 onChange={(e) => setIsMandatory(e.target.checked)}
                                 className="rounded"
@@ -157,6 +158,7 @@ export function RequiredDocsManager({
                         <Label className="flex items-center gap-1.5 text-xs cursor-pointer">
                             <input
                                 type="checkbox"
+                                aria-label="Expiry required"
                                 checked={expiryRequired}
                                 onChange={(e) => setExpiryRequired(e.target.checked)}
                                 className="rounded"

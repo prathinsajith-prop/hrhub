@@ -9,7 +9,10 @@ import {
   CalendarDays, ClipboardList, UserCheck, Users, GraduationCap, Landmark, DollarSign,
   ArrowRightLeft, Heart, StickyNote, History, Trash2, AlertTriangle, Upload, X as XIcon,
   MoreHorizontal, CheckCircle2, Ban, UserX, Search, FolderOpen, Scale, AlertCircle,
+  Trophy, Award,
 } from 'lucide-react'
+import { useEmployeeRecognitionProfile } from '@/hooks/useRecognition'
+import { Link as RLink } from 'react-router-dom'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -109,6 +112,11 @@ interface AttendanceRecord {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+// Visa types selectable in the inline visa-edit form. Hoisted to a module-scope
+// Set so the Object.entries loop over VISA_TYPE_LABELS does an O(1) membership
+// check instead of rebuilding + scanning an array on every iteration.
+const VISA_FORM_TYPES = new Set(['employment', 'investor', 'dependent', 'mission'])
 
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
   active: 'success', onboarding: 'info',
@@ -475,14 +483,14 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+      <DialogContent className="max-w-lg p-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="text-lg font-semibold">Change Salary</DialogTitle>
           <p className="text-sm text-muted-foreground mt-0.5">Record a salary revision and update the employee's compensation package.</p>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="px-6 py-5 space-y-5 flex-1 min-h-0 overflow-y-auto">
 
             {/* Effective date + Revision type */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -564,7 +572,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
                       </Label>
                       <NumericInput
                         id={`cs-${c.id}`}
-                        placeholder={isPct ? '0' : '0.00'}
+                        placeholder={isPct ? 'Percentage' : 'Amount'}
                         value={rawValue}
                         onChange={(ev) =>
                           setComponentAmounts((prev) => ({ ...prev, [c.id]: ev.target.value }))
@@ -623,7 +631,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
             </div>
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t bg-muted/20">
+          <DialogFooter className="px-6 py-4 border-t bg-muted/20 shrink-0">
             <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
@@ -664,13 +672,14 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
   // Build flat department options with full breadcrumb path (Branch → Division → Department)
   const deptOptions: ComboboxOption[] = React.useMemo(() => {
     return orgUnits
-      .filter(u => u.type === 'department')
-      .map(dept => {
+      .reduce<ComboboxOption[]>((acc, dept) => {
+        if (dept.type !== 'department') return acc
         const division = orgUnits.find(u => u.id === dept.parentId && u.type === 'division')
         const branch = division ? orgUnits.find(u => u.id === division.parentId && u.type === 'branch') : null
         const parts = [branch?.name, division?.name, dept.name].filter(Boolean)
-        return { value: dept.id, label: parts.join(' → ') }
-      })
+        acc.push({ value: dept.id, label: parts.join(' → ') })
+        return acc
+      }, [])
       .sort((a, b) => a.label.localeCompare(b.label))
   }, [orgUnits])
 
@@ -766,8 +775,10 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
                 value={toDesignation}
                 onValueChange={setToDesignation}
                 options={(Array.isArray(designationList) ? designationList : [])
-                  .filter((d: { isActive: boolean }) => d.isActive)
-                  .map((d: { name: string }) => ({ value: d.name, label: d.name }))}
+                  .reduce<Array<{ value: string; label: string }>>((acc, d: { name: string; isActive: boolean }) => {
+                    if (d.isActive) acc.push({ value: d.name, label: d.name })
+                    return acc
+                  }, [])}
                 placeholder="Select or type designation…"
                 searchPlaceholder="Search or create…"
                 clearable
@@ -905,7 +916,7 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5 truncate">
             <Building2 className="size-2.5 shrink-0" />
             {orgPath.map((p, i) => (
-              <span key={i} className="flex items-center gap-1">
+              <span key={`${i}-${p}`} className="flex items-center gap-1">
                 {i > 0 && <span className="opacity-40">›</span>}
                 <span className={i === orgPath.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
               </span>
@@ -948,6 +959,11 @@ const TeamMembershipRow = React.memo(function TeamMembershipRow({
 })
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  active:    { label: 'Activate', past: 'activated', confirmLabel: 'Activate', variant: 'success'  as const, description: 'This will set the employee status back to active.' },
+  suspended: { label: 'Suspend',  past: 'suspended', confirmLabel: 'Suspend',  variant: 'warning'  as const, description: 'The employee will be suspended and cannot log in.' },
+}
 
 export function EmployeeDetailPage() {
   const { t } = useTranslation()
@@ -1162,11 +1178,6 @@ export function EmployeeDetailPage() {
   // Terminated or suspended employees must not be granted/managed system access
   const isAccessRestricted = ['terminated', 'suspended'].includes(e?.status ?? '')
 
-  const STATUS_CONFIG = {
-    active:    { label: 'Activate', past: 'activated', confirmLabel: 'Activate', variant: 'success'  as const, description: 'This will set the employee status back to active.' },
-    suspended: { label: 'Suspend',  past: 'suspended', confirmLabel: 'Suspend',  variant: 'warning'  as const, description: 'The employee will be suspended and cannot log in.' },
-  }
-
   function handleStatusChange() {
     if (!statusTarget || !e) return
     updateStatus.mutate({ id: e.id, status: statusTarget.status }, {
@@ -1184,13 +1195,20 @@ export function EmployeeDetailPage() {
 
   function handleArchive() {
     if (!e) return
-    archiveEmployee.mutate(e.id, {
+    archiveEmployee.mutate({ id: e.id }, {
       onSuccess: () => {
         toast.success('Record archived', `${e.fullName}'s record has been archived.`)
         navigate('/employees')
       },
-      onError: () => {
-        toast.error('Failed', 'Could not archive employee record.')
+      onError: (err) => {
+        // Surface the server's reason (protected account, blocking dependency, …)
+        // instead of a generic failure so admins know why an archive was refused.
+        const data = (err as any)?.data ?? null
+        const code: string | undefined = data?.code
+        const deps: Array<{ message: string }> = data?.dependencies ?? []
+        const detail = deps.length ? deps.map((d) => `• ${d.message}`).join('\n') : (err as Error)?.message
+        const blocked = code === 'ARCHIVE_BLOCKED' || (typeof code === 'string' && code.startsWith('PROTECTED'))
+        toast.error(blocked ? 'Cannot archive' : 'Failed', detail || 'Could not archive employee record.')
         setArchiveConfirm(false)
       },
     })
@@ -1315,7 +1333,7 @@ export function EmployeeDetailPage() {
                       <Building2 className="size-3.5 shrink-0" />
                       <span className="flex items-center gap-1 min-w-0 truncate">
                         {parts.map((p, i) => (
-                          <span key={i} className="flex items-center gap-1">
+                          <span key={`${i}-${p}`} className="flex items-center gap-1">
                             {i > 0 && <span className="opacity-40">›</span>}
                             <span className={i === parts.length - 1 ? 'font-medium text-foreground/80' : ''}>{p}</span>
                           </span>
@@ -1579,6 +1597,7 @@ export function EmployeeDetailPage() {
           { value: 'documents', icon: FileText, label: 'Documents & ID' },
           { value: 'payroll', icon: CreditCard, label: 'Payroll' },
           { value: 'performance', icon: Star, label: 'Performance' },
+          { value: 'recognition', icon: Trophy, label: 'Recognition' },
           { value: 'assets', icon: Package, label: 'Assets' },
           { value: 'leave', icon: CalendarDays, label: 'Leave' },
           { value: 'attendance', icon: ClipboardList, label: 'Attendance' },
@@ -1946,15 +1965,16 @@ export function EmployeeDetailPage() {
                         <Select value={visaForm.visaType} onValueChange={v => setVisaForm(f => ({ ...f, visaType: v }))}>
                           <SelectTrigger className="h-9"><SelectValue placeholder="Select visa type…" /></SelectTrigger>
                           <SelectContent>
-                            {Object.entries(VISA_TYPE_LABELS).filter(([k]) => ['employment', 'investor', 'dependent', 'mission'].includes(k)).map(([k, v]) => (
-                              <SelectItem key={k} value={k}>{v}</SelectItem>
-                            ))}
+                            {Object.entries(VISA_TYPE_LABELS).reduce<React.ReactNode[]>((acc, [k, v]) => {
+                              if (VISA_FORM_TYPES.has(k)) acc.push(<SelectItem key={k} value={k}>{v}</SelectItem>)
+                              return acc
+                            }, [])}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1.5">
                         <Label>Visa Number</Label>
-                        <Input value={visaForm.visaNumber} onChange={e => setVisaForm(f => ({ ...f, visaNumber: e.target.value }))} placeholder="e.g. 201/2024/12345" />
+                        <Input value={visaForm.visaNumber} onChange={e => setVisaForm(f => ({ ...f, visaNumber: e.target.value }))} placeholder="Visa number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Visa Issue Date</Label>
@@ -1990,7 +2010,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Emirates ID</Label>
-                        <Input value={visaForm.emiratesId} onChange={e => setVisaForm(f => ({ ...f, emiratesId: e.target.value }))} placeholder="784-XXXX-XXXXXXX-X" />
+                        <Input value={visaForm.emiratesId} onChange={e => setVisaForm(f => ({ ...f, emiratesId: e.target.value }))} placeholder="Emirates ID number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>EID Expiry</Label>
@@ -1998,7 +2018,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Passport No.</Label>
-                        <Input value={visaForm.passportNo} onChange={e => setVisaForm(f => ({ ...f, passportNo: e.target.value }))} placeholder="e.g. A12345678" />
+                        <Input value={visaForm.passportNo} onChange={e => setVisaForm(f => ({ ...f, passportNo: e.target.value }))} placeholder="Passport number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Passport Expiry</Label>
@@ -2006,7 +2026,7 @@ export function EmployeeDetailPage() {
                       </div>
                       <div className="space-y-1.5">
                         <Label>Labour Card No.</Label>
-                        <Input value={visaForm.labourCardNumber} onChange={e => setVisaForm(f => ({ ...f, labourCardNumber: e.target.value }))} placeholder="e.g. 12345678" />
+                        <Input value={visaForm.labourCardNumber} onChange={e => setVisaForm(f => ({ ...f, labourCardNumber: e.target.value }))} placeholder="Labour card number" />
                       </div>
                       <div className="space-y-1.5">
                         <Label>Labour Card Expiry</Label>
@@ -2156,11 +2176,12 @@ export function EmployeeDetailPage() {
                       type="text"
                       value={docSearch}
                       onChange={e => setDocSearch(e.target.value)}
+                      aria-label="Search documents"
                       placeholder="Search by name, type or category…"
                       className="w-full pl-9 pr-8 h-9 text-sm rounded-md border border-input bg-background outline-none focus:ring-2 focus:ring-ring/50 placeholder:text-muted-foreground"
                     />
                     {docSearch && (
-                      <button onClick={() => setDocSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      <button type="button" onClick={() => setDocSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                         <XIcon className="size-3.5" />
                       </button>
                     )}
@@ -2203,7 +2224,7 @@ export function EmployeeDetailPage() {
                     title={`No results for "${docSearch}"`}
                     description="Try a different name or category"
                     action={(
-                      <button onClick={() => setDocSearch('')} className="text-xs text-primary hover:underline font-medium">Clear search</button>
+                      <button type="button" onClick={() => setDocSearch('')} className="text-xs text-primary hover:underline font-medium">Clear search</button>
                     )}
                   />
 
@@ -2732,6 +2753,7 @@ export function EmployeeDetailPage() {
                               </p>
                               {w.documentFileName && (
                                 <button
+                                  type="button"
                                   className="text-primary hover:underline inline-flex items-center gap-1 text-xs mt-1"
                                   onClick={() => downloadWarningDoc.mutate(w.id, {
                                     onSuccess: (res) => window.open(res.url, '_blank'),
@@ -2817,6 +2839,11 @@ export function EmployeeDetailPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          {/* ── Recognition ── */}
+          <TabsContent value="recognition" className="mt-4 space-y-4">
+            <RecognitionTab employeeId={id!} />
           </TabsContent>
 
           {/* ── Assets ── */}
@@ -2992,7 +3019,7 @@ export function EmployeeDetailPage() {
       })()}
 
       {/* Hidden avatar input */}
-      <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
+      <input ref={avatarInputRef} type="file" aria-label="Upload avatar" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
 
       {editOpen && <EditEmployeeDialog open={editOpen} onOpenChange={setEditOpen} employee={e} />}
       {editEmploymentOpen && canManage && <EditEmploymentDialog open={editEmploymentOpen} onOpenChange={setEditEmploymentOpen} employee={e} />}
@@ -3265,8 +3292,12 @@ function TerminateDialog({
     setStep('form')
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  React.useEffect(() => { if (!open) reset() }, [open, reset])
+  // Reset the wizard when the dialog closes — state-during-render (no effect).
+  const [prevOpen, setPrevOpen] = React.useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (!open) reset()
+  }
 
   const handleClose = () => {
     if (!initiateExit.isPending) {
@@ -3343,7 +3374,7 @@ function TerminateDialog({
               </div>
               <div className="space-y-1.5">
                 <Label>Deductions (AED)</Label>
-                <NumericInput decimal value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="0.00" />
+                <NumericInput decimal value={deductions} onChange={e => setDeductions(e.target.value)} placeholder="Amount" />
               </div>
             </div>
 
@@ -3425,6 +3456,8 @@ function TerminateDialog({
 
 type DependentFormData = Omit<Dependent, 'id' | 'employeeId' | 'reference' | 'createdByName' | 'createdAt' | 'updatedAt'>
 
+const BLANK_DEPENDENT: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
+
 function DependentFormDialog({
   open, onOpenChange, dependent, onSave, isSaving,
 }: {
@@ -3434,8 +3467,7 @@ function DependentFormDialog({
   onSave: (data: DependentFormData) => void
   isSaving: boolean
 }) {
-  const blank: DependentFormData = { name: '', birthDate: null, relation: 'spouse', nationality: null, visaNumber: null, medicalInsurance: null }
-  const [form, setForm] = React.useState<DependentFormData>(blank)
+  const [form, setForm] = React.useState<DependentFormData>(BLANK_DEPENDENT)
 
   const [prevDepOpen, setPrevDepOpen] = React.useState(false)
   if (open && !prevDepOpen) {
@@ -3447,7 +3479,7 @@ function DependentFormDialog({
       nationality: dependent.nationality,
       visaNumber: dependent.visaNumber,
       medicalInsurance: dependent.medicalInsurance,
-    } : blank)
+    } : BLANK_DEPENDENT)
   } else if (!open && prevDepOpen) {
     setPrevDepOpen(false)
   }
@@ -3465,7 +3497,7 @@ function DependentFormDialog({
         <div className="flex flex-col gap-4 py-2">
           <div className="space-y-1.5">
             <Label>Full Name *</Label>
-            <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Sarah Johnson" />
+            <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Full name" />
           </div>
 
           <div className="space-y-1.5">
@@ -3498,7 +3530,7 @@ function DependentFormDialog({
             <Label>
               Visa Number <span className="text-muted-foreground font-normal text-xs">(optional)</span>
             </Label>
-            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="784-XXXX" />
+            <Input value={form.visaNumber ?? ''} onChange={e => set('visaNumber', e.target.value)} placeholder="Visa number" />
           </div>
 
           <div className="space-y-1.5">
@@ -3647,7 +3679,7 @@ function AddWarningDialog({
               </>
             )}
           </div>
-          <input ref={fileRef} type="file" className="hidden"
+          <input ref={fileRef} type="file" aria-label="Upload supporting document" className="hidden"
             accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
             onChange={e => pickFile(e.target.files?.[0])} />
         </div>
@@ -3659,5 +3691,109 @@ function AddWarningDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Recognition tab — surfaces the employee's recognition activity:
+ *   - KPI strip (received, given, badges earned, top category)
+ *   - Recent recognitions received (links to detail page)
+ *   - Recent recognitions given
+ */
+function RecognitionTab({ employeeId }: { employeeId: string }) {
+  const { data, isLoading } = useEmployeeRecognitionProfile(employeeId)
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6 space-y-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          <Trophy className="size-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm font-medium">No recognition activity yet</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const { received, given, stats } = data
+  const topCat = stats.topCategories[0]
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiTile icon={<Trophy className="size-4 text-amber-500" />} label="Received" value={stats.receivedCount} />
+        <KpiTile icon={<Heart className="size-4 text-rose-500" />} label="Given" value={stats.givenCount} />
+        <KpiTile icon={<Award className="size-4 text-indigo-500" />} label="Badges Earned" value={stats.badgesEarned} />
+        <KpiTile icon={<Star className="size-4 text-violet-500" />} label="Top Category" value={topCat ? topCat.label || topCat.key : '—'} small />
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Recognitions received</CardTitle></CardHeader>
+        <CardContent>
+          {received.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Trophy className="size-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No recognitions received yet</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {received.slice(0, 10).map((r) => (
+                <RecognitionRow key={r.id} r={r} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Recognitions given</CardTitle></CardHeader>
+        <CardContent>
+          {given.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Heart className="size-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Hasn't appreciated anyone yet</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {given.slice(0, 10).map((r) => (
+                <RecognitionRow key={r.id} r={r} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+
+function KpiTile({ icon, label, value, small }: { icon: React.ReactNode; label: string; value: number | string; small?: boolean }) {
+  return (
+    <div className="border rounded-lg p-3 bg-card">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">{icon}<span>{label}</span></div>
+      <div className={small ? "mt-1 text-sm font-semibold truncate" : "mt-1 text-2xl font-semibold"}>{value}</div>
+    </div>
+  )
+}
+
+function RecognitionRow({ r }: { r: { id: string; title: string; categoryKey: string; publishedAt?: string | null; createdAt: string; giverName?: string | null } }) {
+  return (
+    <RLink to={`/recognition/${r.id}`} className="flex items-center justify-between py-3 hover:bg-muted/40 -mx-2 px-2 rounded transition-colors">
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">{r.title}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {r.giverName ? `${r.giverName} · ` : ''}{r.categoryKey.replace(/_/g, ' ')} · {formatDate(r.publishedAt ?? r.createdAt)}
+        </p>
+      </div>
+      <Trophy className="size-4 text-amber-500 shrink-0 ml-3" />
+    </RLink>
   )
 }

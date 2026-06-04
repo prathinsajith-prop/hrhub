@@ -36,6 +36,9 @@ export const loginHistory = pgTable('login_history', {
     tenantIdx: index('idx_login_history_tenant').on(t.tenantId),
     createdAtIdx: index('idx_login_history_created').on(t.createdAt),
     eventIdx: index('idx_login_history_event').on(t.eventType),
+    // Serves the login-history list: WHERE tenant ORDER BY created_at DESC, id DESC
+    // (Postgres scans this ascending index backwards — no separate sort step).
+    tenantCreatedIdx: index('idx_login_history_tenant_created').on(t.tenantId, t.createdAt, t.id),
 }))
 
 /**
@@ -67,4 +70,7 @@ export const activityLogs = pgTable('activity_logs', {
     userIdx: index('idx_activity_logs_user').on(t.userId),
     entityIdx: index('idx_activity_logs_entity').on(t.entityType, t.entityId),
     createdIdx: index('idx_activity_logs_created').on(t.createdAt),
+    // Serves the audit-log list: WHERE tenant ORDER BY created_at DESC, id DESC
+    // — composite filter+sort, eliminating the per-page sort on large trails.
+    tenantCreatedIdx: index('idx_activity_logs_tenant_created').on(t.tenantId, t.createdAt, t.id),
 }))

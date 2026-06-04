@@ -43,6 +43,8 @@ import { attendanceRoutes } from './modules/attendance/attendance.routes.js'
 import biometricRoutes from './modules/attendance/biometric.routes.js'
 import { auditRoutes } from './modules/audit/audit.routes.js'
 import { notificationsRoutes } from './modules/notifications/notifications.routes.js'
+import announcementsRoutes from './modules/announcements/announcements.routes.js'
+import recognitionRoutes from './modules/recognition/recognition.routes.js'
 import assetsRoutes from './modules/assets/assets.routes.js'
 import tenantsRoutes from './modules/tenants/tenants.routes.js'
 import appsRoutes from './modules/apps/apps.routes.js'
@@ -373,6 +375,8 @@ async function bootstrap() {
     await app.register(biometricRoutes, { prefix: '/api/v1/attendance' })
     await app.register(auditRoutes, { prefix: '/api/v1/audit' })
     await app.register(notificationsRoutes, { prefix: '/api/v1/notifications' })
+    await app.register(announcementsRoutes, { prefix: '/api/v1/announcements' })
+    await app.register(recognitionRoutes, { prefix: '/api/v1/recognition' })
     await app.register(assetsRoutes, { prefix: '/api/v1/assets' })
     await app.register(tenantsRoutes, { prefix: '/api/v1/tenants' })
     await app.register(appsRoutes, { prefix: '/api/v1/apps' })
@@ -433,7 +437,7 @@ async function bootstrap() {
             const { visaExpiryQueue } = await import('./workers/expiry.worker.js')
             if (visaExpiryQueue) {
                 const client = await visaExpiryQueue.client
-                await client.ping()
+                await client.runCommand('ping', [])
                 checks.redis = { ok: true, latencyMs: Date.now() - redisStart }
             } else {
                 checks.redis = { ok: false, error: 'Redis unavailable — BullMQ disabled' }

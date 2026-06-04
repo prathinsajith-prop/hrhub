@@ -65,6 +65,7 @@ export const payrollAdjustments = pgTable('payroll_adjustments', {
     autoUniq: uniqueIndex('uq_payroll_adj_auto')
         .on(t.tenantId, t.employeeId, t.periodYear, t.periodMonth, t.category, t.sourceRef)
         .where(sql`source_ref IS NOT NULL`),
+    tenantCreatedIdx: index('idx_payroll_adjustments_tenant_created').on(t.tenantId, t.createdAt).where(sql`deleted_at IS NULL`),
 }))
 
 export const payrollAdjustmentsRelations = relations(payrollAdjustments, ({ one }) => ({

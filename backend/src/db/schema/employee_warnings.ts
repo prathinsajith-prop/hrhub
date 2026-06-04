@@ -15,6 +15,7 @@ export const employeeWarnings = pgTable('employee_warnings', {
     documentFileName: text('document_file_name'),
     createdById: uuid('created_by_id').references(() => users.id, { onDelete: 'set null' }),
     createdByName: text('created_by_name'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

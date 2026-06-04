@@ -339,6 +339,7 @@ function StepUploadArea({
                                         type="text"
                                         value={docNumber}
                                         onChange={(e) => setDocNumber(e.target.value)}
+                                        aria-label={meta.label}
                                         placeholder={meta.placeholder}
                                         className="w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
@@ -374,6 +375,7 @@ function StepUploadArea({
                             <input
                                 ref={fileRef}
                                 type="file"
+                                aria-label="File"
                                 accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xlsx"
                                 className="hidden"
                                 onChange={(e) => pickFile(e.target.files?.[0])}
