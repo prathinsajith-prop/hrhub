@@ -18,6 +18,9 @@ export interface User {
     /** HR-controlled — when false, hides the manual back-fill panel on the
      *  portal. Defaults to true. */
     attendanceManualEntryEnabled?: boolean
+    /** HR-controlled — when true, the user may publish posts to the portal
+     *  feed (shows the "Start a post" composer). Defaults to false. */
+    portalPostEnabled?: boolean
 }
 
 export interface Tenant {

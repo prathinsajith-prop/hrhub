@@ -19,12 +19,15 @@ import {
     LogOut,
     Megaphone,
     MessageCircle,
+    MoreHorizontal,
     Newspaper,
     Pin,
+    Pencil,
     PenSquare,
     Send,
     Sparkles,
     Target,
+    Trash2,
     User,
     UserPlus,
     Contact as UserPin,
@@ -38,10 +41,15 @@ import {
     useAnnouncementFeed,
     useAnnouncementComments,
     useAddAnnouncementComment,
+    useUpdatePost,
+    useDeletePost,
     type FeedAnnouncement,
 } from '@/hooks/useAnnouncements'
 import { BirthdaysCard } from '@/components/shared/BirthdaysCard'
 import { CompactEmptyState } from '@/components/shared/EmptyState'
+import { StartPostComposer } from '@/components/shared/StartPostComposer'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useMyChangeRequests } from '@/hooks/useProfileChanges'
 import { useUnreadNotificationsCount } from '@/hooks/useNotifications'
 import { formatTime } from '@/lib/datetime'
@@ -113,7 +121,7 @@ export function EmployeeHomePage() {
     const checkOut = useCheckOut()
     // HR-controlled override — hide the live check-in/out widget entirely
     // when self-punch is revoked for this user.
-    const { attendancePunchEnabled } = useAccountFlags()
+    const { attendancePunchEnabled, portalPostEnabled } = useAccountFlags()
 
     const todayRecord = todayAttendance?.data?.[0]
     const isCheckedIn = !!todayRecord?.checkIn && !todayRecord?.checkOut
@@ -152,11 +160,15 @@ export function EmployeeHomePage() {
                 </div>
             </header>
 
-            {/* ── 2-column home layout — main content on the left, widget
-                sidebar on the right (collapses to single column on small
-                screens). ── */}
-            <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
+            {/* ── Adaptive home layout — the right sidebar (attendance,
+                quick actions, important links, open tasks, birthdays, who's
+                out) is only meaningful on the Feed tab. On Overview /
+                Announcements / Recognitions the embedded page is its own
+                full-width surface, so the sidebar is hidden and the main
+                column spans the full width. The data hooks above stay live
+                regardless, so switching back to Feed is instant. ── */}
+            <div className={cn('grid gap-6', tab === 'feed' && 'lg:grid-cols-3')}>
+                <div className={cn(tab === 'feed' && 'lg:col-span-2')}>
                     <Tabs value={tab} onValueChange={setTab} className="space-y-5">
                         <TabsList variant="underline">
                             <TabsTrigger value="feed">
@@ -175,6 +187,9 @@ export function EmployeeHomePage() {
 
                         {/* ── Feed — activity stream: welcome, announcements preview, recent leave ── */}
                         <TabsContent value="feed" className="space-y-6 focus-visible:outline-none">
+                            {portalPostEnabled ? (
+                                <StartPostComposer displayName={displayName} avatarUrl={me?.avatarUrl} />
+                            ) : null}
                             <NewJoineeCard
                                 displayName={displayName}
                                 avatarUrl={me?.avatarUrl}
@@ -185,6 +200,7 @@ export function EmployeeHomePage() {
                             <AnnouncementsList
                                 items={announcements}
                                 onViewAll={() => setTab('announcements')}
+                                currentUserId={user?.id}
                                 currentUserName={displayName}
                                 currentUserAvatarUrl={me?.avatarUrl}
                                 hasMore={hasMoreAnnouncements}
@@ -246,57 +262,60 @@ export function EmployeeHomePage() {
                 </div>
                 {/* /Left column */}
 
-                {/* ── Right sidebar widgets ── */}
-                <aside className="space-y-6">
-                    <AttendanceSidebarCard
-                        todayRecord={todayRecord}
-                        isCheckedIn={isCheckedIn}
-                        checkedOutToday={checkedOutToday}
-                        liveTimer={liveTimer}
-                        attendancePunchEnabled={attendancePunchEnabled}
-                        shift={me?.shift ?? null}
-                        onCheckIn={() => checkIn.mutate({}, { onSuccess: () => toast.success(t('attendance.checkIn')) })}
-                        onCheckOut={() => checkOut.mutate({}, { onSuccess: () => toast.success(t('attendance.checkOut')) })}
-                        checkInPending={checkIn.isPending}
-                        checkOutPending={checkOut.isPending}
-                    />
-                    {/* Quick Actions — moved here, directly under the Attendance card. */}
-                    <Card className="border-border/70">
-                        <CardContent className="p-5 sm:p-6">
-                            <h2 className="mb-3 font-display text-base font-semibold text-foreground">
-                                {t('home.quickActions')}
-                            </h2>
-                            <div className="grid grid-cols-3 gap-2">
-                                <QuickActionTile icon={PenSquare} label={t('home.createPost')} onClick={() => navigate(ROUTES.employeeAnnouncements)} />
-                                <QuickActionTile icon={UserPlus} label={t('home.refer')} onClick={() => navigate(ROUTES.employeeReferrals)} />
-                                <QuickActionTile icon={Award} label={t('home.recognize')} onClick={() => navigate(ROUTES.employeeRecognition)} />
-                                <QuickActionTile icon={CalendarClock} label={t('home.regulariseAttendance')} onClick={() => navigate(ROUTES.employeeAttendance)} />
-                                <QuickActionTile icon={CalendarDays} label={t('home.applyLeave')} onClick={() => navigate(ROUTES.employeeLeave)} />
-                                <QuickActionTile icon={Target} label={t('home.createGoal')} onClick={() => navigate(ROUTES.employeeGoals)} />
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <ImportantLinksCard />
-                    <OpenTasksCard
-                        pendingLeaveCount={pendingLeaveCount}
-                        pendingProfileChangeCount={pendingProfileChangeCount}
-                        unread={unread}
-                        openTasksTotal={openTasksTotal}
-                        onOpenLeave={() => navigate(ROUTES.employeeLeave)}
-                        onOpenProfile={() => navigate(ROUTES.employeeProfile)}
-                        onOpenNotifications={() => navigate(ROUTES.notifications)}
-                    />
-                    {/* Department birthdays today — moved here from the
-                        portal Reports page. Sits directly after the Open
-                        Tasks card so the right rail goes: my live state
-                        (attendance) → my actions (open tasks) → people
-                        signals (birthdays, who's out). */}
-                    <BirthdaysCard title={t('home.departmentBirthdaysToday', { defaultValue: 'Department birthdays today' })} />
-                    <WhoIsOutCard
-                        upcomingLeaves={upcomingMyLeaves}
-                        onViewAll={() => setTab('overview')}
-                    />
-                </aside>
+                {/* ── Right sidebar widgets — only meaningful on the Feed
+                    tab. Other tabs render their own full-width surface. ── */}
+                {tab === 'feed' && (
+                    <aside className="space-y-6">
+                        <AttendanceSidebarCard
+                            todayRecord={todayRecord}
+                            isCheckedIn={isCheckedIn}
+                            checkedOutToday={checkedOutToday}
+                            liveTimer={liveTimer}
+                            attendancePunchEnabled={attendancePunchEnabled}
+                            shift={me?.shift ?? null}
+                            onCheckIn={() => checkIn.mutate({}, { onSuccess: () => toast.success(t('attendance.checkIn')) })}
+                            onCheckOut={() => checkOut.mutate({}, { onSuccess: () => toast.success(t('attendance.checkOut')) })}
+                            checkInPending={checkIn.isPending}
+                            checkOutPending={checkOut.isPending}
+                        />
+                        {/* Quick Actions — moved here, directly under the Attendance card. */}
+                        <Card className="border-border/70">
+                            <CardContent className="p-5 sm:p-6">
+                                <h2 className="mb-3 font-display text-base font-semibold text-foreground">
+                                    {t('home.quickActions')}
+                                </h2>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <QuickActionTile icon={PenSquare} label={t('home.createPost')} onClick={() => navigate(ROUTES.employeeAnnouncements)} />
+                                    <QuickActionTile icon={UserPlus} label={t('home.refer')} onClick={() => navigate(ROUTES.employeeReferrals)} />
+                                    <QuickActionTile icon={Award} label={t('home.recognize')} onClick={() => navigate(ROUTES.employeeRecognition)} />
+                                    <QuickActionTile icon={CalendarClock} label={t('home.regulariseAttendance')} onClick={() => navigate(ROUTES.employeeAttendance)} />
+                                    <QuickActionTile icon={CalendarDays} label={t('home.applyLeave')} onClick={() => navigate(ROUTES.employeeLeave)} />
+                                    <QuickActionTile icon={Target} label={t('home.createGoal')} onClick={() => navigate(ROUTES.employeeGoals)} />
+                                </div>
+                            </CardContent>
+                        </Card>
+                        <ImportantLinksCard />
+                        <OpenTasksCard
+                            pendingLeaveCount={pendingLeaveCount}
+                            pendingProfileChangeCount={pendingProfileChangeCount}
+                            unread={unread}
+                            openTasksTotal={openTasksTotal}
+                            onOpenLeave={() => navigate(ROUTES.employeeLeave)}
+                            onOpenProfile={() => navigate(ROUTES.employeeProfile)}
+                            onOpenNotifications={() => navigate(ROUTES.notifications)}
+                        />
+                        {/* Department birthdays today — moved here from the
+                            portal Reports page. Sits directly after the Open
+                            Tasks card so the right rail goes: my live state
+                            (attendance) → my actions (open tasks) → people
+                            signals (birthdays, who's out). */}
+                        <BirthdaysCard title={t('home.departmentBirthdaysToday', { defaultValue: 'Department birthdays today' })} />
+                        <WhoIsOutCard
+                            upcomingLeaves={upcomingMyLeaves}
+                            onViewAll={() => setTab('overview')}
+                        />
+                    </aside>
+                )}
             </div>
         </div>
     )
@@ -396,6 +415,7 @@ function NewJoineeCard({ displayName, avatarUrl, firstName, joinDateLabel }: New
 interface AnnouncementsListProps {
     items: FeedAnnouncement[]
     onViewAll: () => void
+    currentUserId?: string
     currentUserName?: string
     currentUserAvatarUrl?: string | null
     hasMore?: boolean
@@ -406,6 +426,7 @@ interface AnnouncementsListProps {
 function AnnouncementsList({
     items,
     onViewAll,
+    currentUserId,
     currentUserName,
     currentUserAvatarUrl,
     hasMore = false,
@@ -482,6 +503,7 @@ function AnnouncementsList({
                                     <AnnouncementCard
                                         item={a}
                                         locale={i18n.language}
+                                        currentUserId={currentUserId}
                                         currentUserName={currentUserName}
                                         currentUserAvatarUrl={currentUserAvatarUrl}
                                     />
@@ -503,17 +525,58 @@ function AnnouncementsList({
 function AnnouncementCard({
     item,
     locale,
+    currentUserId,
     currentUserName,
     currentUserAvatarUrl,
 }: {
     item: FeedAnnouncement
     locale: string
+    currentUserId?: string
     currentUserName?: string
     currentUserAvatarUrl?: string | null
 }) {
     const { t } = useTranslation()
     const dateLabel = formatJoinDate(item.publishedAt ?? item.createdAt, locale)
     const authorInitials = initialsOf(item.authorName ?? '?')
+
+    // Own posts (authored by the signed-in user) get edit/delete affordances.
+    // Ownership is the createdBy match — so this never exposes controls on
+    // HR-authored announcements, even for a user with the post permission.
+    const isOwn = !!item.createdBy && !!currentUserId && item.createdBy === currentUserId
+    const updatePost = useUpdatePost()
+    const deletePost = useDeletePost()
+    const [editing, setEditing] = useState(false)
+    const [editText, setEditText] = useState(item.body)
+    const [confirmDelete, setConfirmDelete] = useState(false)
+
+    function saveEdit() {
+        const body = editText.trim()
+        if (!body || updatePost.isPending) return
+        updatePost.mutate(
+            { id: item.id, body },
+            {
+                onSuccess: () => {
+                    setEditing(false)
+                    toast.success(t('post.updated', { defaultValue: 'Post updated' }))
+                },
+                onError: (err: unknown) =>
+                    toast.error(err instanceof Error ? err.message : t('post.failed', { defaultValue: 'Could not update post' })),
+            },
+        )
+    }
+
+    function runDelete() {
+        deletePost.mutate(item.id, {
+            onSuccess: () => {
+                setConfirmDelete(false)
+                toast.success(t('post.deleted', { defaultValue: 'Post deleted' }))
+            },
+            onError: (err: unknown) => {
+                setConfirmDelete(false)
+                toast.error(err instanceof Error ? err.message : t('post.deleteFailed', { defaultValue: 'Could not delete post' }))
+            },
+        })
+    }
 
     // Lazy-load comments only when the user opens the thread — keeps the
     // home feed snappy when there are several announcements but each
@@ -566,15 +629,74 @@ function AnnouncementCard({
                         {t('home.pinned', { defaultValue: 'Pinned' })}
                     </span>
                 ) : null}
+                {isOwn && !editing ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label={t('common.more', { defaultValue: 'More' })}
+                                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            >
+                                <MoreHorizontal className="size-4" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onSelect={() => { setEditText(item.body); setEditing(true) }} className="gap-2.5">
+                                <Pencil className="size-4" /> {t('common.edit', { defaultValue: 'Edit' })}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => setConfirmDelete(true)}
+                                className="gap-2.5 text-rose-600 focus:text-rose-700 dark:text-rose-300"
+                            >
+                                <Trash2 className="size-4" /> {t('common.delete', { defaultValue: 'Delete' })}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : null}
             </header>
 
-            {/* ── Title + body ── */}
-            <div className="mt-3 space-y-1.5">
-                <h3 className="font-display text-base font-semibold leading-snug text-foreground">{item.title}</h3>
-                {item.body ? (
-                    <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{item.body}</p>
-                ) : null}
-            </div>
+            {/* ── Title + body, or the inline editor for an own post ── */}
+            {editing ? (
+                <div className="mt-3">
+                    <textarea
+                        autoFocus
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        rows={3}
+                        maxLength={5000}
+                        className="w-full resize-none rounded-xl border border-border/70 bg-background px-3.5 py-2.5 text-sm leading-relaxed outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/15"
+                    />
+                    <div className="mt-2 flex items-center justify-end gap-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                            {t('common.cancel', { defaultValue: 'Cancel' })}
+                        </Button>
+                        <Button type="button" size="sm" onClick={saveEdit} disabled={!editText.trim() || updatePost.isPending}>
+                            {updatePost.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                            <span className={updatePost.isPending ? 'ms-1.5' : ''}>{t('common.save', { defaultValue: 'Save' })}</span>
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <div className="mt-3 space-y-1.5">
+                    {item.title ? (
+                        <h3 className="font-display text-base font-semibold leading-snug text-foreground">{item.title}</h3>
+                    ) : null}
+                    {item.body ? (
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{item.body}</p>
+                    ) : null}
+                </div>
+            )}
+
+            <ConfirmDialog
+                open={confirmDelete}
+                onOpenChange={setConfirmDelete}
+                title={t('post.deleteTitle', { defaultValue: 'Delete this post?' })}
+                description={t('post.deleteDesc', { defaultValue: 'This permanently removes your post from the feed.' })}
+                confirmLabel={t('common.delete', { defaultValue: 'Delete' })}
+                onConfirm={runDelete}
+                loading={deletePost.isPending}
+                variant="destructive"
+            />
 
             {/* ── Comment affordance ──
                 A single, honest control. The disabled "React — coming soon"

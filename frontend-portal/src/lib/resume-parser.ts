@@ -222,7 +222,7 @@ function classifyHeader(line: string): 'experience' | 'education' | 'skills' | '
 }
 
 /** Pull the lines belonging to one section (header → next recognised header / end). */
-function extractSection(lines: string[], section: 'experience' | 'education'): string[] {
+function extractSection(lines: string[], section: 'experience' | 'education' | 'skills'): string[] {
     let start = -1
     for (let i = 0; i < lines.length; i++) {
         if (classifyHeader(lines[i]) === section) { start = i; break }
@@ -234,6 +234,44 @@ function extractSection(lines: string[], section: 'experience' | 'education'): s
         block.push(lines[i])
     }
     return block
+}
+
+/**
+ * Parse the lines of a "Skills" section into a clean list of skill tokens.
+ * Resumes use wildly different separators here — commas, bullets, pipes,
+ * slashes, line-breaks — so we split on all of them, then trim each token
+ * and apply quality filters (length, stopwords, pure numbers, "looks like a
+ * sentence"). Returns case-insensitively de-duplicated values in document
+ * order. This is the ONLY way to surface skills the hardcoded dictionary
+ * doesn't know about (domain-specific tools, niche frameworks, etc.).
+ */
+const SKILL_STOPWORDS = new Set([
+    '', 'and', 'or', 'etc', 'etc.', '&', 'plus', 'with', 'to', 'on', 'in',
+    'including', 'such', 'as', 'also', 'others', 'other', 'various', 'misc',
+])
+function parseSkillsBlock(block: string[]): string[] {
+    if (!block.length) return []
+    // Join with a pipe so line-breaks become hard splits along with the other
+    // delimiters. Bullet glyphs are listed explicitly in the split regex.
+    const joined = block.join(' | ')
+    const tokens = joined.split(/[•▪◦·∙*‧‣⁃→►●◆,|;/\n]| - /g)
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const raw of tokens) {
+        // Strip leading/trailing punctuation/whitespace but keep internal
+        // characters like "." (Node.js), "+" (C++), "#" (C#), ")" inside parens.
+        const t = raw.trim().replace(/^[^A-Za-z0-9+#.]+|[^A-Za-z0-9+#.)]+$/g, '').trim()
+        if (!t) continue
+        if (t.length < 2 || t.length > 50) continue
+        if (SKILL_STOPWORDS.has(t.toLowerCase())) continue
+        if (/^\d+$/.test(t)) continue                  // pure numbers
+        if (t.split(/\s+/).length > 5) continue        // sentence-like, not a skill
+        const key = t.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push(t)
+    }
+    return out
 }
 
 /** Split an "entry header" into title/company on the first recognised separator. */
@@ -672,13 +710,37 @@ export function parseResumeText(text: string): ParsedResume {
     out.address = findAddress(lines)
     if (out.address) out.confidence.address = ADDRESS_KEYWORD_RE.test(out.address) ? 0.75 : 0.55
 
-    // Skills: dictionary match (word-boundary, case-insensitive).
+    // Skills — two sources merged:
+    //   1) The explicit "Skills" section (catches domain-specific tools and
+    //      niche frameworks that aren't in the dictionary).
+    //   2) Dictionary scan across the entire document (catches mentions in
+    //      the summary, experience bullets, etc., even when the candidate
+    //      didn't make a dedicated Skills section).
+    // Section-extracted skills come first because they are explicitly listed
+    // by the candidate and are the most reliable signal.
+    const skillsBlock = extractSection(lines, 'skills')
+    const sectionSkills = parseSkillsBlock(skillsBlock)
     const lower = text.toLowerCase()
-    const found = SKILL_DICTIONARY.filter(s => {
+    const dictionaryHits = SKILL_DICTIONARY.filter(s => {
         const esc = s.toLowerCase().replace(/[.+#]/g, m => `\\${m}`)
         return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`, 'i').test(lower)
     })
-    if (found.length) { out.skills = found; out.confidence.skills = found.length >= 3 ? 0.85 : 0.6 }
+    const merged: string[] = []
+    const seenSkill = new Set<string>()
+    for (const s of [...sectionSkills, ...dictionaryHits]) {
+        const k = s.toLowerCase()
+        if (seenSkill.has(k)) continue
+        seenSkill.add(k)
+        merged.push(s)
+    }
+    if (merged.length) {
+        out.skills = merged
+        // Higher confidence when we extracted from the Skills section, since
+        // those came directly from the candidate.
+        out.confidence.skills = sectionSkills.length >= 3 ? 0.9
+            : merged.length >= 3 ? 0.75
+            : 0.55
+    }
 
     // Structured experience + education from their sections.
     const expBlock = extractSection(lines, 'experience')

@@ -483,3 +483,107 @@ B.Sc Computer Science — MIT
         expect(p.education[0].school).toContain('MIT')
     })
 })
+
+// ── Skills section extraction ────────────────────────────────────────────────
+// The legacy implementation matched skills only against a hardcoded dictionary,
+// so anything domain-specific was dropped. We now also parse the explicit
+// "Skills" section and merge the two sources, deduped case-insensitively.
+describe('parseResumeText — skills section extraction', () => {
+    it('extracts comma-separated skills from an explicit Skills section', () => {
+        const t = `Alice Example
+alice@example.com
+
+SKILLS
+SAP HANA, Oracle Fusion, Tally ERP, QuickBooks, Zoho Books
+
+EXPERIENCE
+Finance Analyst — Acme
+2020 - 2024
+`
+        const p = parseResumeText(t)
+        // Domain skills not in the dictionary should now be present.
+        expect(p.skills).toEqual(expect.arrayContaining([
+            'SAP HANA', 'Oracle Fusion', 'Tally ERP', 'QuickBooks', 'Zoho Books',
+        ]))
+    })
+
+    it('extracts bullet-separated skills', () => {
+        const t = `SKILLS
+• Figma  • Adobe XD  • Sketch  • InVision  • Framer
+`
+        const p = parseResumeText(t)
+        expect(p.skills).toEqual(expect.arrayContaining([
+            'Figma', 'Adobe XD', 'Sketch', 'InVision', 'Framer',
+        ]))
+    })
+
+    it('extracts pipe-separated skills on a single line', () => {
+        const t = `Technical Skills
+HubSpot | Salesforce | Mailchimp | Pardot | Marketo
+`
+        const p = parseResumeText(t)
+        expect(p.skills).toEqual(expect.arrayContaining([
+            'HubSpot', 'Salesforce', 'Mailchimp', 'Pardot', 'Marketo',
+        ]))
+    })
+
+    it('extracts line-break-separated skills', () => {
+        const t = `Core Competencies
+AutoCAD
+SolidWorks
+Revit
+3DS Max
+`
+        const p = parseResumeText(t)
+        expect(p.skills).toEqual(expect.arrayContaining([
+            'AutoCAD', 'SolidWorks', 'Revit', '3DS Max',
+        ]))
+    })
+
+    it('merges section skills with dictionary hits (deduped, section first)', () => {
+        const t = `SKILLS
+React, TypeScript, Custom Framework Foo
+
+EXPERIENCE
+Engineer — Acme
+2020 - 2024
+Worked with Node.js and AWS on internal tools.
+`
+        const p = parseResumeText(t)
+        // Section skills should appear first, then dictionary-only hits.
+        expect(p.skills).toContain('Custom Framework Foo')   // section-only
+        expect(p.skills).toContain('Node.js')                 // dictionary-only (from exp)
+        expect(p.skills).toContain('AWS')                     // dictionary-only (from exp)
+        // No duplicates from case differences ("React" vs "react").
+        const lowered = p.skills.map(s => s.toLowerCase())
+        expect(new Set(lowered).size).toBe(lowered.length)
+    })
+
+    it('filters out junk tokens (numbers, sentences, stopwords)', () => {
+        const t = `SKILLS
+React, and, etc., 2024, Building scalable enterprise applications with care, Vue
+`
+        const p = parseResumeText(t)
+        expect(p.skills).toContain('React')
+        expect(p.skills).toContain('Vue')
+        // Junk rejected:
+        expect(p.skills).not.toContain('and')
+        expect(p.skills).not.toContain('etc.')
+        expect(p.skills).not.toContain('2024')
+        // Sentence-like (>5 words) is rejected
+        expect(p.skills).not.toContain('Building scalable enterprise applications with care')
+    })
+
+    it('confidence is highest when extracted from a real Skills section', () => {
+        const withSection = parseResumeText(`SKILLS
+Java, Spring Boot, PostgreSQL, AWS, Docker
+`)
+        const dictionaryOnly = parseResumeText('I worked with React and Node.js at my last job.')
+        expect(withSection.confidence.skills ?? 0).toBeGreaterThan(dictionaryOnly.confidence.skills ?? 0)
+    })
+
+    it('returns an empty list when no Skills section and no dictionary words exist', () => {
+        const p = parseResumeText('Just a brief description with no technical terms.')
+        expect(p.skills).toEqual([])
+    })
+})

@@ -26,6 +26,9 @@ import type { Employee, User } from '@/types'
 export interface AccountFlags {
     attendancePunchEnabled: boolean
     attendanceManualEntryEnabled: boolean
+    // Whether this user may publish posts to the portal feed. OFF by default —
+    // an admin enables it per-user in Manage Access. Gates the home-feed composer.
+    portalPostEnabled: boolean
 }
 
 export function useAccountFlags(): AccountFlags & { isLoading: boolean } {
@@ -42,6 +45,7 @@ export function useAccountFlags(): AccountFlags & { isLoading: boolean } {
     return {
         attendancePunchEnabled: query.data?.attendancePunchEnabled ?? true,
         attendanceManualEntryEnabled: query.data?.attendanceManualEntryEnabled ?? true,
+        portalPostEnabled: query.data?.portalPostEnabled ?? false,
         isLoading: query.isLoading,
     }
 }

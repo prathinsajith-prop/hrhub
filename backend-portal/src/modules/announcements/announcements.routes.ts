@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { and, desc, eq, isNull, lte, sql, getTableColumns } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { announcements, announcementReceipts, announcementComments, employees, teamMembers } from '../../db/schema/index.js'
+import { announcements, announcementAudiences, announcementReceipts, announcementComments, employees, teamMembers, users } from '../../db/schema/index.js'
 import { recordActivity } from '../../lib/audit.js'
 
 // Employee-portal read surface for Company Announcements. HR creates/publishes
@@ -254,5 +254,115 @@ export default async function announcementsRoutes(fastify: FastifyInstance): Pro
             metadata: { kind: 'announcement', subKind: 'comment', commentId: row.id }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
         }).catch(() => { })
         return reply.code(201).send({ data: row })
+    })
+
+    // ── Employee posts ────────────────────────────────────────────────────────
+    //
+    // Employees with the `portalPostEnabled` permission (set per-user in the
+    // admin Manage Access screen, OFF by default) can publish their own posts
+    // into the feed. A post is stored as an announcement authored by the
+    // employee — title is empty (it's a social post, not an official notice),
+    // category 'general', audience 'all', published immediately. The matching
+    // `announcement_audiences` row (kind 'all') is REQUIRED or the feed's
+    // audience filter would never surface it. Authors may edit/delete only
+    // their own posts; the ownership check (`created_by = me`) means this can
+    // never touch HR-authored announcements even with the permission on.
+
+    /** Gate: 403 unless the signed-in user has post-creation permission. */
+    async function assertCanPost(request: any, reply: any): Promise<boolean> {
+        const [row] = await db.select({ enabled: users.portalPostEnabled })
+            .from(users).where(eq(users.id, request.user.id)).limit(1)
+        if (!row?.enabled) {
+            reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You do not have permission to create posts' })
+            return false
+        }
+        return true
+    }
+
+    function readPostBody(request: any, reply: any): string | null {
+        const raw = (request.body as any)?.body
+        const body = typeof raw === 'string' ? raw.trim() : ''
+        if (!body) {
+            reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Post content is required' })
+            return null
+        }
+        if (body.length > 5000) {
+            reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Post is too long (max 5000 characters)' })
+            return null
+        }
+        return body
+    }
+
+    // POST /announcements — create a post (published immediately, company-wide).
+    fastify.post('/', { ...auth }, async (request: any, reply: any) => {
+        if (!(await assertCanPost(request, reply))) return
+        const body = readPostBody(request, reply)
+        if (body === null) return
+        const row = await db.transaction(async (tx) => {
+            const [ann] = await tx.insert(announcements).values({
+                tenantId: request.user.tenantId,
+                title: '',
+                body,
+                category: 'general',
+                priority: 'normal' as never,
+                status: 'published' as never,
+                audienceType: 'all' as never,
+                publishedAt: new Date(),
+                createdBy: request.user.id ?? null,
+                authorName: request.user.name ?? null,
+            }).returning()
+            await tx.insert(announcementAudiences).values({
+                tenantId: request.user.tenantId, announcementId: ann.id, audienceKind: 'all' as never, audienceValue: null,
+            })
+            return ann
+        })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'announcement', entityId: row.id, entityName: body.slice(0, 80), action: 'create',
+            metadata: { kind: 'post' }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: { ...row, readAt: null, acknowledgedAt: null } })
+    })
+
+    // PATCH /announcements/:id — edit your own post.
+    fastify.patch('/:id', { ...auth }, async (request: any, reply: any) => {
+        if (!(await assertCanPost(request, reply))) return
+        const { id } = request.params as { id: string }
+        const [existing] = await db.select({ createdBy: announcements.createdBy }).from(announcements)
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId), isNull(announcements.deletedAt))).limit(1)
+        if (!existing) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Post not found' })
+        if (existing.createdBy !== request.user.id) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only edit your own posts' })
+        }
+        const body = readPostBody(request, reply)
+        if (body === null) return
+        const [row] = await db.update(announcements).set({ body, updatedAt: new Date() })
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId))).returning()
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'announcement', entityId: id, entityName: body.slice(0, 80), action: 'update',
+            metadata: { kind: 'post' }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    // DELETE /announcements/:id — delete (soft) your own post.
+    fastify.delete('/:id', { ...auth }, async (request: any, reply: any) => {
+        if (!(await assertCanPost(request, reply))) return
+        const { id } = request.params as { id: string }
+        const [existing] = await db.select({ createdBy: announcements.createdBy }).from(announcements)
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId), isNull(announcements.deletedAt))).limit(1)
+        if (!existing) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Post not found' })
+        if (existing.createdBy !== request.user.id) {
+            return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'You can only delete your own posts' })
+        }
+        await db.update(announcements).set({ deletedAt: new Date(), updatedAt: new Date() })
+            .where(and(eq(announcements.id, id), eq(announcements.tenantId, request.user.tenantId)))
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: 'announcement', entityId: id, entityName: 'Post', action: 'delete',
+            metadata: { kind: 'post' }, ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: { ok: true } })
     })
 }

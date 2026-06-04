@@ -680,6 +680,17 @@
       "preBoarding": "Pre-Boarding",
       "rejected": "Rejected"
     },
+    "recommendations": {
+      "candidatesTitle": "Recommended candidates",
+      "candidatesEmpty": "No strong matches in the talent pool yet",
+      "jobsTitle": "Recommended jobs",
+      "jobsEmpty": "No other open roles match yet",
+      "matchPct": "{{score}}% match",
+      "matched": "Matched",
+      "missing": "Missing",
+      "alsoAppliedTo": "Also applied to:",
+      "cappedNote": "Scored the most recent {{count}} candidates"
+    },
     "candidateProfile": {
       "notFound": "Candidate not found.",
       "backToRecruitment": "Back to Recruitment",

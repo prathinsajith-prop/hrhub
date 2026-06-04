@@ -1,7 +1,7 @@
 import { eq, and, desc, isNull, sql, getTableColumns, ne, inArray } from 'drizzle-orm'
 import { withTimestamp } from '../../lib/db-helpers.js'
 import { db } from '../../db/index.js'
-import { recruitmentJobs, jobApplications, recruitmentStages, employees, tenants } from '../../db/schema/index.js'
+import { recruitmentJobs, jobApplications, recruitmentStages, employees, tenants, recruitmentSkills, recruitmentQualifications } from '../../db/schema/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { Conditions } from '../../lib/filters.js'
 import { buildDefaultRecruitmentStageRows } from './recruitment.defaults.js'
@@ -67,28 +67,45 @@ export async function getJob(tenantId: string, id: string) {
  * consistent tags instead of inventing case/spelling variants. De-duplicated
  * case-insensitively (first-seen casing wins) and sorted alphabetically.
  */
+/**
+ * Skill + qualification suggestions for the recruitment UIs. Reads the dedicated
+ * per-tenant catalog tables (migration 0088) — a single indexed lookup each,
+ * already de-duplicated and alphabetised — instead of unnesting every job's
+ * jsonb arrays at request time. Used by the job dialogs, the public careers
+ * apply form, and the portal referral form.
+ */
 export async function getJobTagSuggestions(tenantId: string) {
-    const rows = await db
-        .select({ skills: recruitmentJobs.skills, qualifications: recruitmentJobs.qualifications })
-        .from(recruitmentJobs)
-        .where(and(eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
+    const [skills, qualifications] = await Promise.all([
+        db.select({ name: recruitmentSkills.name }).from(recruitmentSkills)
+            .where(eq(recruitmentSkills.tenantId, tenantId)).orderBy(recruitmentSkills.name),
+        db.select({ name: recruitmentQualifications.name }).from(recruitmentQualifications)
+            .where(eq(recruitmentQualifications.tenantId, tenantId)).orderBy(recruitmentQualifications.name),
+    ])
+    return { skills: skills.map((r) => r.name), qualifications: qualifications.map((r) => r.name) }
+}
 
-    const collect = (lists: Array<string[] | null>) => {
-        const seen = new Map<string, string>() // lowercase → first-seen original casing
-        for (const list of lists) {
-            for (const raw of list ?? []) {
-                const val = typeof raw === 'string' ? raw.trim() : ''
-                if (!val) continue
-                const key = val.toLowerCase()
-                if (!seen.has(key)) seen.set(key, val)
-            }
-        }
-        return [...seen.values()].sort((a, b) => a.localeCompare(b))
+/**
+ * Upsert a job's skills/qualifications into the per-tenant catalogs. This is the
+ * ONLY writer of the catalog — résumé-upload areas (candidate add, public
+ * careers, referral) read suggestions but never add to it. Conflicts on the
+ * case-insensitive unique index are ignored (first-seen casing is preserved).
+ */
+async function upsertJobCatalog(
+    tenantId: string,
+    tags: { skills?: unknown; qualifications?: unknown },
+    conn: typeof db = db,
+) {
+    const skills = dedupeTags(tags.skills)
+    const qualifications = dedupeTags(tags.qualifications)
+    if (skills && skills.length > 0) {
+        await conn.insert(recruitmentSkills)
+            .values(skills.map((name) => ({ tenantId, name })))
+            .onConflictDoNothing()
     }
-
-    return {
-        skills: collect(rows.map(r => r.skills)),
-        qualifications: collect(rows.map(r => r.qualifications)),
+    if (qualifications && qualifications.length > 0) {
+        await conn.insert(recruitmentQualifications)
+            .values(qualifications.map((name) => ({ tenantId, name })))
+            .onConflictDoNothing()
     }
 }
 
@@ -260,6 +277,8 @@ export async function createJob(tenantId: string, data: Omit<NewJob, 'tenantId' 
     const [row] = await db.insert(recruitmentJobs)
         .values({ ...data, ...normalizeJobTags(data), tenantId, jobNo } as never)
         .returning()
+    // Feed the tag catalogs from the job's skills/qualifications.
+    await upsertJobCatalog(tenantId, data)
     return row
 }
 
@@ -268,6 +287,9 @@ export async function updateJob(tenantId: string, id: string, data: Partial<NewJ
         .set(withTimestamp({ ...data, ...normalizeJobTags(data) }))
         .where(and(eq(recruitmentJobs.id, id), eq(recruitmentJobs.tenantId, tenantId), isNull(recruitmentJobs.deletedAt)))
         .returning()
+    if (row && (data.skills !== undefined || data.qualifications !== undefined)) {
+        await upsertJobCatalog(tenantId, data)
+    }
     return row ?? null
 }
 

@@ -13,6 +13,9 @@ export interface FeedAnnouncement {
     attachments?: Array<{ name: string; s3Key: string; size?: number; mime?: string }>
     publishedAt: string | null
     authorName: string | null
+    /** Author user id — used to decide whether the current user owns this post
+     *  (and may therefore edit/delete it). Null for legacy/system rows. */
+    createdBy: string | null
     createdAt: string
     readAt: string | null
     acknowledgedAt: string | null
@@ -30,6 +33,38 @@ export function useAnnouncementFeed(pageSize = 15) {
             api.get<FeedPage>(`/announcements/feed?limit=${pageSize}&offset=${pageParam}`),
         getNextPageParam: (last, all) => (last && last.hasMore ? all.reduce((s, p) => s + p.data.length, 0) : undefined),
         enabled: !!tenantId,
+    })
+}
+
+// ── Employee posts ──────────────────────────────────────────────────────────
+// Create / edit / delete the signed-in employee's own feed posts. Gated server
+// side by the `portalPostEnabled` permission (and ownership for edit/delete).
+// All three invalidate the shared announcements feed so the change shows
+// immediately.
+
+export function useCreatePost() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (body: string) =>
+            api.post<{ data: FeedAnnouncement }>('/announcements', { body }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'announcements'] }),
+    })
+}
+
+export function useUpdatePost() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ id, body }: { id: string; body: string }) =>
+            api.patch<{ data: FeedAnnouncement }>(`/announcements/${id}`, { body }).then((r) => r.data),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'announcements'] }),
+    })
+}
+
+export function useDeletePost() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/announcements/${id}`),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['portal', 'announcements'] }),
     })
 }
 

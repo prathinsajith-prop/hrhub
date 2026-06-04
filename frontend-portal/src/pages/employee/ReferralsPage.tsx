@@ -2,11 +2,12 @@ import { useMemo, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { toast } from 'sonner'
-import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles, UploadCloud, CalendarDays } from 'lucide-react'
+import { UserPlus, Briefcase, MapPin, Loader2, Users, Search, Check, ChevronsUpDown, Paperclip, X, FileText, Sparkles, UploadCloud, CalendarDays, Send } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumericInput } from '@/components/ui/numeric-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -22,7 +23,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { cn, initialsOf, formatDate } from '@/lib/utils'
-import { useMyReferrals, useReferralJobs, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
+import { useMyReferrals, useReferralJobs, useReferralTagSuggestions, useSubmitReferral, type MyReferral, type ReferralJob } from '@/hooks/useReferrals'
 import { parseResumeFile, extractResumeImage, type ParsedResume } from '@/lib/resume-parser'
 import { CandidateProfileFields, GenderSelect } from '@/components/shared/CandidateProfileFields'
 import { ChipsField } from '@/components/shared/ChipsField'
@@ -294,6 +295,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     const [experienceHistory, setExperienceHistory] = useState<ExperienceEntry[]>([])
     const [skills, setSkills] = useState<string[]>([])
     const [skillInput, setSkillInput] = useState('')
+    const { data: tagSuggestions } = useReferralTagSuggestions()
     const addSkill = (value?: string) => {
         const v = (value ?? skillInput).trim()
         if (v && !skills.some(s => s.toLowerCase() === v.toLowerCase())) setSkills(s => [...s, v])
@@ -394,13 +396,18 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 
     return (
         <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-            {/* Wider dialog now that we collect address/gender/education/experience */}
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+            {/* Wider dialog now that we collect address/gender/education/experience.
+                Three-row flex layout — header (sticky-top by virtue of order),
+                scrollable body, footer separated by a top border. Overriding the
+                DialogContent base styles: `gap-0 p-0 overflow-hidden flex flex-col`
+                so only the middle row scrolls while the footer stays anchored
+                with clear visual separation from the form body. */}
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] gap-0 p-0 overflow-hidden flex flex-col">
+                <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
                     <DialogTitle>{t('referrals.dialogTitle', { defaultValue: 'Refer a candidate' })}</DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
                     {/* Résumé first — attach to auto-fill the fields below */}
                     <div className="space-y-1.5">
                         <Label>{t('referrals.resumeLabel', { defaultValue: 'Resume' })} <span className="text-destructive">*</span></Label>
@@ -490,9 +497,10 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     </div>
 
                     {/* Optional candidate metadata that HR also captures via the
-                        admin Add Candidate dialog & the public apply form. Plain
-                        inputs here — the portal doesn't ship the country/numeric
-                        helpers, but a free-text field is enough for a referral. */}
+                        admin Add Candidate dialog & the public apply form.
+                        Grouped into two rows so the 3 numeric fields sit
+                        together: identity (Nationality + Gender) then
+                        compensation (Experience + Expected + Current). */}
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>{t('referrals.nationality', { defaultValue: 'Nationality' })}</Label>
@@ -502,13 +510,13 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                             <Label>{t('referrals.gender', { defaultValue: 'Gender' })}</Label>
                             <GenderSelect value={gender} onChange={setGender} />
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div className="space-y-1.5">
                             <Label>{t('referrals.experience', { defaultValue: 'Experience (years)' })}</Label>
-                            <Input
-                                type="number"
-                                min={0}
-                                step={1}
-                                inputMode="numeric"
+                            <NumericInput
+                                decimal={false}
                                 value={experience}
                                 onChange={(e) => setExperience(e.target.value)}
                                 placeholder="0"
@@ -516,10 +524,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                         </div>
                         <div className="space-y-1.5">
                             <Label>{t('referrals.expectedSalary', { defaultValue: 'Expected salary (AED)' })}</Label>
-                            <Input
-                                type="number"
-                                min={0}
-                                inputMode="decimal"
+                            <NumericInput
                                 value={expectedSalary}
                                 onChange={(e) => setExpectedSalary(e.target.value)}
                                 placeholder="0"
@@ -527,10 +532,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                         </div>
                         <div className="space-y-1.5">
                             <Label>{t('referrals.currentSalary', { defaultValue: 'Current salary (AED)' })}</Label>
-                            <Input
-                                type="number"
-                                min={0}
-                                inputMode="decimal"
+                            <NumericInput
                                 value={currentSalary}
                                 onChange={(e) => setCurrentSalary(e.target.value)}
                                 placeholder="0"
@@ -569,7 +571,7 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
                                 onAdd={addSkill}
                                 onAddValue={addSkill}
-                                suggestions={job?.skills}
+                                suggestions={tagSuggestions?.skills}
                                 placeholder={t('referrals.skillPlaceholder', { defaultValue: 'Add a skill · Press Enter' })}
                                 chipClassName="bg-sky-100 text-sky-700"
                             />
@@ -577,10 +579,27 @@ function ReferDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
                     </div>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={close} disabled={submit.isPending}>{t('common.cancel', { defaultValue: 'Cancel' })}</Button>
-                    <Button onClick={handleSubmit} disabled={!canSubmit} className="gap-2">
-                        {submit.isPending && <Loader2 className="size-4 animate-spin" />}
+                <DialogFooter className="px-6 py-4 border-t border-border/60 bg-background">
+                    {/* Footer CTAs — outline + primary with matched heights and a
+                        consistent min-width so the pair looks balanced even when
+                        the labels differ in length. The Submit button uses
+                        Button's built-in `loading` prop, which swaps the
+                        leftIcon for a spinner during submission. */}
+                    <Button
+                        variant="outline"
+                        onClick={close}
+                        disabled={submit.isPending}
+                        className="min-w-[7rem]"
+                    >
+                        {t('common.cancel', { defaultValue: 'Cancel' })}
+                    </Button>
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={!canSubmit}
+                        loading={submit.isPending}
+                        leftIcon={<Send className="size-4" />}
+                        className="min-w-[10rem]"
+                    >
                         {t('referrals.submit', { defaultValue: 'Submit referral' })}
                     </Button>
                 </DialogFooter>

@@ -35,6 +35,9 @@ export interface TenantUser {
      *  manual-entry panel that lets the user back-fill missed punches.
      *  Defaults to true. */
     attendanceManualEntryEnabled: boolean
+    /** HR-controlled switch — when true, the user can publish posts to the
+     *  employee portal feed. Defaults to false. */
+    portalPostEnabled: boolean
     lastLoginAt: string | null
     createdAt: string
     employeeId: string
@@ -88,9 +91,18 @@ export function useTenantUsers() {
 export function useUpdateUser() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean }) =>
+        mutationFn: ({ id, ...data }: { id: string; isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean }) =>
             api.patch<{ data: TenantUser }>(`/settings/users/${id}`, data).then((r) => r.data),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'users'] }),
+        onSuccess: () => {
+            // Invalidate both query trees that surface user/account data:
+            //   • ['settings', 'users']            — the Users page list
+            //   • ['employees', employeeId, 'account'] — the InviteEmployeeDialog's account query
+            // Without invalidating ['employees'], reopening the Login Access
+            // dialog within the 30s staleTime window would show the previous
+            // feature-flag state instead of the freshly saved one.
+            qc.invalidateQueries({ queryKey: ['settings', 'users'] })
+            qc.invalidateQueries({ queryKey: ['employees'] })
+        },
     })
 }
 

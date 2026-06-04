@@ -55,29 +55,62 @@ interface FeatureFlagsSectionProps {
     userId: string
     initialPunch: boolean
     initialManual: boolean
-    onSave: (userId: string, patch: { attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean }) => void
+    initialPost: boolean
+    /** Persists a single-field patch. Must throw / reject on failure so the
+     *  switch can revert its optimistic state. */
+    onSave: (
+        userId: string,
+        patch: { attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean },
+    ) => Promise<void>
     isSaving: boolean
 }
 
 /**
- * Two-switch panel for the per-user attendance toggles. Mirrors the layout
- * used on the Users page so HR sees the same control wherever they reach
- * Manage Access from. State is local-draft-with-Save (dirty-only) to match
- * the RoleSelector pattern above.
+ * Three-switch panel for the per-user feature toggles. Each switch auto-saves
+ * the moment it's flipped — no separate Save button — and shows a precise
+ * toast ("Create posts enabled" / "Create posts disabled") via the parent
+ * handler. The optimistic UI rolls back if the request fails.
+ *
+ * Why auto-save? With the previous draft-+-Save pattern, users frequently
+ * flipped a toggle, saw the visual state change, then closed the dialog
+ * without clicking the small Save button at the bottom — losing the change
+ * silently.
  */
-function FeatureFlagsSection({ userId, initialPunch, initialManual, onSave, isSaving }: FeatureFlagsSectionProps) {
+function FeatureFlagsSection({ userId, initialPunch, initialManual, initialPost, onSave, isSaving }: FeatureFlagsSectionProps) {
     const [punch, setPunch] = useState(initialPunch)
     const [manual, setManual] = useState(initialManual)
-    // Reset draft state if the underlying user changes (e.g. dialog reopened
-    // for a different employee).
-    const [syncKey, setSyncKey] = useState(`${userId}:${initialPunch}:${initialManual}`)
-    const nextKey = `${userId}:${initialPunch}:${initialManual}`
+    const [post, setPost] = useState(initialPost)
+    // Re-sync if the underlying user changes (e.g. dialog reopened for a
+    // different employee, or query refetched after save).
+    const [syncKey, setSyncKey] = useState(`${userId}:${initialPunch}:${initialManual}:${initialPost}`)
+    const nextKey = `${userId}:${initialPunch}:${initialManual}:${initialPost}`
     if (nextKey !== syncKey) {
         setSyncKey(nextKey)
         setPunch(initialPunch)
         setManual(initialManual)
+        setPost(initialPost)
     }
-    const dirty = punch !== initialPunch || manual !== initialManual
+
+    // Per-toggle handlers — optimistic update, persist, revert on failure.
+    async function togglePunch(next: boolean) {
+        const prev = punch
+        setPunch(next)
+        try { await onSave(userId, { attendancePunchEnabled: next }) }
+        catch { setPunch(prev) }
+    }
+    async function toggleManual(next: boolean) {
+        const prev = manual
+        setManual(next)
+        try { await onSave(userId, { attendanceManualEntryEnabled: next }) }
+        catch { setManual(prev) }
+    }
+    async function togglePost(next: boolean) {
+        const prev = post
+        setPost(next)
+        try { await onSave(userId, { portalPostEnabled: next }) }
+        catch { setPost(prev) }
+    }
+
     return (
         <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground">Features</p>
@@ -92,7 +125,7 @@ function FeatureFlagsSection({ userId, initialPunch, initialManual, onSave, isSa
                     <Switch
                         id={`punch-${userId}`}
                         checked={punch}
-                        onCheckedChange={setPunch}
+                        onCheckedChange={togglePunch}
                         disabled={isSaving}
                     />
                 </label>
@@ -106,26 +139,25 @@ function FeatureFlagsSection({ userId, initialPunch, initialManual, onSave, isSa
                     <Switch
                         id={`manual-${userId}`}
                         checked={manual}
-                        onCheckedChange={setManual}
+                        onCheckedChange={toggleManual}
+                        disabled={isSaving}
+                    />
+                </label>
+                <label htmlFor={`post-${userId}`} className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer">
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium">Create posts</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                            When on, the user can publish posts to the employee portal feed. Off by default.
+                        </p>
+                    </div>
+                    <Switch
+                        id={`post-${userId}`}
+                        checked={post}
+                        onCheckedChange={togglePost}
                         disabled={isSaving}
                     />
                 </label>
             </div>
-            {dirty && (
-                <div className="flex justify-end">
-                    <Button
-                        size="sm"
-                        className="h-6 text-xs"
-                        onClick={() => onSave(userId, {
-                            ...(punch !== initialPunch ? { attendancePunchEnabled: punch } : {}),
-                            ...(manual !== initialManual ? { attendanceManualEntryEnabled: manual } : {}),
-                        })}
-                        loading={isSaving}
-                    >
-                        Save
-                    </Button>
-                </div>
-            )}
         </div>
     )
 }
@@ -233,14 +265,30 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
 
     async function handleSaveFeatureFlags(
         userId: string,
-        patch: { attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean },
+        patch: { attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean },
     ) {
         if (Object.keys(patch).length === 0) return
         try {
             await updateUser.mutateAsync({ id: userId, ...patch })
-            toast.success('Features updated')
-        } catch {
+            // Precise per-field message so the user sees exactly what they
+            // just changed — much clearer than a generic "Features updated".
+            const parts: string[] = []
+            if (patch.attendancePunchEnabled !== undefined) {
+                parts.push(patch.attendancePunchEnabled ? 'Attendance check-in enabled' : 'Attendance check-in disabled')
+            }
+            if (patch.attendanceManualEntryEnabled !== undefined) {
+                parts.push(patch.attendanceManualEntryEnabled ? 'Manual entry enabled' : 'Manual entry disabled')
+            }
+            if (patch.portalPostEnabled !== undefined) {
+                parts.push(patch.portalPostEnabled ? 'Create posts enabled' : 'Create posts disabled')
+            }
+            toast.success(parts.join(' · ') || 'Features updated')
+        } catch (err) {
             toast.error('Update failed', 'Could not update the feature switches.')
+            // Re-throw so the calling switch can roll back its optimistic
+            // visual state — without this, a failed save leaves the toggle
+            // visually "on" even though the server still has it off.
+            throw err
         }
     }
 
@@ -349,6 +397,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     userId={account.id}
                                     initialPunch={account.attendancePunchEnabled ?? true}
                                     initialManual={account.attendanceManualEntryEnabled ?? true}
+                                    initialPost={account.portalPostEnabled ?? false}
                                     onSave={handleSaveFeatureFlags}
                                     isSaving={updateUser.isPending}
                                 />
@@ -386,6 +435,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     userId={account.id}
                                     initialPunch={account.attendancePunchEnabled ?? true}
                                     initialManual={account.attendanceManualEntryEnabled ?? true}
+                                    initialPost={account.portalPostEnabled ?? false}
                                     onSave={handleSaveFeatureFlags}
                                     isSaving={updateUser.isPending}
                                 />
@@ -418,6 +468,7 @@ export function InviteEmployeeDialog({ employee, open, onOpenChange }: Props) {
                                     userId={account.id}
                                     initialPunch={account.attendancePunchEnabled ?? true}
                                     initialManual={account.attendanceManualEntryEnabled ?? true}
+                                    initialPost={account.portalPostEnabled ?? false}
                                     onSave={handleSaveFeatureFlags}
                                     isSaving={updateUser.isPending}
                                 />

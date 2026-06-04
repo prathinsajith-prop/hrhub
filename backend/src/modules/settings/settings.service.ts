@@ -96,6 +96,10 @@ export async function listTenantUsers(tenantId: string) {
             isActive: users.isActive,
             attendancePunchEnabled: users.attendancePunchEnabled,
             attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            // Without this column in the SELECT, the Manage Access modal
+            // would always render the "Create posts" toggle as OFF on reopen
+            // — even right after the user enabled and saved it.
+            portalPostEnabled: users.portalPostEnabled,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
             employeeId: users.employeeId,
@@ -124,12 +128,13 @@ const ROLE_HIERARCHY: Record<string, number> = { super_admin: 5, hr_manager: 4, 
 export async function updateUserStatus(
     tenantId: string,
     userId: string,
-    data: { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean },
+    data: { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean },
 ) {
     const patch: Record<string, unknown> = { updatedAt: new Date() }
     if (data.isActive !== undefined) patch.isActive = data.isActive
     if (data.attendancePunchEnabled !== undefined) patch.attendancePunchEnabled = data.attendancePunchEnabled
     if (data.attendanceManualEntryEnabled !== undefined) patch.attendanceManualEntryEnabled = data.attendanceManualEntryEnabled
+    if (data.portalPostEnabled !== undefined) patch.portalPostEnabled = data.portalPostEnabled
     if (data.roles && data.roles.length > 0) {
         const effectiveRole = data.roles.reduce((best, r) => (ROLE_HIERARCHY[r] ?? 0) > (ROLE_HIERARCHY[best] ?? 0) ? r : best, data.roles[0])
         patch.role = effectiveRole as UserRole
@@ -151,6 +156,7 @@ export async function updateUserStatus(
             isActive: users.isActive,
             attendancePunchEnabled: users.attendancePunchEnabled,
             attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+            portalPostEnabled: users.portalPostEnabled,
         })
     return updated ?? null
 }

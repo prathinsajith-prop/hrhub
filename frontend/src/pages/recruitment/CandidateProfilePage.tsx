@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
     ArrowLeft, Mail, Phone, Globe, Briefcase, DollarSign, Star,
     XCircle, UserPlus, Save, Edit2, FileText, Upload, CheckCircle2,
-    Clock, ChevronRight, User, MapPin, GraduationCap, Sparkles,
+    Clock, ChevronRight, User, MapPin, GraduationCap, Sparkles, Wand2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,7 +24,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { cn, getInitials, formatDate, formatCurrency } from '@/lib/utils'
-import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
+import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume, useRecommendedJobs } from '@/hooks/useRecruitment'
+import { MatchScoreBadge, MatchSkillChips } from '@/components/shared/RecommendationBits'
+import { JobTypeBadge, WorkplaceBadge } from '@/components/shared/JobBadges'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useDesignationOptions, useCreateDesignation } from '@/hooks/useDesignations'
 import { useRecruitmentStages } from '@/hooks/useRecruitment'
@@ -106,6 +108,7 @@ export function CandidateProfilePage() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { data: candidateData, isLoading } = useApplication(id)
+    const { data: recommendedJobs, isLoading: recJobsLoading } = useRecommendedJobs(id ?? '', !!id)
     const updateStage = useUpdateApplicationStage()
     const updateApplication = useUpdateApplication()
     const convertToEmployee = useConvertCandidateToEmployee()
@@ -609,6 +612,65 @@ export function CandidateProfilePage() {
                                     </Card>
                                 ) : null
                             })()}
+
+                            {/* Recommended jobs — open roles that best fit this candidate */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm flex items-center gap-1.5">
+                                        <Wand2 className="size-3.5 text-violet-500" />
+                                        {t('recruitment.recommendations.jobsTitle', { defaultValue: 'Recommended jobs' })}
+                                        {(recommendedJobs?.length ?? 0) > 0 && (
+                                            <span className="ml-auto text-[10px] font-normal text-muted-foreground">{recommendedJobs?.length}</span>
+                                        )}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    {recJobsLoading ? (
+                                        <div className="space-y-2">
+                                            {[1, 2].map(i => <Skeleton key={`recjob-skeleton-${i}`} className="h-20 rounded-lg" />)}
+                                        </div>
+                                    ) : (recommendedJobs?.length ?? 0) === 0 ? (
+                                        <p className="text-xs text-muted-foreground italic py-1">
+                                            {t('recruitment.recommendations.jobsEmpty', { defaultValue: 'No other open roles match yet' })}
+                                        </p>
+                                    ) : (
+                                        <ul className="space-y-2.5">
+                                            {recommendedJobs!.map((rj) => (
+                                                <li key={rj.jobId}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate(`/recruitment/jobs/${rj.jobId}`)}
+                                                        className="w-full text-start rounded-lg border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3"
+                                                    >
+                                                        <div className="flex items-start gap-2 flex-wrap">
+                                                            <p className="text-sm font-semibold text-foreground">{rj.title}</p>
+                                                            <MatchScoreBadge score={rj.overall} className="ms-auto" />
+                                                        </div>
+                                                        <div className="flex items-center gap-2 flex-wrap mt-1">
+                                                            {rj.department && <span className="text-[11px] text-muted-foreground">{rj.department}</span>}
+                                                            {rj.location && (
+                                                                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                                                    <MapPin className="size-3 opacity-70" />{rj.location}
+                                                                </span>
+                                                            )}
+                                                            {rj.type && <JobTypeBadge type={rj.type} size="xs" variant="bordered" />}
+                                                            {rj.workplaceType && <WorkplaceBadge workplace={rj.workplaceType} size="xs" variant="bordered" />}
+                                                        </div>
+                                                        {(rj.matchedSkills.length > 0 || rj.missingSkills.length > 0) && (
+                                                            <div className="mt-2">
+                                                                <MatchSkillChips matched={rj.matchedSkills} missing={rj.missingSkills} />
+                                                            </div>
+                                                        )}
+                                                        {rj.strengths.length > 0 && (
+                                                            <p className="text-[11px] text-muted-foreground/90 mt-2">{rj.strengths.join(' · ')}</p>
+                                                        )}
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </TabsContent>
 
                         {/* ── Pipeline tab ── */}

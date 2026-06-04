@@ -5,9 +5,10 @@ import { RichTextDisplay } from '@/components/ui/rich-text-display'
 import {
   ArrowLeft, Edit2, MapPin, Briefcase, Users,
   Download, Eye, Star, CheckCircle2, XCircle, AlertCircle,
-  GraduationCap, Sparkles, Hash, Building2, Clock,
+  GraduationCap, Sparkles, Hash, Building2, Clock, Wand2,
 } from 'lucide-react'
 import { JobTypeBadge, WorkplaceBadge, TagChip, formatPostedAgo } from '@/components/shared/JobBadges'
+import { MatchScoreBadge, MatchSkillChips } from '@/components/shared/RecommendationBits'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,7 +17,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
-import { useJob, useApplications, useRecruitmentStages } from '@/hooks/useRecruitment'
+import { useJob, useApplications, useRecruitmentStages, useRecommendedCandidates } from '@/hooks/useRecruitment'
 import { DataTable } from '@/components/ui/data-table'
 import type { ColumnDef } from '@tanstack/react-table'
 import { EditJobDialog } from '@/components/shared/action-dialogs'
@@ -63,6 +64,7 @@ export function JobDetailPage() {
 
   const { data: jobData, isLoading: jobLoading } = useJob(id)
   const { data: appsData, isLoading: appsLoading } = useApplications({ jobId: id, limit: 200 })
+  const { data: recsData, isLoading: recsLoading } = useRecommendedCandidates(id ?? '', !!id)
   const { data: stagesData } = useRecruitmentStages()
   const allStages = useMemo<RecruitmentStage[]>(
     () => (stagesData && stagesData.length > 0
@@ -544,6 +546,84 @@ export function JobDetailPage() {
                       onRowClick={(c) => navigate(`/recruitment/candidates/${c.id}`)}
                     />
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── Recommended candidates (talent-pool matching) ── */}
+            <Card className="mt-4">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Wand2 className="size-3.5 text-violet-500" />
+                  {t('recruitment.recommendations.candidatesTitle', { defaultValue: 'Recommended candidates' })}
+                  {(recsData?.data?.length ?? 0) > 0 && (
+                    <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-muted text-[11px] font-medium tabular-nums ml-auto">
+                      {recsData?.data.length}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                {recsLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map(i => <Skeleton key={`rec-skeleton-${i}`} className="h-24 rounded-lg" />)}
+                  </div>
+                ) : (recsData?.data?.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground italic py-2">
+                    {t('recruitment.recommendations.candidatesEmpty', { defaultValue: 'No strong matches in the talent pool yet' })}
+                  </p>
+                ) : (
+                  <>
+                    <ul className="space-y-2.5">
+                      {recsData!.data.map((rc) => (
+                        <li key={rc.applicationId}>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/recruitment/candidates/${rc.applicationId}`)}
+                            className="w-full text-start rounded-lg border border-border/60 bg-card hover:border-foreground/30 hover:bg-muted/30 transition-colors p-3"
+                          >
+                            <div className="flex items-start gap-3">
+                              <Avatar className="size-9 shrink-0 border border-border/60">
+                                {rc.avatar && <img src={rc.avatar} alt={rc.name} className="object-cover" />}
+                                <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">{getInitials(rc.name)}</AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-sm font-semibold text-foreground truncate">{rc.name}</p>
+                                  <MatchScoreBadge score={rc.overall} className="ms-auto" />
+                                </div>
+                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                                  {rc.email}
+                                  {rc.experience != null && rc.experience > 0 && (
+                                    <span> · {t('recruitment.jobDetail.experienceYears', { count: rc.experience })}</span>
+                                  )}
+                                </p>
+                                {(rc.matchedSkills.length > 0 || rc.missingSkills.length > 0) && (
+                                  <div className="mt-2">
+                                    <MatchSkillChips matched={rc.matchedSkills} missing={rc.missingSkills} />
+                                  </div>
+                                )}
+                                {rc.strengths.length > 0 && (
+                                  <p className="text-[11px] text-muted-foreground/90 mt-2">{rc.strengths.join(' · ')}</p>
+                                )}
+                                {rc.appliedJobs.length > 0 && (
+                                  <p className="text-[11px] text-muted-foreground/70 mt-1.5">
+                                    {t('recruitment.recommendations.alsoAppliedTo', { defaultValue: 'Also applied to:' })}{' '}
+                                    {rc.appliedJobs.map(j => j.title).join(', ')}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {recsData!.capped && (
+                      <p className="text-[11px] text-muted-foreground/60 mt-3">
+                        {t('recruitment.recommendations.cappedNote', { defaultValue: 'Scored the most recent {{count}} candidates', count: recsData!.scanned })}
+                      </p>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

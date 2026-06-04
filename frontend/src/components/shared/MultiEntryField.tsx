@@ -48,6 +48,9 @@ export interface MultiEntryFieldProps<T> {
     cancelLabel?: string
     deleteConfirmTitle?: string
     deleteConfirmDescription?: string
+    /** Message shown when the list is empty and not currently being edited.
+     *  Falls back to a label-derived sentence ("No experience added yet…"). */
+    emptyMessage?: string
 }
 
 type Mode<T> =
@@ -73,7 +76,12 @@ export function MultiEntryField<T>({
     cancelLabel = 'Cancel',
     deleteConfirmTitle = 'Remove entry?',
     deleteConfirmDescription = 'This entry will be removed from the application.',
+    emptyMessage,
 }: MultiEntryFieldProps<T>) {
+    // Default message references the section label ("No experience added yet…"),
+    // so consumers don't need to pass copy for every instance.
+    const defaultEmptyMessage = `No ${label.toLowerCase()} added yet. Click + Add to add one.`
+    const emptyText = emptyMessage ?? defaultEmptyMessage
     const [mode, setMode] = useState<Mode<T>>({ kind: 'idle' })
     const [pendingDelete, setPendingDelete] = useState<number | null>(null)
 
@@ -132,6 +140,17 @@ export function MultiEntryField<T>({
                     </Button>
                 )}
             </div>
+
+            {/* Empty state — shown only when nothing has been added AND no add form is open.
+                Gives the section visible content instead of a bare header + button. */}
+            {items.length === 0 && mode.kind === 'idle' && (
+                <div
+                    role="status"
+                    className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-5 text-center"
+                >
+                    <p className="text-sm text-muted-foreground">{emptyText}</p>
+                </div>
+            )}
 
             {/* Saved items — each row shows summary + Edit/Delete unless this row is being edited */}
             {items.length > 0 && (

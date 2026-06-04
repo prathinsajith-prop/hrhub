@@ -196,3 +196,38 @@ export const referralsRelations = relations(referrals, ({ one }) => ({
     referrer: one(employees, { fields: [referrals.referredByEmployeeId], references: [employees.id] }),
     application: one(jobApplications, { fields: [referrals.jobApplicationId], references: [jobApplications.id] }),
 }))
+
+// ─── Recruitment tag catalogs (skills / qualifications) ───────────────────────
+// Per-tenant vocabulary powering the type-ahead suggestions in the job
+// create/edit dialogs and every résumé-upload area. Curated ONLY from the job
+// screens (the upsert runs in createJob/updateJob); candidate/referral/careers
+// forms read these but never add to them. Case-insensitively unique per tenant
+// (see the uq_* indexes in migration 0088) which double as the upsert conflict
+// target — kept as separate tables so each catalog is independently queryable.
+export const recruitmentSkills = pgTable('recruitment_skills', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantNameIdx: index('idx_recruitment_skills_tenant_name').on(t.tenantId, t.name),
+    tenantNameUniq: uniqueIndex('uq_recruitment_skills_tenant_name').on(t.tenantId, sql`lower(${t.name})`),
+}))
+
+export const recruitmentQualifications = pgTable('recruitment_qualifications', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantNameIdx: index('idx_recruitment_qualifications_tenant_name').on(t.tenantId, t.name),
+    tenantNameUniq: uniqueIndex('uq_recruitment_qualifications_tenant_name').on(t.tenantId, sql`lower(${t.name})`),
+}))
+
+export const recruitmentSkillsRelations = relations(recruitmentSkills, ({ one }) => ({
+    tenant: one(tenants, { fields: [recruitmentSkills.tenantId], references: [tenants.id] }),
+}))
+
+export const recruitmentQualificationsRelations = relations(recruitmentQualifications, ({ one }) => ({
+    tenant: one(tenants, { fields: [recruitmentQualifications.tenantId], references: [tenants.id] }),
+}))

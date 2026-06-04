@@ -68,6 +68,18 @@
         "appearance": "Appearance",
         "myWork": "My Work"
     },
+    "post": {
+        "start": "Start a post",
+        "placeholder": "Share something with your team…",
+        "publish": "Post",
+        "published": "Post published",
+        "updated": "Post updated",
+        "deleted": "Post deleted",
+        "failed": "Could not publish post",
+        "deleteFailed": "Could not delete post",
+        "deleteTitle": "Delete this post?",
+        "deleteDesc": "This permanently removes your post from the feed."
+    },
     "announcements": {
         "title": "Announcements",
         "subtitle": "Company news and updates relevant to you.",

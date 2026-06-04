@@ -120,6 +120,21 @@ export function usePublicJobFacets(companyCode: string) {
     })
 }
 
+/**
+ * Skill / qualification catalog for the company — powers the apply form's
+ * type-ahead. Read-only: applicants pick from the tenant's curated vocabulary
+ * (fed by job postings) but never add to it.
+ */
+export function usePublicTagSuggestions(companyCode: string) {
+    return useQuery({
+        queryKey: ['public-tag-suggestions', companyCode],
+        queryFn: () => publicApi.get<{ data: { skills: string[]; qualifications: string[] } }>(`/public/careers/${enc(companyCode)}/tag-suggestions`).then((r) => r.data),
+        enabled: !!companyCode,
+        staleTime: 5 * 60_000,
+        retry: false,
+    })
+}
+
 export function usePublicJob(companyCode: string, jobId: string) {
     return useQuery({
         queryKey: ['public-job', companyCode, jobId],

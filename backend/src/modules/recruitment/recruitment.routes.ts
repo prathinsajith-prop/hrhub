@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { listJobs, getJob, getJobTagSuggestions, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
+import { recommendCandidatesForJob, recommendJobsForCandidate } from './matching.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
@@ -189,6 +190,20 @@ export default async function (fastify: any): Promise<void> {
         const job = await getJob(request.user.tenantId, id)
         if (!job) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
         return reply.send({ data: job })
+    })
+
+    // GET /api/v1/jobs/:id/recommended-candidates — talent-pool + cross-job matches
+    // for this role. Scores the deduped candidate pool (by email) against the job
+    // and returns the best fits who are NOT already in this job's pipeline.
+    fastify.get('/jobs/:id/recommended-candidates', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const limit = Math.min(Number(request.query?.limit) || 10, 50)
+        const result = await recommendCandidatesForJob(request.user.tenantId, id, limit)
+        if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Job not found' })
+        return reply.send(result)
     })
 
     // POST /api/v1/jobs
@@ -630,6 +645,20 @@ export default async function (fastify: any): Promise<void> {
         // Wrapped as { data } for consistency with the list endpoint and the
         // rest of the API. Existing frontend hooks must unwrap accordingly.
         return reply.send({ data: result })
+    })
+
+    // GET /api/v1/applications/:id/recommended-jobs — open roles that fit this
+    // candidate (excluding the one they already applied to). Lets a recruiter
+    // move a strong applicant into another pipeline without re-sourcing.
+    fastify.get('/applications/:id/recommended-jobs', {
+        preHandler: [fastify.authenticate, fastify.requireRole('hr_manager', 'super_admin')],
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { id } = request.params as { id: string }
+        const limit = Math.min(Number(request.query?.limit) || 10, 50)
+        const result = await recommendJobsForCandidate(request.user.tenantId, id, limit)
+        if (!result) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Candidate not found' })
+        return reply.send(result)
     })
 
     // POST /api/v1/jobs/:id/applications
@@ -1240,6 +1269,20 @@ export default async function (fastify: any): Promise<void> {
         if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
         const facets = await getPublicJobFacets(tenant.id)
         return reply.send({ data: facets })
+    })
+
+    // GET /api/v1/public/careers/:companyCode/tag-suggestions — skill/qualification
+    // catalog for the applicant form's type-ahead. Read-only: applicants pick from
+    // the tenant's curated vocabulary but never extend it.
+    fastify.get('/public/careers/:companyCode/tag-suggestions', {
+        ...browseLimit,
+        schema: { tags: ['Recruitment'] },
+    }, async (request: any, reply: any) => {
+        const { companyCode } = request.params as { companyCode: string }
+        const tenant = await getPublicTenantByCode(companyCode)
+        if (!tenant) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Company not found' })
+        const data = await getJobTagSuggestions(tenant.id)
+        return reply.send({ data })
     })
 
     // GET /api/v1/public/careers/:companyCode/jobs/:jobId — single open job

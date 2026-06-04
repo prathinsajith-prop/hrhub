@@ -243,6 +243,46 @@ export interface Candidate {
   referredByName?: string | null
 }
 
+// AI-assisted recruitment matching. `overall` and each dimension are 0–100
+// integers produced by the backend recommendation engine.
+export interface MatchDimensions {
+  skills?: number
+  qualification?: number
+  location?: number
+  industry?: number
+}
+
+// A candidate suggested for a given job (job → candidates).
+export interface RecommendedCandidate {
+  applicationId: string
+  name: string
+  email: string
+  avatar?: string
+  experience: number | null
+  stage: string
+  overall: number
+  dimensions: MatchDimensions
+  matchedSkills: string[]
+  missingSkills: string[]
+  strengths: string[]
+  appliedJobs: Array<{ id: string; title: string }>
+}
+
+// A job suggested for a given candidate/application (candidate → jobs).
+export interface RecommendedJob {
+  jobId: string
+  title: string
+  department: string | null
+  location: string | null
+  workplaceType: string
+  type: string
+  overall: number
+  dimensions: MatchDimensions
+  matchedSkills: string[]
+  missingSkills: string[]
+  strengths: string[]
+}
+
 // Visa
 export type VisaType =
   | 'employment_new'

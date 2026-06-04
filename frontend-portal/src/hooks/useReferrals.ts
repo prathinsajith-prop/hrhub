@@ -10,8 +10,6 @@ export interface ReferralJob {
     location: string | null
     type: 'full_time' | 'part_time' | 'contract'
     openings: number
-    /** The role's required skills — used to suggest tags in the referral form. */
-    skills?: string[]
 }
 
 export interface MyReferral {
@@ -56,6 +54,22 @@ export interface SubmitReferralBody {
     resume?: File | null
     /** Candidate photo auto-extracted from the résumé (optional). */
     photo?: Blob | null
+}
+
+/**
+ * Skill / qualification catalog for the tenant — powers the referral form's
+ * type-ahead. Read-only: the catalog is curated by the admin job screens, so the
+ * referral form suggests from it but never adds to it.
+ */
+export function useReferralTagSuggestions() {
+    const tenantId = useAuthStore((s) => s.user?.tenantId)
+    return useQuery({
+        queryKey: ['portal', 'referral-tag-suggestions', tenantId],
+        queryFn: () =>
+            api.get<{ data: { skills: string[]; qualifications: string[] } }>('/referrals/tag-suggestions').then((r) => r.data),
+        enabled: !!tenantId,
+        staleTime: 5 * 60_000,
+    })
 }
 
 /**

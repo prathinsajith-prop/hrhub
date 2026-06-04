@@ -3,6 +3,7 @@ import {
     Users, Plus, CheckCircle2, Shield, ShieldOff, ShieldCheck,
     Search, MailCheck, UserPlus, Check, Mail, Clock,
     AlertCircle, MinusCircle, KeyRound, Timer, Pencil, UserX, UserCheck,
+    MessageSquarePlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1276,14 +1277,17 @@ function ManageUserAccessModal({
     const [draftRoles, setDraftRoles] = useState<string[]>(initialRoles)
     const initialPunchEnabled = user?.attendancePunchEnabled ?? true
     const initialManualEnabled = user?.attendanceManualEntryEnabled ?? true
+    const initialPostEnabled = user?.portalPostEnabled ?? false
     const [draftPunchEnabled, setDraftPunchEnabled] = useState<boolean>(initialPunchEnabled)
     const [draftManualEnabled, setDraftManualEnabled] = useState<boolean>(initialManualEnabled)
+    const [draftPostEnabled, setDraftPostEnabled] = useState<boolean>(initialPostEnabled)
     const [syncedId, setSyncedId] = useState<string | null>(null)
     if (user && user.id !== syncedId) {
         setSyncedId(user.id)
         setDraftRoles(initialRoles)
         setDraftPunchEnabled(user.attendancePunchEnabled ?? true)
         setDraftManualEnabled(user.attendanceManualEntryEnabled ?? true)
+        setDraftPostEnabled(user.portalPostEnabled ?? false)
     }
 
     if (!user) return null
@@ -1291,7 +1295,8 @@ function ManageUserAccessModal({
     const rolesDirty = JSON.stringify(draftRoles.toSorted()) !== JSON.stringify(initialRoles.toSorted())
     const punchDirty = draftPunchEnabled !== initialPunchEnabled
     const manualDirty = draftManualEnabled !== initialManualEnabled
-    const isDirty = rolesDirty || punchDirty || manualDirty
+    const postDirty = draftPostEnabled !== initialPostEnabled
+    const isDirty = rolesDirty || punchDirty || manualDirty || postDirty
 
     async function handleSave() {
         if (!user) return
@@ -1301,6 +1306,7 @@ function ManageUserAccessModal({
                 ...(rolesDirty ? { roles: draftRoles, role: draftRoles[0] } : {}),
                 ...(punchDirty ? { attendancePunchEnabled: draftPunchEnabled } : {}),
                 ...(manualDirty ? { attendanceManualEntryEnabled: draftManualEnabled } : {}),
+                ...(postDirty ? { portalPostEnabled: draftPostEnabled } : {}),
             })
             toast.success(t('settingsDetail.users.accessUpdated', { defaultValue: 'Access updated' }))
             onClose()
@@ -1492,6 +1498,31 @@ function ManageUserAccessModal({
                                     id="manual-switch"
                                     checked={draftManualEnabled}
                                     onCheckedChange={setDraftManualEnabled}
+                                    disabled={updateUser.isPending}
+                                    className="shrink-0 mt-0.5"
+                                />
+                            </label>
+                            <label
+                                htmlFor="post-switch"
+                                className="flex items-start justify-between gap-3 px-3.5 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                            >
+                                <div className="min-w-0 flex items-start gap-2.5">
+                                    <span className="mt-0.5 inline-flex size-7 items-center justify-center rounded-md bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400 shrink-0">
+                                        <MessageSquarePlus className="size-3.5" />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium">
+                                            {t('settingsDetail.users.allowPostTitle', { defaultValue: 'Create posts' })}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                                            {t('settingsDetail.users.allowPostDesc', { defaultValue: 'When on, the user can publish posts to the employee portal feed. Off by default.' })}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    id="post-switch"
+                                    checked={draftPostEnabled}
+                                    onCheckedChange={setDraftPostEnabled}
                                     disabled={updateUser.isPending}
                                     className="shrink-0 mt-0.5"
                                 />

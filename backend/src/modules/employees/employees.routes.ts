@@ -293,6 +293,7 @@ export default async function (fastify: any): Promise<void> {
                 createdAt: users.createdAt,
                 attendancePunchEnabled: users.attendancePunchEnabled,
                 attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+                portalPostEnabled: users.portalPostEnabled,
             })
             .from(users)
             .where(and(eq(users.employeeId, id), eq(users.tenantId, request.user.tenantId)))

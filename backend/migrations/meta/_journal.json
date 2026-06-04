@@ -610,6 +610,20 @@
       "when": 1782230400000,
       "tag": "0086_application_skills",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1782316800000,
+      "tag": "0087_portal_post_enabled",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1782403200000,
+      "tag": "0088_recruitment_tag_catalog",
+      "breakpoints": true
     }
   ]
 }

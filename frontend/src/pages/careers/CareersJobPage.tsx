@@ -7,7 +7,7 @@ import { useState, useRef, useMemo, useEffect, type ChangeEvent, type FormEvent,
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, MapPin, Building2, CalendarDays, Banknote, Users, CheckCircle2, Sparkles, GraduationCap, Clock, Hash, Briefcase, Info, ImagePlus, Trash2 } from 'lucide-react'
-import { usePublicJob, useApplyToJob, type ApplyInput } from '@/hooks/usePublicCareers'
+import { usePublicJob, useApplyToJob, usePublicTagSuggestions, type ApplyInput } from '@/hooks/usePublicCareers'
 import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -252,7 +252,7 @@ export function CareersJobPage() {
                     /* Application tab — wider container so the résumé dropzone
                         and the inline 2-col form fields breathe properly. */
                     <div className="mx-auto mt-6 max-w-4xl">
-                        <ApplyForm companyCode={companyCode} jobId={jobId} jobTitle={job.title} jobSkills={job.skills ?? []} />
+                        <ApplyForm companyCode={companyCode} jobId={jobId} jobTitle={job.title} />
                     </div>
                 )}
             </div>
@@ -285,7 +285,8 @@ function SectionTitle({ children }: { children: ReactNode }) {
     )
 }
 
-function ApplyForm({ companyCode, jobId, jobTitle, jobSkills }: { companyCode: string; jobId: string; jobTitle: string; jobSkills: string[] }) {
+function ApplyForm({ companyCode, jobId, jobTitle }: { companyCode: string; jobId: string; jobTitle: string }) {
+    const { data: tagSuggestions } = usePublicTagSuggestions(companyCode)
     const { t } = useTranslation()
     const apply = useApplyToJob(companyCode, jobId)
     const [form, setForm] = useState({ name: '', email: '', phone: '', nationality: '', experience: '', expectedSalary: '', currentSalary: '', coverNote: '' })
@@ -451,7 +452,7 @@ function ApplyForm({ companyCode, jobId, jobTitle, jobSkills }: { companyCode: s
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill() } if (e.key === 'Backspace' && !skillInput && skills.length > 0) setSkills(s => s.slice(0, -1)) }}
                             onAdd={addSkill}
                             onAddValue={addSkill}
-                            suggestions={jobSkills}
+                            suggestions={tagSuggestions?.skills}
                             placeholder={t('careers.apply.skillPlaceholder', { defaultValue: 'Add a skill · Press Enter' })}
                             chipClassName="bg-sky-100 text-sky-700"
                         />

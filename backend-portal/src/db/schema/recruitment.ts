@@ -128,3 +128,26 @@ export const referralsRelations = relations(referrals, ({ one }) => ({
     referrer: one(employees, { fields: [referrals.referredByEmployeeId], references: [employees.id] }),
     application: one(jobApplications, { fields: [referrals.jobApplicationId], references: [jobApplications.id] }),
 }))
+
+// Per-tenant skill/qualification catalogs (migration 0088). The portal only
+// READS these — to suggest tags in the referral form. They are curated by the
+// admin job screens; the portal never writes to them.
+export const recruitmentSkills = pgTable('recruitment_skills', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantNameIdx: index('idx_recruitment_skills_tenant_name').on(t.tenantId, t.name),
+    tenantNameUniq: uniqueIndex('uq_recruitment_skills_tenant_name').on(t.tenantId, sql`lower(${t.name})`),
+}))
+
+export const recruitmentQualifications = pgTable('recruitment_qualifications', {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+    tenantNameIdx: index('idx_recruitment_qualifications_tenant_name').on(t.tenantId, t.name),
+    tenantNameUniq: uniqueIndex('uq_recruitment_qualifications_tenant_name').on(t.tenantId, sql`lower(${t.name})`),
+}))

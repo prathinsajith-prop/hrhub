@@ -6,6 +6,8 @@ import {
     jobApplications,
     referrals,
     tenants,
+    recruitmentSkills,
+    recruitmentQualifications,
 } from '../../db/schema/index.js'
 import { e400, e403, e404, e409 } from '../../lib/errors.js'
 import { recordActivity } from '../../lib/audit.js'
@@ -70,8 +72,6 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
                 location: recruitmentJobs.location,
                 type: recruitmentJobs.type,
                 openings: recruitmentJobs.openings,
-                // Drives the skill type-ahead suggestions in the referral form.
-                skills: recruitmentJobs.skills,
             })
             .from(recruitmentJobs)
             .where(and(
@@ -83,6 +83,20 @@ export default async function referralsRoutes(fastify: FastifyInstance): Promise
             .orderBy(desc(recruitmentJobs.createdAt))
             .limit(25)
         return reply.send({ data: rows })
+    })
+
+    // ── Skill / qualification suggestions (read-only) ───────────────────────
+    // Sourced from the per-tenant catalog curated by the admin job screens. The
+    // referral form suggests from this vocabulary but never adds to it.
+    fastify.get('/tag-suggestions', { ...auth }, async (request: any, reply: any) => {
+        const tenantId = request.user.tenantId
+        const [skills, qualifications] = await Promise.all([
+            db.select({ name: recruitmentSkills.name }).from(recruitmentSkills)
+                .where(eq(recruitmentSkills.tenantId, tenantId)).orderBy(recruitmentSkills.name),
+            db.select({ name: recruitmentQualifications.name }).from(recruitmentQualifications)
+                .where(eq(recruitmentQualifications.tenantId, tenantId)).orderBy(recruitmentQualifications.name),
+        ])
+        return reply.send({ data: { skills: skills.map((r) => r.name), qualifications: qualifications.map((r) => r.name) } })
     })
 
     // ── My referrals (with the live stage of the linked application) ────────

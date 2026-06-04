@@ -680,6 +680,17 @@
       "preBoarding": "ما قبل الانضمام",
       "rejected": "مرفوض"
     },
+    "recommendations": {
+      "candidatesTitle": "المرشحون الموصى بهم",
+      "candidatesEmpty": "لا توجد تطابقات قوية في مجموعة المواهب حتى الآن",
+      "jobsTitle": "الوظائف الموصى بها",
+      "jobsEmpty": "لا توجد وظائف مفتوحة أخرى متطابقة حتى الآن",
+      "matchPct": "تطابق {{score}}٪",
+      "matched": "متطابق",
+      "missing": "مفقود",
+      "alsoAppliedTo": "تقدم أيضاً إلى:",
+      "cappedNote": "تم تقييم أحدث {{count}} مرشحين"
+    },
     "candidateProfile": {
       "notFound": "لم يتم العثور على المرشح.",
       "backToRecruitment": "العودة إلى التوظيف",

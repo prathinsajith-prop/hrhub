@@ -294,6 +294,8 @@ export interface EmployeeAccount {
         attendancePunchEnabled?: boolean
         /** HR-controlled — when false, hides the manual-entry panel on the portal. */
         attendanceManualEntryEnabled?: boolean
+        /** HR-controlled — when true, the user can publish posts to the portal feed. Defaults to false. */
+        portalPostEnabled: boolean
     } | null
 }
 

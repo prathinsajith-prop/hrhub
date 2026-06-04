@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type InfiniteD
 import { api } from '@/lib/api'
 import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import { toast } from '@/components/ui/overlays'
-import type { Candidate, Job } from '@/types'
+import type { Candidate, Job, RecommendedCandidate, RecommendedJob } from '@/types'
 import type { RecruitmentStage } from '@/lib/recruitmentStages'
 
 interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
@@ -64,6 +64,38 @@ export function useCreateJob() {
             // New skills/qualifications may have been introduced — refresh the type-ahead vocabulary.
             qc.invalidateQueries({ queryKey: ['job-tag-suggestions'] })
         },
+    })
+}
+
+/**
+ * AI-assisted talent-pool matching for a job — returns the candidates whose
+ * skills/qualifications/location/industry best fit the posting. `capped` is
+ * true when the engine only scored the most recent `scanned` candidates.
+ */
+export function useRecommendedCandidates(jobId: string, enabled = true) {
+    return useQuery({
+        queryKey: ['recommended-candidates', jobId],
+        queryFn: () => api.get<{ data: RecommendedCandidate[]; capped: boolean; scanned: number }>(
+            `/jobs/${jobId}/recommended-candidates?limit=10`,
+        ),
+        enabled: enabled && !!jobId,
+        staleTime: 30_000,
+    })
+}
+
+/**
+ * AI-assisted job matching for a candidate/application — returns the open
+ * roles that best fit the candidate. Unwraps the `{ data }` envelope so
+ * consumers receive the typed array directly.
+ */
+export function useRecommendedJobs(applicationId: string, enabled = true) {
+    return useQuery({
+        queryKey: ['recommended-jobs', applicationId],
+        queryFn: () => api.get<{ data: RecommendedJob[] }>(
+            `/applications/${applicationId}/recommended-jobs?limit=10`,
+        ).then((r) => r.data),
+        enabled: enabled && !!applicationId,
+        staleTime: 30_000,
     })
 }
 
