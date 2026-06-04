@@ -4,6 +4,7 @@ import { db } from '../../db/index.js'
 import { resolveAvatarUrl } from '../../plugins/s3.js'
 import { onboardingChecklists, onboardingSteps, employees, onboardingTemplateSteps, onboardingTemplateStepRequiredDocs, onboardingStepRequiredDocs } from '../../db/schema/index.js'
 import { DEFAULT_ONBOARDING_TEMPLATE, buildDefaultOnboardingTemplateRows } from './onboarding.defaults.js'
+import { notifyEmployee } from '../notifications/notifications.service.js'
 
 /* ─── Template steps (per-tenant) ─────────────────────────────────────────── */
 
@@ -292,6 +293,19 @@ export async function updateStep(tenantId: string, checklistId: string, stepId: 
                 eq(employees.tenantId, tenantId),
                 eq(employees.status, 'onboarding'),
             ))
+        notifyEmployee(tenantId, checklist.employeeId, {
+            type: 'success',
+            title: 'Onboarding complete',
+            message: 'All your onboarding steps are done — welcome aboard!',
+            actionUrl: '/dashboard',
+        }).catch(() => { })
+    } else if (data.status === 'completed' && checklist.employeeId) {
+        notifyEmployee(tenantId, checklist.employeeId, {
+            type: 'info',
+            title: 'Onboarding step completed',
+            message: `An onboarding step was marked complete (${progress}% done).`,
+            actionUrl: '/onboarding',
+        }).catch(() => { })
     }
 
     return { step, progress }

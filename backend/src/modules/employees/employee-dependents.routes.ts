@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { db } from '../../db/index.js'
 import { employeeDependents, employees } from '../../db/schema/index.js'
-import { eq, and, sql, desc } from 'drizzle-orm'
+import { eq, and, sql, desc, isNull } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 
 const createSchema = z.object({
@@ -42,6 +42,7 @@ export default async function employeeDependentsRoutes(fastify: any): Promise<vo
             .where(and(
                 eq(employeeDependents.employeeId, id),
                 eq(employeeDependents.tenantId, request.user.tenantId),
+                isNull(employeeDependents.deletedAt),
             ))
             .orderBy(desc(employeeDependents.createdAt))
         return reply.send({ data: rows })
@@ -126,11 +127,13 @@ export default async function employeeDependentsRoutes(fastify: any): Promise<vo
     fastify.delete('/:id/dependents/:depId', { ...hrOnly, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { id, depId } = request.params as { id: string; depId: string }
         const [row] = await db
-            .delete(employeeDependents)
+            .update(employeeDependents)
+            .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(and(
                 eq(employeeDependents.id, depId),
                 eq(employeeDependents.employeeId, id),
                 eq(employeeDependents.tenantId, request.user.tenantId),
+                isNull(employeeDependents.deletedAt),
             ))
             .returning()
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Dependent not found' })

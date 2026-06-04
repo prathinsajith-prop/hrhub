@@ -402,7 +402,7 @@ export function OnboardingPage() {
                         onChange={e => setSearch(e.target.value)}
                     />
                     {search && (
-                        <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <button type="button" onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                             <X className="size-3.5" />
                         </button>
                     )}
@@ -480,7 +480,7 @@ export function OnboardingPage() {
                         {hasMore && (
                             <div ref={sentinelRef}>
                                 {[...Array(Math.min(PAGE_SIZE, filtered.length - visibleCount))].map((_, i) => (
-                                    <RowSkeleton key={i} />
+                                    <RowSkeleton key={`more-rowskeleton-${i}`} />
                                 ))}
                             </div>
                         )}
@@ -516,6 +516,7 @@ export function OnboardingPage() {
                         <Label className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border cursor-pointer hover:bg-muted/80 transition-colors">
                             <input
                                 type="checkbox"
+                                aria-label="Use default template"
                                 checked={useTemplate}
                                 onChange={e => setUseTemplate(e.target.checked)}
                                 className="mt-0.5 size-4 rounded accent-primary"

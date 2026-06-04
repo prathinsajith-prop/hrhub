@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import {
     ArrowLeft, Mail, Phone, Globe, Briefcase, DollarSign, Star,
     XCircle, UserPlus, Save, Edit2, FileText, Upload, CheckCircle2,
-    Clock, ChevronRight,
+    Clock, ChevronRight, User, MapPin, GraduationCap, Sparkles, Wand2, ArrowUpRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { PageWrapper } from '@/components/layout/PageWrapper'
+import { CandidateSourceBadge } from '@/components/shared/CandidateSourceBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
@@ -23,7 +24,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/overlays'
 import { cn, getInitials, formatDate, formatCurrency } from '@/lib/utils'
-import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume } from '@/hooks/useRecruitment'
+import { useApplication, useUpdateApplicationStage, useUpdateApplication, useConvertCandidateToEmployee, useUploadResume, useRecommendedJobs } from '@/hooks/useRecruitment'
+import { MatchScoreBadge, MatchSkillChips } from '@/components/shared/RecommendationBits'
+import { JobTypeBadge, WorkplaceBadge } from '@/components/shared/JobBadges'
 import { useOrgUnits, type OrgUnit } from '@/hooks/useOrgUnits'
 import { useDesignations, useDesignationOptions, useCreateDesignation } from '@/hooks/useDesignations'
 import { useRecruitmentStages } from '@/hooks/useRecruitment'
@@ -84,7 +87,7 @@ function NoteHistory({ notes }: { notes: string | undefined }) {
     return (
         <ol className="space-y-3">
             {entries.map((e, i) => (
-                <li key={i} className="border-l-2 border-border pl-3 py-1">
+                <li key={`${i}-${e.stamp ?? ''}`} className="border-l-2 border-border pl-3 py-1">
                     {(e.stamp || e.label) && (
                         <div className="flex items-center gap-2 mb-1">
                             {e.stamp && <span className="text-[11px] text-muted-foreground tabular-nums">{e.stamp}</span>}
@@ -105,6 +108,7 @@ export function CandidateProfilePage() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { data: candidateData, isLoading } = useApplication(id)
+    const { data: recommendedJobs, isLoading: recJobsLoading } = useRecommendedJobs(id ?? '', !!id)
     const updateStage = useUpdateApplicationStage()
     const updateApplication = useUpdateApplication()
     const convertToEmployee = useConvertCandidateToEmployee()
@@ -276,7 +280,9 @@ export function CandidateProfilePage() {
             <div className="flex items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
                     <Avatar className="size-12 border border-border shrink-0">
-                        {candidate.avatar && <img src={candidate.avatar} alt={candidate.name} className="object-cover" />}
+                        {(candidate.avatarUrl ?? candidate.avatar) && (
+                            <img src={(candidate.avatarUrl ?? candidate.avatar) as string} alt={candidate.name} className="object-cover" />
+                        )}
                         <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
                             {getInitials(candidate.name)}
                         </AvatarFallback>
@@ -294,6 +300,7 @@ export function CandidateProfilePage() {
                             <Badge variant="outline" className={cn('text-[11px]', stageColor.badgeClass)}>
                                 {currentStage?.label ?? candidate.stage}
                             </Badge>
+                            <CandidateSourceBadge source={candidate.source} referredByName={candidate.referredByName} />
                         </div>
                     </div>
                 </div>
@@ -343,8 +350,20 @@ export function CandidateProfilePage() {
                                     <span className="text-muted-foreground">{t('recruitment.candidateProfile.experience', { count: candidate.experience })}</span>
                                 </div>
                             )}
+                            {candidate.gender && (
+                                <div className="flex items-center gap-2 text-sm">
+                                    <User className="size-3.5 text-muted-foreground shrink-0" />
+                                    <span className="text-muted-foreground capitalize">{candidate.gender.replace(/_/g, ' ')}</span>
+                                </div>
+                            )}
+                            {candidate.address && (
+                                <div className="flex items-start gap-2 text-sm">
+                                    <MapPin className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                                    <span className="text-muted-foreground whitespace-pre-line">{candidate.address}</span>
+                                </div>
+                            )}
 
-                            {(candidate.expectedSalary || candidate.currentSalary || candidate.score !== undefined) && (
+                            {(candidate.expectedSalary != null || candidate.currentSalary != null || candidate.score !== undefined) && (
                                 <div className="border-t border-border pt-3 space-y-2.5">
                                     {candidate.score !== undefined && (
                                         <div className="flex items-center justify-between text-sm">
@@ -352,13 +371,13 @@ export function CandidateProfilePage() {
                                             <ScoreBadge score={candidate.score} />
                                         </div>
                                     )}
-                                    {candidate.currentSalary && (
+                                    {candidate.currentSalary != null && (
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">{t('recruitment.candidateProfile.currentSalary')}</span>
                                             <span className="font-medium tabular-nums">{formatCurrency(candidate.currentSalary)}</span>
                                         </div>
                                     )}
-                                    {candidate.expectedSalary && (
+                                    {candidate.expectedSalary != null && (
                                         <div className="flex items-center justify-between text-sm">
                                             <span className="text-muted-foreground">{t('recruitment.candidateProfile.expectedSalary')}</span>
                                             <span className="font-medium tabular-nums">{formatCurrency(candidate.expectedSalary)}</span>
@@ -422,6 +441,90 @@ export function CandidateProfilePage() {
                             </Label>
                         </CardContent>
                     </Card>
+
+                    {/* Skills — candidate's own skill tags (from the form or résumé) */}
+                    {candidate.skills && candidate.skills.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-1.5">
+                                    <Sparkles className="size-3.5 text-amber-500" />
+                                    {t('recruitment.candidateProfile.skills', { defaultValue: 'Skills' })}
+                                    <span className="ml-auto text-[10px] font-normal text-muted-foreground">{candidate.skills.length}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {candidate.skills.map((s, i) => (
+                                        <Badge key={`skill-${i}`} variant="secondary" className="text-[11px] font-normal">{s}</Badge>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Experience timeline — past roles captured at apply time */}
+                    {candidate.experienceHistory && candidate.experienceHistory.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-1.5">
+                                    <Briefcase className="size-3.5 text-sky-600" />
+                                    {t('recruitment.candidateProfile.experienceHistory', { defaultValue: 'Experience' })}
+                                    <span className="ml-auto text-[10px] font-normal text-muted-foreground">{candidate.experienceHistory.length}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <ol className="space-y-3 border-l-2 border-border/60 pl-4">
+                                    {candidate.experienceHistory.map((e, i) => (
+                                        <li key={`exp-${i}`} className="relative">
+                                            <span aria-hidden className="absolute -left-[19px] top-1.5 grid size-3 place-items-center rounded-full bg-sky-500 ring-2 ring-background" />
+                                            <p className="text-sm font-semibold text-foreground">{e.title}</p>
+                                            {(e.company || e.industry) && (
+                                                <p className="text-[12px] text-muted-foreground">{[e.company, e.industry].filter(Boolean).join(' · ')}</p>
+                                            )}
+                                            {(e.startDate || e.endDate || e.current) && (
+                                                <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 tabular-figures">
+                                                    <Clock className="size-3 opacity-70" />{formatMonth(e.startDate)} – {e.current ? 'Present' : formatMonth(e.endDate)}
+                                                </p>
+                                            )}
+                                            {e.summary && <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{e.summary}</p>}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Education timeline */}
+                    {candidate.educationHistory && candidate.educationHistory.length > 0 && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-1.5">
+                                    <GraduationCap className="size-3.5 text-emerald-600" />
+                                    {t('recruitment.candidateProfile.educationHistory', { defaultValue: 'Education' })}
+                                    <span className="ml-auto text-[10px] font-normal text-muted-foreground">{candidate.educationHistory.length}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                                <ol className="space-y-3 border-l-2 border-border/60 pl-4">
+                                    {candidate.educationHistory.map((e, i) => (
+                                        <li key={`edu-${i}`} className="relative">
+                                            <span aria-hidden className="absolute -left-[19px] top-1.5 grid size-3 place-items-center rounded-full bg-emerald-500 ring-2 ring-background" />
+                                            <p className="text-sm font-semibold text-foreground">{e.school}</p>
+                                            {(e.degree || e.fieldOfStudy) && (
+                                                <p className="text-[12px] text-muted-foreground">{[e.degree, e.fieldOfStudy].filter(Boolean).join(' · ')}</p>
+                                            )}
+                                            {(e.startDate || e.endDate || e.current) && (
+                                                <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground/80 tabular-figures">
+                                                    <Clock className="size-3 opacity-70" />{formatMonth(e.startDate)} – {e.current ? 'Present' : formatMonth(e.endDate)}
+                                                </p>
+                                            )}
+                                            {e.summary && <p className="mt-1 text-xs text-muted-foreground whitespace-pre-line">{e.summary}</p>}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Actions */}
                     {!isRejected && (
@@ -509,6 +612,79 @@ export function CandidateProfilePage() {
                                     </Card>
                                 ) : null
                             })()}
+
+                            {/* Recommended jobs — open roles that best fit this candidate */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm flex items-center gap-1.5">
+                                        <Wand2 className="size-3.5 text-violet-500" />
+                                        {t('recruitment.recommendations.jobsTitle', { defaultValue: 'Recommended jobs' })}
+                                        {(recommendedJobs?.length ?? 0) > 0 && (
+                                            <span className="ml-auto text-[10px] font-normal text-muted-foreground">{recommendedJobs?.length}</span>
+                                        )}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    {recJobsLoading ? (
+                                        <div className="space-y-2">
+                                            {[1, 2].map(i => <Skeleton key={`recjob-skeleton-${i}`} className="h-20 rounded-lg" />)}
+                                        </div>
+                                    ) : (recommendedJobs?.length ?? 0) === 0 ? (
+                                        <p className="text-xs text-muted-foreground italic py-1">
+                                            {t('recruitment.recommendations.jobsEmpty', { defaultValue: 'No other open roles match yet' })}
+                                        </p>
+                                    ) : (
+                                        <ul className="space-y-2.5">
+                                            {recommendedJobs!.map((rj) => (
+                                                <li key={rj.jobId}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => navigate(`/recruitment/jobs/${rj.jobId}`)}
+                                                        title={t('recruitment.recommendations.viewRole', { defaultValue: 'View role' })}
+                                                        className="group/rec w-full cursor-pointer text-start rounded-xl border border-border/60 bg-card hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm transition-all p-3.5"
+                                                    >
+                                                        {/* Title + ref on the left, match score pinned top-right. */}
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-semibold text-foreground group-hover/rec:text-primary transition-colors">{rj.title}</p>
+                                                                {rj.jobNo && <p className="text-[10px] font-medium tabular-nums text-muted-foreground/70 mt-0.5">#{rj.jobNo}</p>}
+                                                            </div>
+                                                            <MatchScoreBadge score={rj.overall} className="shrink-0" />
+                                                        </div>
+                                                        <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                                                            {rj.department && <span className="text-[11px] text-muted-foreground">{rj.department}</span>}
+                                                            {rj.location && (
+                                                                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                                                    <MapPin className="size-3 opacity-70" />{rj.location}
+                                                                </span>
+                                                            )}
+                                                            {rj.type && <JobTypeBadge type={rj.type} size="xs" variant="bordered" />}
+                                                            {rj.workplaceType && <WorkplaceBadge workplace={rj.workplaceType} size="xs" variant="bordered" />}
+                                                        </div>
+                                                        {(rj.matchedSkills.length > 0 || rj.missingSkills.length > 0) && (
+                                                            <div className="mt-2.5 border-t border-border/40 pt-2.5">
+                                                                <MatchSkillChips matched={rj.matchedSkills} missing={rj.missingSkills} />
+                                                            </div>
+                                                        )}
+                                                        {rj.strengths.length > 0 && (
+                                                            <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                                                                <Sparkles className="size-3 shrink-0 mt-0.5 text-violet-500" />
+                                                                <span>{rj.strengths.join(' · ')}</span>
+                                                            </p>
+                                                        )}
+                                                        {/* Explicit redirect affordance — the whole card is clickable, this
+                                                            makes it obvious where it goes. */}
+                                                        <div className="mt-3 flex items-center justify-end gap-1 text-[11px] font-medium text-primary/70 group-hover/rec:text-primary transition-colors">
+                                                            {t('recruitment.recommendations.viewRole', { defaultValue: 'View role' })}
+                                                            <ArrowUpRight className="size-3.5" data-rtl-flip />
+                                                        </div>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </TabsContent>
 
                         {/* ── Pipeline tab ── */}
@@ -731,4 +907,17 @@ function StatCard({ label, value, icon }: { label: string; value: string; icon: 
             <p className="text-sm font-semibold tabular-nums truncate">{value}</p>
         </Card>
     )
+}
+
+/**
+ * "YYYY-MM" → "Jan 2024". Returns empty string when value is missing so we can
+ * still render "— Present" for current roles where only an end is set.
+ */
+function formatMonth(value: string | null | undefined): string {
+    if (!value) return ''
+    const [y, m] = value.split('-')
+    if (!y) return ''
+    if (!m) return y
+    const month = new Date(Number(y), Number(m) - 1, 1).toLocaleString('en', { month: 'short' })
+    return `${month} ${y}`
 }

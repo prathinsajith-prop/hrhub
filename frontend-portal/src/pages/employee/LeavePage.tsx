@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Calendar, CalendarDays, Plus, X } from 'lucide-react'
+import { ArrowRight, Calendar, CalendarDays, Plus, X } from 'lucide-react'
 
 import { useAuthStore } from '@/store/authStore'
 import {
@@ -18,8 +18,8 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { GlassCard } from '@/components/shared/GlassCard'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { DatePicker } from '@/components/ui/date-picker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -57,13 +57,13 @@ function computeDays(startISO: string, endISO: string): number {
 }
 
 const STATUS_TONE: Record<LeaveStatus, string> = {
-    pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-    approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
-    rejected: 'bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
-    cancelled: 'bg-muted text-muted-foreground',
+    pending: 'bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
+    approved: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200',
+    rejected: 'bg-rose-100 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200',
+    cancelled: 'bg-muted text-foreground',
 }
 
-export function EmployeeLeavePage() {
+export function EmployeeLeavePage({ embedded = false }: { embedded?: boolean } = {}) {
     const { t } = useTranslation()
     const user = useAuthStore((s) => s.user)
     const employeeId = user?.employeeId ?? undefined
@@ -79,14 +79,22 @@ export function EmployeeLeavePage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader
-                title={t('leave.title')}
-                action={
+            {embedded ? (
+                <div className="flex justify-end">
                     <Button onClick={() => setOpen(true)}>
                         <Plus className="size-4" /> {t('leave.newRequest')}
                     </Button>
-                }
-            />
+                </div>
+            ) : (
+                <PageHeader
+                    title={t('leave.title')}
+                    action={
+                        <Button onClick={() => setOpen(true)}>
+                            <Plus className="size-4" /> {t('leave.newRequest')}
+                        </Button>
+                    }
+                />
+            )}
 
             <GlassCard tone="primary" className="p-5">
                 <div className="flex items-center justify-between">
@@ -157,15 +165,19 @@ export function EmployeeLeavePage() {
                             <CardContent className="flex items-start justify-between gap-3 p-4">
                                 <div>
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-medium capitalize">{req.leaveType}</span>
-                                        <Badge className={cn('border-0 text-[10px] uppercase tracking-wider', STATUS_TONE[req.status])}>
+                                        <span className="font-medium">
+                                            {t(`leave.types.${req.leaveType}`, { defaultValue: req.leaveType })}
+                                        </span>
+                                        <Badge className={cn('border-0 text-xs uppercase tracking-wider', STATUS_TONE[req.status])}>
                                             {t(`leave.status.${req.status}`)}
                                         </Badge>
                                     </div>
-                                    <div className="mt-1 text-sm text-muted-foreground">
-                                        {formatDate(req.startDate)} → {formatDate(req.endDate)}
+                                    <div className="mt-1 inline-flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                                        {formatDate(req.startDate)}
+                                        <ArrowRight className="size-3.5" data-rtl-flip />
+                                        {formatDate(req.endDate)}
                                         {' · '}
-                                        {req.days} {req.days === 1 ? 'day' : 'days'}
+                                        {t(req.days === 1 ? 'leave.days' : 'leave.days_plural', { count: req.days })}
                                     </div>
                                     {req.reason ? (
                                         <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{req.reason}</p>
@@ -177,7 +189,7 @@ export function EmployeeLeavePage() {
                                         size="sm"
                                         onClick={() => setCancelingId(req.id)}
                                         disabled={cancel.isPending}
-                                        aria-label="Cancel request"
+                                        aria-label={t('leave.cancelRequest', { defaultValue: 'Cancel request' })}
                                     >
                                         <X className="size-4" />
                                     </Button>
@@ -194,24 +206,27 @@ export function EmployeeLeavePage() {
                 employeeId={employeeId}
                 onSubmitted={() => {
                     setOpen(false)
-                    toast.success(t('leave.submitRequest'))
+                    toast.success(t('leave.requestSubmitted', { defaultValue: 'Leave request submitted' }))
                 }}
             />
 
             <ConfirmDialog
                 open={!!cancelingId}
                 onOpenChange={(v) => !v && setCancelingId(null)}
-                title="Cancel this leave request?"
-                description="This will withdraw the request. Your manager will no longer see it as pending."
-                confirmLabel="Yes, cancel"
-                cancelLabel="Keep request"
+                title={t('leave.cancelConfirmTitle', { defaultValue: 'Cancel this leave request?' })}
+                description={t('leave.cancelConfirmDesc', {
+                    defaultValue:
+                        'This will withdraw the request. Your manager will no longer see it as pending.',
+                })}
+                confirmLabel={t('leave.cancelConfirmYes', { defaultValue: 'Yes, cancel' })}
+                cancelLabel={t('leave.cancelConfirmKeep', { defaultValue: 'Keep request' })}
                 variant="destructive"
                 loading={cancel.isPending}
                 onConfirm={() => {
                     if (!cancelingId) return
                     cancel.mutate(cancelingId, {
                         onSuccess: () => {
-                            toast.success('Leave request cancelled')
+                            toast.success(t('leave.cancelled', { defaultValue: 'Leave request cancelled' }))
                             setCancelingId(null)
                         },
                     })
@@ -302,8 +317,11 @@ function NewLeaveDialog({
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{t('leave.newRequest')}</DialogTitle>
+                    <p className="text-sm text-muted-foreground">
+                        {t('leave.newRequestSubtitle', { defaultValue: 'Submit a new leave request for approval.' })}
+                    </p>
                 </DialogHeader>
-                <form className="space-y-4" onSubmit={onSubmit}>
+                <form className="space-y-4 pt-1" onSubmit={onSubmit}>
                     <div className="space-y-1.5">
                         <Label>{t('leave.type')}</Label>
                         <Select value={type} onValueChange={(v) => setType(v as LeaveType)}>
@@ -312,8 +330,8 @@ function NewLeaveDialog({
                             </SelectTrigger>
                             <SelectContent>
                                 {LEAVE_TYPES.map((lt) => (
-                                    <SelectItem key={lt} value={lt} className="capitalize">
-                                        {lt}
+                                    <SelectItem key={lt} value={lt}>
+                                        {t(`leave.types.${lt}`, { defaultValue: lt })}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -345,13 +363,18 @@ function NewLeaveDialog({
                         </div>
                     </div>
                     {days > 0 ? (
-                        <p className="-mt-2 text-[11px] text-muted-foreground">
-                            {days} {days === 1 ? t('leave.days', { count: days }) : t('leave.days_plural', { count: days })}
+                        <p className="-mt-2 text-xs text-muted-foreground">
+                            {t(days === 1 ? 'leave.days' : 'leave.days_plural', { count: days })}
                         </p>
                     ) : null}
                     <div className="space-y-1.5">
                         <Label>{t('leave.reason')}</Label>
-                        <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+                        <Textarea
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            maxLength={500}
+                            rows={2}
+                        />
                     </div>
 
                     {/* Handover — required iff there's at least one colleague in
@@ -360,7 +383,7 @@ function NewLeaveDialog({
                     <div className="space-y-1.5">
                         <Label>
                             {t('leave.handoverTo', { defaultValue: 'Handover to' })}
-                            {handoverRequired ? <span className="ml-0.5 text-destructive">*</span> : null}
+                            {handoverRequired ? <span className="ms-0.5 text-destructive">*</span> : null}
                         </Label>
                         {colleagues.length > 0 ? (
                             <Select value={handoverTo} onValueChange={setHandoverTo}>
@@ -371,29 +394,37 @@ function NewLeaveDialog({
                                     {colleagues.map((c) => (
                                         <SelectItem key={c.id} value={c.id}>
                                             {c.firstName} {c.lastName}
-                                            {c.designation ? <span className="ml-1 text-xs text-muted-foreground"> · {c.designation}</span> : null}
+                                            {c.designation ? <span className="ms-1 text-xs text-muted-foreground"> · {c.designation}</span> : null}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         ) : (
                             <p className="rounded-md border border-dashed border-border bg-card/40 px-3 py-2 text-xs text-muted-foreground">
-                                No colleagues in your department: handover not required.
+                                {t('leave.noColleaguesHandover', {
+                                    defaultValue: 'No colleagues in your department: handover not required.',
+                                })}
                             </p>
                         )}
                     </div>
 
                     <div className="space-y-1.5">
                         <Label>{t('leave.handoverNotes', { defaultValue: 'Handover notes (optional)' })}</Label>
-                        <Input
+                        <Textarea
                             value={handoverNotes}
                             onChange={(e) => setHandoverNotes(e.target.value)}
                             maxLength={500}
-                            placeholder="e.g. follow up with the Acme deal on Tuesday"
+                            rows={2}
+                            placeholder={t('leave.handoverNotesPlaceholder', {
+                                defaultValue: 'Handover notes',
+                            })}
                         />
                         {handoverTo ? (
-                            <p className="text-[11px] text-muted-foreground">
-                                Your handover person will be notified once HR approves this request.
+                            <p className="text-xs text-muted-foreground">
+                                {t('leave.handoverNotifyNote', {
+                                    defaultValue:
+                                        'Your handover person will be notified once HR approves this request.',
+                                })}
                             </p>
                         ) : null}
                     </div>

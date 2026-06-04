@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js'
 import { employeeWarnings, employees } from '../../db/schema/index.js'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, isNull } from 'drizzle-orm'
 import { recordActivity } from '../audit/audit.service.js'
 import { generateUploadUrl, buildS3Key, generateDownloadUrl, deleteObject, objectExists } from '../../plugins/s3.js'
 import { z } from 'zod'
@@ -38,6 +38,7 @@ export default async function employeeWarningsRoutes(fastify: any): Promise<void
             .where(and(
                 eq(employeeWarnings.employeeId, id),
                 eq(employeeWarnings.tenantId, request.user.tenantId),
+                isNull(employeeWarnings.deletedAt),
             ))
             .orderBy(desc(employeeWarnings.createdAt))
         return reply.send({ data: rows })
@@ -136,11 +137,13 @@ export default async function employeeWarningsRoutes(fastify: any): Promise<void
     fastify.delete('/:id/warnings/:warnId', { ...hrOnly, schema: { tags: ['Employees'] } }, async (request: any, reply: any) => {
         const { id, warnId } = request.params as { id: string; warnId: string }
         const [row] = await db
-            .delete(employeeWarnings)
+            .update(employeeWarnings)
+            .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(and(
                 eq(employeeWarnings.id, warnId),
                 eq(employeeWarnings.employeeId, id),
                 eq(employeeWarnings.tenantId, request.user.tenantId),
+                isNull(employeeWarnings.deletedAt),
             ))
             .returning()
         if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Warning not found' })

@@ -68,7 +68,7 @@ export async function listLoans(
                        AND sc.is_active = true
                        AND sc.kind = 'earning'
                        AND sc.category = 'basic'),
-                    ${employees.basicSalary}
+                    ${employees.basicSalary}::text
                 )`,
                 employeeTotalSalary: sql<string | null>`COALESCE(
                     (SELECT SUM(COALESCE(esc.amount::numeric, sc.amount::numeric, 0))::text
@@ -79,7 +79,7 @@ export async function listLoans(
                        AND esc.is_active = true
                        AND sc.is_active = true
                        AND sc.kind = 'earning'),
-                    ${employees.totalSalary}
+                    ${employees.totalSalary}::text
                 )`,
                 approverName: sql<string | null>`${users.name}`,
                 total: sql<number>`COUNT(*) OVER()`.as('total'),

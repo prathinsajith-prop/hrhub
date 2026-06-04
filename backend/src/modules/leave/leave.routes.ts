@@ -222,6 +222,35 @@ export default async function (fastify: any): Promise<void> {
         const updated = await cancelLeave(request.user.tenantId, id, request.user.email, request.user.role, request.user.employeeId ?? null)
         if (!updated) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Leave request not found' })
         cacheDel(`dashboard:kpis:${request.user.tenantId}`).catch(() => { })
+        // Audit the cancellation (was previously untracked) + mirror onto the
+        // employee so it shows on their timeline.
+        recordActivity({
+            tenantId: request.user.tenantId,
+            userId: request.user.id,
+            actorName: request.user.name,
+            actorRole: request.user.role,
+            entityType: 'leave',
+            entityId: id,
+            action: 'cancel',
+            metadata: { leaveType: (updated as any).leaveType ?? null },
+            ipAddress: (request as any).ip,
+            userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        if ((updated as any).employeeId) {
+            recordActivity({
+                tenantId: request.user.tenantId,
+                userId: request.user.id,
+                actorName: request.user.name,
+                actorRole: request.user.role,
+                entityType: 'employee',
+                entityId: (updated as any).employeeId,
+                entityName: `${(updated as any).leaveType ?? 'Leave'} request`,
+                action: 'cancel',
+                metadata: { kind: 'leave', subKind: 'cancel', leaveId: id, leaveType: (updated as any).leaveType ?? null },
+                ipAddress: (request as any).ip,
+                userAgent: request.headers['user-agent'],
+            }).catch(() => { })
+        }
         return reply.send({ data: updated })
     })
 

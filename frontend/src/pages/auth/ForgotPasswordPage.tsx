@@ -87,7 +87,7 @@ export function ForgotPasswordPage() {
                                 id="email"
                                 type="email"
                                 autoComplete="email"
-                                placeholder="you@company.ae"
+                                placeholder="Email address"
                                 {...register('email')}
                                 aria-invalid={!!errors.email}
                             />

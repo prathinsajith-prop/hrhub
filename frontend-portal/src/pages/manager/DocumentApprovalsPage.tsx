@@ -201,7 +201,7 @@ function RejectDialog({ target, onClose }: { target: PendingDocument | null; onC
                             id="reject-reason"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            placeholder="e.g. Blurry scan, please re-upload a clearer copy"
+                            placeholder="Reason for rejection"
                             required
                         />
                     </div>

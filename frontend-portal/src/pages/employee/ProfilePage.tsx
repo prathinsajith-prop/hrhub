@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { CalendarDays, Check, Clock, Eye, EyeOff, Languages, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Languages, Lock, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
-import { useMyEmployee, useUpdateMyProfile, type UpdateMyProfileBody } from '@/hooks/useMe'
+import { useMyEmployee, type UpdateMyProfileBody } from '@/hooks/useMe'
+import { useSubmitChangeRequest } from '@/hooks/useProfileChanges'
 import { useChangePassword } from '@/hooks/useChangePassword'
 import { TwoFactorCard } from '@/components/security/TwoFactorCard'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ScheduleCard } from '@/components/shared/ScheduleCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,12 +23,12 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn, formatDate, formatShiftRange } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 
 export function EmployeeProfilePage() {
     const { t } = useTranslation()
     const { data: employee, isLoading } = useMyEmployee()
-    const update = useUpdateMyProfile()
+    const submitChange = useSubmitChangeRequest()
     const [editing, setEditing] = useState(false)
     const [form, setForm] = useState<UpdateMyProfileBody>({})
 
@@ -55,22 +57,39 @@ export function EmployeeProfilePage() {
     }
 
     function onSave() {
-        // Strip empty strings so we don't store ""
-        const cleaned: UpdateMyProfileBody = {}
-        for (const k of Object.keys(form) as (keyof UpdateMyProfileBody)[]) {
-            const v = form[k]
-            if (v !== undefined && v !== '') cleaned[k] = v as string
+        // Contact + personal details are employee-editable but require admin /
+        // super_admin approval before they take effect. Rather than writing the
+        // record directly, submit a change request per affected category — the
+        // change is applied only once a reviewer approves it.
+        const changedIn = (fields: readonly (keyof UpdateMyProfileBody)[]): Record<string, string | null> => {
+            const out: Record<string, string | null> = {}
+            const src = employee as unknown as Record<string, unknown>
+            for (const f of fields) {
+                const current = String(src[f] ?? '')
+                const next = String(form[f] ?? '')
+                if (current !== next) out[f] = next === '' ? null : next
+            }
+            return out
         }
-        if (Object.keys(cleaned).length === 0) {
+        const contactChanges = changedIn(['phone', 'mobileNo', 'personalEmail'])
+        const personalChanges = changedIn(['emergencyContactName', 'emergencyContactPhone', 'emergencyContact', 'homeCountryAddress'])
+
+        const submissions: Promise<unknown>[] = []
+        if (Object.keys(contactChanges).length) submissions.push(submitChange.mutateAsync({ category: 'contact', changes: contactChanges }))
+        if (Object.keys(personalChanges).length) submissions.push(submitChange.mutateAsync({ category: 'personal', changes: personalChanges }))
+
+        if (submissions.length === 0) {
             setEditing(false)
             return
         }
-        update.mutate(cleaned, {
-            onSuccess: () => {
-                toast.success(t('profile.updated'))
+        Promise.all(submissions)
+            .then(() => {
+                toast.success(t('profile.changeSubmitted', { defaultValue: 'Submitted for approval' }))
                 setEditing(false)
-            },
-        })
+            })
+            .catch((err: unknown) => {
+                toast.error(err instanceof Error ? err.message : t('profile.changeSubmitFailed', { defaultValue: 'Could not submit changes' }))
+            })
     }
 
     return (
@@ -81,11 +100,11 @@ export function EmployeeProfilePage() {
                 action={
                     editing ? (
                         <>
-                            <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={update.isPending}>
+                            <Button variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={submitChange.isPending}>
                                 <X className="size-4" /> {t('common.cancel')}
                             </Button>
-                            <Button size="sm" onClick={onSave} loading={update.isPending}>
-                                <Save className="size-4" /> {t('profile.saveChanges')}
+                            <Button size="sm" onClick={onSave} loading={submitChange.isPending}>
+                                <Save className="size-4" /> {t('profile.submitForApproval', { defaultValue: 'Submit for approval' })}
                             </Button>
                         </>
                     ) : (
@@ -96,10 +115,16 @@ export function EmployeeProfilePage() {
                 }
             />
 
+            {editing ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                    {t('profile.approvalNote', { defaultValue: 'Changes to your contact details are submitted for admin approval before they take effect.' })}
+                </div>
+            ) : null}
+
             <Tabs defaultValue="personal">
                 <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
-                    <TabsTrigger value="personal">Personal</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
+                    <TabsTrigger value="personal">{t('common.personal', { defaultValue: 'Personal' })}</TabsTrigger>
+                    <TabsTrigger value="settings">{t('common.settings', { defaultValue: 'Settings' })}</TabsTrigger>
                 </TabsList>
 
                 {/* ── Personal: Employment basics + Schedule + Contact + Address + Emergency ── */}
@@ -110,23 +135,23 @@ export function EmployeeProfilePage() {
                                 {t('profile.employment')}
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                <Field label="Employee No" value={employee.employeeNo} />
-                                <Field label="Status" value={employee.status} />
-                                <Field label="Join date" value={formatDate(employee.joinDate)} />
-                                <Field label="Designation" value={employee.designation ?? '—'} />
-                                <Field label="Nationality" value={employee.nationality ?? '—'} />
+                                <Field label={t('profile.employeeNo', { defaultValue: 'Employee No' })} value={employee.employeeNo} />
+                                <Field label={t('profile.status', { defaultValue: 'Status' })} value={statusLabel(t, employee.status)} />
+                                <Field label={t('profile.joinDate', { defaultValue: 'Join date' })} value={formatDate(employee.joinDate)} />
+                                <Field label={t('profile.designation', { defaultValue: 'Designation' })} value={employee.designation ?? '—'} />
+                                <Field label={t('profile.nationality', { defaultValue: 'Nationality' })} value={employee.nationality ?? '—'} />
                                 {/* Branch → Division → Department triad — joined
                                     from org_units server-side. We hide rows that
                                     have no value so a flat-org tenant (just one
                                     branch) doesn't show three em-dashes. */}
                                 {employee.branchName ? (
-                                    <Field label="Branch" value={employee.branchName} />
+                                    <Field label={t('profile.branch', { defaultValue: 'Branch' })} value={employee.branchName} />
                                 ) : null}
                                 {employee.divisionName ? (
-                                    <Field label="Division" value={employee.divisionName} />
+                                    <Field label={t('profile.division', { defaultValue: 'Division' })} value={employee.divisionName} />
                                 ) : null}
                                 <Field
-                                    label="Department"
+                                    label={t('profile.department', { defaultValue: 'Department' })}
                                     value={employee.departmentName ?? employee.department ?? '—'}
                                 />
                             </div>
@@ -141,23 +166,29 @@ export function EmployeeProfilePage() {
                                 {t('profile.contact')}
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <Field label="Work email" value={employee.email ?? '—'} icon={<Mail className="size-3.5" />} />
+                                <Field
+                                    label={t('profile.workEmail', { defaultValue: 'Work email' })}
+                                    value={employee.email ?? '—'}
+                                    icon={<Mail className="size-3.5" />}
+                                    locked={editing}
+                                    lockedHint={t('profile.managedByHr', { defaultValue: 'Managed by HR' })}
+                                />
                                 <EditableField
-                                    label="Personal email"
+                                    label={t('profile.personalEmail', { defaultValue: 'Personal email' })}
                                     value={form.personalEmail ?? employee.personalEmail ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('personalEmail', v)}
                                     type="email"
                                 />
                                 <EditableField
-                                    label="Phone"
+                                    label={t('profile.phone', { defaultValue: 'Phone' })}
                                     value={form.phone ?? employee.phone ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('phone', v)}
                                     icon={<Phone className="size-3.5" />}
                                 />
                                 <EditableField
-                                    label="Mobile"
+                                    label={t('profile.mobile', { defaultValue: 'Mobile' })}
                                     value={form.mobileNo ?? employee.mobileNo ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('mobileNo', v)}
@@ -168,7 +199,7 @@ export function EmployeeProfilePage() {
                                 {t('profile.address')}
                             </h3>
                             <EditableField
-                                label="Home country address"
+                                label={t('profile.homeCountryAddress', { defaultValue: 'Home country address' })}
                                 value={form.homeCountryAddress ?? ''}
                                 editing={editing}
                                 onChange={(v) => onChange('homeCountryAddress', v)}
@@ -182,19 +213,19 @@ export function EmployeeProfilePage() {
                             </h3>
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <EditableField
-                                    label="Contact name"
+                                    label={t('profile.contactName', { defaultValue: 'Contact name' })}
                                     value={form.emergencyContactName ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('emergencyContactName', v)}
                                 />
                                 <EditableField
-                                    label="Contact phone"
+                                    label={t('profile.contactPhone', { defaultValue: 'Contact phone' })}
                                     value={form.emergencyContactPhone ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('emergencyContactPhone', v)}
                                 />
                                 <EditableField
-                                    label="Relationship / notes"
+                                    label={t('profile.relationshipNotes', { defaultValue: 'Relationship / notes' })}
                                     value={form.emergencyContact ?? ''}
                                     editing={editing}
                                     onChange={(v) => onChange('emergencyContact', v)}
@@ -216,13 +247,13 @@ export function EmployeeProfilePage() {
     )
 }
 
-const LANGUAGES: { code: 'en' | 'ar'; label: string; native: string }[] = [
-    { code: 'en', label: 'English', native: 'EN' },
-    { code: 'ar', label: 'العربية', native: 'AR' },
+const LANGUAGES: { code: 'en' | 'ar'; label: string }[] = [
+    { code: 'en', label: 'English' },
+    { code: 'ar', label: 'العربية' },
 ]
 
 function LanguageCard() {
-    const { i18n } = useTranslation()
+    const { t, i18n } = useTranslation()
     const current = (i18n.language?.slice(0, 2) ?? 'en') as 'en' | 'ar'
     return (
         <Card className="overflow-hidden border-border/70">
@@ -232,8 +263,12 @@ function LanguageCard() {
                         <Languages className="size-5" />
                     </span>
                     <div>
-                        <h3 className="text-sm font-semibold">Language</h3>
-                        <p className="text-xs text-muted-foreground">Choose the interface language.</p>
+                        <h3 className="font-display text-sm font-semibold">
+                            {t('profile.language', { defaultValue: 'Language' })}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                            {t('profile.languageDesc', { defaultValue: 'Choose the interface language.' })}
+                        </p>
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -254,7 +289,6 @@ function LanguageCard() {
                             >
                                 {active ? <Check className="size-3.5" /> : null}
                                 <span>{l.label}</span>
-                                <span className="text-[10px] tracking-wider text-muted-foreground">{l.native}</span>
                             </button>
                         )
                     })}
@@ -275,7 +309,7 @@ function SecurityCard() {
                         <ShieldCheck className="size-5" />
                     </span>
                     <div>
-                        <h3 className="text-sm font-semibold">{t('security.title')}</h3>
+                        <h3 className="font-display text-sm font-semibold">{t('security.title')}</h3>
                         <p className="text-xs text-muted-foreground">{t('security.changePassword')}</p>
                     </div>
                 </div>
@@ -368,7 +402,7 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                             <button
                                 type="button"
                                 onClick={() => setShow((v) => !v)}
-                                aria-label={show ? 'Hide password' : 'Show password'}
+                                aria-label={show ? t('common.hidePassword', { defaultValue: 'Hide password' }) : t('common.showPassword', { defaultValue: 'Show password' })}
                                 aria-pressed={show}
                                 className="absolute end-0 top-0 flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
                             >
@@ -401,103 +435,48 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     )
 }
 
-// Day-name ordering used by the weekly-off chips. Mirrors the
-// backend's WEEKDAY_NAMES table so casing of the saved strings doesn't matter.
-const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
-const WEEK_DAY_SHORT: Record<(typeof WEEK_DAYS)[number], string> = {
-    sunday: 'Sun', monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed',
-    thursday: 'Thu', friday: 'Fri', saturday: 'Sat',
+// Humanize the raw employee status enum (e.g. "on_leave" → "On leave"), preferring
+// a translated label when one exists for the value.
+function statusLabel(t: (key: string, opts?: Record<string, unknown>) => string, status: string): string {
+    const titleCased = status
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+    return t(`profile.statusValue.${status}`, { defaultValue: titleCased })
 }
 
-interface ShiftInfo {
-    name: string
-    startTime: string
-    endTime: string
-    weeklyOffDays: string[]
-}
-
-/**
- * Dedicated schedule card — surfaces the shift name, work hours, and which
- * days of the week are off. When the employee has no shift assigned, falls
- * back to a short hint about tenant-default hours so the panel isn't blank.
- */
-function ScheduleCard({ shift }: { shift: ShiftInfo | null }) {
-    const range = shift ? formatShiftRange(shift.startTime, shift.endTime) : null
-    const offSet = new Set((shift?.weeklyOffDays ?? []).map((d) => d.toLowerCase()))
-
-    return (
-        <Card className="overflow-hidden border-border/70">
-            <CardContent className="p-5">
-                <div className="mb-4 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        <Clock className="size-3.5" /> Schedule
-                    </h3>
-                    {shift ? (
-                        <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                            {shift.name}
-                        </span>
-                    ) : (
-                        <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                            Default working hours
-                        </span>
-                    )}
-                </div>
-
-                {shift ? (
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 text-sm">
-                            <Clock className="size-4 text-muted-foreground" />
-                            <span className="font-display text-base font-semibold tabular-figures">
-                                {range ?? '—'}
-                            </span>
-                        </div>
-
-                        <div>
-                            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                                <CalendarDays className="size-3" /> Weekly off
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {WEEK_DAYS.map((d) => {
-                                    const isOff = offSet.has(d)
-                                    return (
-                                        <span
-                                            key={d}
-                                            className={
-                                                isOff
-                                                    ? 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md bg-rose-100 px-2 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
-                                                    : 'inline-flex h-7 min-w-[44px] items-center justify-center rounded-md border border-border bg-card/50 px-2 text-xs text-muted-foreground'
-                                            }
-                                        >
-                                            {WEEK_DAY_SHORT[d]}
-                                        </span>
-                                    )
-                                })}
-                            </div>
-                            {offSet.size === 0 ? (
-                                <p className="mt-2 text-[11px] text-muted-foreground">
-                                    No weekly off days configured for this shift.
-                                </p>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-sm text-muted-foreground">
-                        You're on the tenant's default working week. Ask HR if you need a custom shift.
-                    </p>
-                )}
-            </CardContent>
-        </Card>
-    )
-}
-
-function Field({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function Field({
+    label,
+    value,
+    icon,
+    locked,
+    lockedHint,
+}: {
+    label: string
+    value: string
+    icon?: React.ReactNode
+    /** When true (i.e. the surrounding form is in edit mode), render the value
+        as a disabled Input with a lock icon so it reads as intentionally
+        non-editable alongside the live inputs rather than looking forgotten. */
+    locked?: boolean
+    lockedHint?: string
+}) {
     return (
         <div>
-            <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {icon}
                 {label}
             </div>
-            <div className="mt-1 text-sm font-medium">{value}</div>
+            {locked ? (
+                <div className="relative mt-1.5">
+                    <Input value={value} disabled readOnly className="pe-9" />
+                    <Lock
+                        className="pointer-events-none absolute end-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                        aria-label={lockedHint}
+                    />
+                </div>
+            ) : (
+                <div className="mt-1 text-sm font-medium">{value}</div>
+            )}
         </div>
     )
 }
@@ -521,7 +500,7 @@ function EditableField({
 }) {
     return (
         <div className={className}>
-            <Label className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <Label className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 {icon}
                 {label}
             </Label>

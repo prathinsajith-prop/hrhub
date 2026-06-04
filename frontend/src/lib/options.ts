@@ -27,6 +27,7 @@ import {
     PERFORMANCE_STATUS_LABELS,
     JOB_STATUS_LABELS,
     EMPLOYMENT_TYPE_LABELS,
+    WORKPLACE_TYPE_LABELS,
     EXIT_TYPE_LABELS,
     AUDIT_ACTION_LABELS,
     CONTRACT_TYPE_LABELS,
@@ -134,11 +135,11 @@ export const PERFORMANCE_STATUS_OPTIONS: SelectOption[] = toOptions(PERFORMANCE_
 // ── Recruitment ──────────────────────────────────────────────────────────────
 export const JOB_STATUS_OPTIONS: SelectOption[] = toOptions(JOB_STATUS_LABELS)
 export const EMPLOYMENT_TYPE_OPTIONS: SelectOption[] = toOptions(EMPLOYMENT_TYPE_LABELS)
-// Job posting type includes internship (not an employment contract type)
-export const JOB_TYPE_OPTIONS: SelectOption[] = [
-    ...toOptions(EMPLOYMENT_TYPE_LABELS),
-    { value: 'internship', label: 'Internship' },
-]
+// Job posting uses the same set — internship/temporary/freelance now live in
+// EMPLOYMENT_TYPE_LABELS so this alias is just a re-export.
+export const JOB_TYPE_OPTIONS: SelectOption[] = EMPLOYMENT_TYPE_OPTIONS
+// Where the work happens (on-site / hybrid / remote).
+export const WORKPLACE_TYPE_OPTIONS: SelectOption[] = toOptions(WORKPLACE_TYPE_LABELS)
 
 // ── Exit ─────────────────────────────────────────────────────────────────────
 export const EXIT_TYPE_OPTIONS: SelectOption[] = toOptions(EXIT_TYPE_LABELS)

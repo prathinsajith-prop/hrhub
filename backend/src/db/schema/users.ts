@@ -34,6 +34,10 @@ export const users = pgTable('users', {
     //     employee back-fill missed punches with an arbitrary timestamp
     attendancePunchEnabled: boolean('attendance_punch_enabled').notNull().default(true),
     attendanceManualEntryEnabled: boolean('attendance_manual_entry_enabled').notNull().default(true),
+    // Per-user switch — gates whether the user can publish posts to the
+    // employee portal feed. Defaults to false (off) so the capability is
+    // opt-in; HR grants it from Users → Manage Access.
+    portalPostEnabled: boolean('portal_post_enabled').notNull().default(false),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     // Account lockout — incremented on every failed login, reset on success
     failedLoginCount: integer('failed_login_count').notNull().default(0),

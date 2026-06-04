@@ -170,7 +170,7 @@ function RequestCard({
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         rows={2}
-                        placeholder="Add any verification context (e.g. confirmed against IBAN letter)"
+                        placeholder="Verification notes"
                         className="resize-none text-sm"
                     />
                 </div>
@@ -310,7 +310,7 @@ function RejectDialog({
                             id="pcr-reject-reason"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            placeholder="e.g. IBAN didn't match the bank certificate, please re-submit"
+                            placeholder="Reason for rejection"
                             required
                         />
                     </div>

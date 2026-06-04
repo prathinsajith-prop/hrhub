@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { Check, ChevronDown, X, Plus } from 'lucide-react'
 import { cn, onActivate } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -126,13 +126,14 @@ export function Combobox({
                             </CommandEmpty>
                         )}
                         <CommandGroup className="p-1">
-                            {options
-                                .filter(o =>
-                                    search.trim() === '' ||
-                                    o.label.toLowerCase().includes(search.trim().toLowerCase()) ||
-                                    (o.secondary?.toLowerCase().includes(search.trim().toLowerCase()) ?? false),
-                                )
-                                .map(opt => (
+                            {options.reduce<ReactNode[]>((acc, opt) => {
+                                const q = search.trim().toLowerCase()
+                                const matches =
+                                    q === '' ||
+                                    opt.label.toLowerCase().includes(q) ||
+                                    (opt.secondary?.toLowerCase().includes(q) ?? false)
+                                if (!matches) return acc
+                                acc.push(
                                     <CommandItem
                                         key={opt.value}
                                         value={opt.secondary ? `${opt.label} ${opt.secondary}` : opt.label}
@@ -152,7 +153,9 @@ export function Combobox({
                                             )}
                                         </span>
                                     </CommandItem>
-                                ))}
+                                )
+                                return acc
+                            }, [])}
                         </CommandGroup>
 
                         {showCreate && (

@@ -161,7 +161,7 @@ function TrainingFormDialog({
                                 maxDecimals={2}
                                 value={form.cost}
                                 onChange={e => setForm(f => ({ ...f, cost: e.target.value }))}
-                                placeholder="0.00"
+                                placeholder="Cost"
                             />
                         </FormField>
                         <FormField label={t('training.status')}>

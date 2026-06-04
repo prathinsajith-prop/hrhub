@@ -207,7 +207,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
     // PATCH /settings/users/:id — deactivate/reactivate a user or change their role
     fastify.patch('/users/:id', { ...hrAdmin, schema: { tags: ['Settings'] } }, async (request: any, reply: any) => {
         const { id } = request.params as { id: string }
-        const { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled } = request.body as { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean }
+        const { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled, portalPostEnabled } = request.body as { isActive?: boolean; role?: string; roles?: string[]; attendancePunchEnabled?: boolean; attendanceManualEntryEnabled?: boolean; portalPostEnabled?: boolean }
 
         // Prevent anyone from deactivating themselves
         if (id === request.user.id && isActive === false) {
@@ -246,12 +246,13 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
                 isActive: users.isActive,
                 attendancePunchEnabled: users.attendancePunchEnabled,
                 attendanceManualEntryEnabled: users.attendanceManualEntryEnabled,
+                portalPostEnabled: users.portalPostEnabled,
             })
             .from(users)
             .where(and(eq(users.id, id), eq(users.tenantId, request.user.tenantId)))
             .limit(1)
 
-        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled })
+        const updated = await updateUserStatus(request.user.tenantId, id, { isActive, role, roles, attendancePunchEnabled, attendanceManualEntryEnabled, portalPostEnabled })
         if (!updated) return reply.code(404).send({ message: 'User not found' })
 
         // Invalidate the isActive cache for this user so the change is effective immediately
@@ -263,7 +264,7 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             entityId: id,
             entityName: updated.name || updated.email,
             action: 'update',
-            changes: diffChanges(beforeUser, updated, ['role', 'roles', 'isActive', 'attendancePunchEnabled', 'attendanceManualEntryEnabled']),
+            changes: diffChanges(beforeUser, updated, ['role', 'roles', 'isActive', 'attendancePunchEnabled', 'attendanceManualEntryEnabled', 'portalPostEnabled']),
         })
 
         return reply.send({ data: updated })

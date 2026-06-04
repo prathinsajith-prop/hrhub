@@ -571,7 +571,7 @@ function NotesStep({ form, set, touched }: { form: WizardForm; set: <K extends k
                 <NumericInput
                     value={form.deductions}
                     onChange={(e) => set('deductions', Number(e.target.value) || 0)}
-                    placeholder="0.00"
+                    placeholder="Amount"
                 />
                 <p className="text-[11px] text-muted-foreground">
                     Pending loans, unreturned assets, or any other deduction. Subtracted from the final settlement.

@@ -416,6 +416,10 @@ function ComponentList({
 
 // ─── Create / Edit dialog ─────────────────────────────────────────────────
 
+// Default the social-security scheme list per the Zoho reference — the
+// most common GCC schemes ticked by default for new earnings.
+const DEFAULT_SCHEMES: SocialSecurityScheme[] = ['GPSSA', 'ADPF', 'SIO', 'SPF', 'PIFSS']
+
 function ComponentDialog({
     kind, existing, onClose,
 }: {
@@ -428,10 +432,6 @@ function ComponentDialog({
     const update = useUpdateSalaryComponent()
     const isEditing = !!existing
     const isPending = create.isPending || update.isPending
-
-    // Default the social-security scheme list per the Zoho reference — the
-    // most common GCC schemes ticked by default for new earnings.
-    const defaultSchemes: SocialSecurityScheme[] = ['GPSSA', 'ADPF', 'SIO', 'SPF', 'PIFSS']
 
     const [category, setCategory] = useState<string>(
         existing?.category ?? (kind === 'earning' ? 'custom_allowance' : KIND_CATEGORIES[kind][0]),
@@ -452,7 +452,7 @@ function ComponentDialog({
     // immediately. Matches the seeded defaults; HR can still deactivate.
     const [isActive, setIsActive] = useState(existing?.isActive ?? true)
     const [schemes, setSchemes] = useState<SocialSecurityScheme[]>(
-        existing?.applicableSocialSecurity ?? defaultSchemes,
+        existing?.applicableSocialSecurity ?? DEFAULT_SCHEMES,
     )
 
     // Auto-sync the payslip name when the user types the display name — only

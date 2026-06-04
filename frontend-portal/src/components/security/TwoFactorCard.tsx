@@ -184,7 +184,7 @@ function CodeInput({ id, value, onChange }: { id: string; value: string; onChang
             autoFocus
             inputMode="numeric"
             autoComplete="one-time-code"
-            placeholder="123456"
+            placeholder="6-digit code"
             maxLength={6}
             className="text-center text-lg tracking-[0.3em]"
         />

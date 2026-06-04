@@ -16,7 +16,7 @@
  * approval audit trail needs to survive even if HR removes a row.
  */
 import { pgTable, uuid, text, date, numeric, boolean, integer, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { tenants } from './tenants.js'
 import { employees } from './employees.js'
 import { users } from './users.js'
@@ -62,6 +62,7 @@ export const travelRequests = pgTable('travel_requests', {
     // never issue the same code twice (race-safe under concurrent inserts
     // because Postgres rejects the duplicate at INSERT).
     travelNoUniq:      uniqueIndex('uq_travel_requests_travel_no').on(t.tenantId, t.travelNo),
+    tenantCreatedIdx:  index('idx_travel_requests_tenant_created').on(t.tenantId, t.createdAt).where(sql`${t.deletedAt} IS NULL`),
 }))
 
 export const travelExpenses = pgTable('travel_expenses', {

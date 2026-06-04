@@ -8,10 +8,9 @@ const WORKING_STATUSES = ['active', 'onboarding'] as const
 import type { FastifyInstance } from 'fastify'
 import { db } from '../../db/client.js'
 import { employees, orgUnits, shifts } from '../../db/schema/index.js'
-import { e400, e403, e404 } from '../../lib/errors.js'
-import { paginationSchema, parseUuidParam, updateMyProfileSchema, validate } from '../../lib/validation.js'
-import { recordActivity } from '../../lib/audit.js'
-import { buildTeammateScopeWhere, canViewTeammate, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
+import { e403, e404 } from '../../lib/errors.js'
+import { paginationSchema, parseUuidParam, validate } from '../../lib/validation.js'
+import { buildTeammateScopeWhere, canViewTeammate, canAccessEmployee, getReportingSubtreeIds, isDeptHead } from '../../lib/scoping.js'
 
 /**
  * Compute days-until-next-birthday in UTC, handling the year-end wrap so a
@@ -28,16 +27,6 @@ function daysUntilBirthday(dob: string | null): number {
     if (next < today) next = new Date(Date.UTC(now.getUTCFullYear() + 1, d.getUTCMonth(), d.getUTCDate()))
     return Math.round((next.getTime() - today.getTime()) / 86_400_000)
 }
-
-const ALLOWED_SELF_UPDATE_FIELDS = [
-    'phone',
-    'mobileNo',
-    'personalEmail',
-    'emergencyContact',
-    'emergencyContactName',
-    'emergencyContactPhone',
-    'homeCountryAddress',
-] as const
 
 /**
  * Fetch an employee plus their reporting-to manager, assigned shift, AND the
@@ -120,6 +109,38 @@ async function getEmployeeWithReportingTo(tenantId: string, id: string) {
     }
 }
 
+// Non-sensitive fields a same-department PEER may see on the basic-profile
+// screen. Explicit ALLOW-LIST (not a denylist) so newly-added sensitive columns
+// (salary, allowances, passport, Emirates ID, bank/IBAN, DOB, visa, labour card,
+// home address) can never leak by default. The full record is reserved for self
+// / reporting-subtree / HR via `canAccessEmployee`.
+function toBasicProfile(emp: NonNullable<Awaited<ReturnType<typeof getEmployeeWithReportingTo>>>) {
+    return {
+        id: emp.id,
+        employeeNo: emp.employeeNo,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        email: emp.email,
+        personalEmail: emp.personalEmail,
+        phone: emp.phone,
+        mobileNo: emp.mobileNo,
+        designation: emp.designation,
+        department: emp.department,
+        nationality: emp.nationality,
+        joinDate: emp.joinDate,
+        status: emp.status,
+        avatarUrl: emp.avatarUrl,
+        branchName: emp.branchName,
+        divisionName: emp.divisionName,
+        departmentName: emp.departmentName,
+        reportingToName: emp.reportingToName,
+        reportingToEmployeeNo: emp.reportingToEmployeeNo,
+        reportingToDesignation: emp.reportingToDesignation,
+        reportingToDepartment: emp.reportingToDepartment,
+        shift: emp.shift,
+    }
+}
+
 export default async function employeesRoutes(fastify: FastifyInstance) {
     const auth = { preHandler: [(fastify as any).authenticate] }
 
@@ -139,41 +160,14 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         return reply.send({ data: employee })
     })
 
-    // PATCH /api/v1/employees/me — update own personal details (restricted field set)
+    // PATCH /api/v1/employees/me — locked. Contact / personal detail changes must
+    // go through the approval pipeline (POST /api/v1/profile-changes) so an
+    // admin / super_admin reviews them before they take effect. Direct
+    // self-updates are rejected here so the review can't be bypassed.
     fastify.patch('/me', { ...auth }, async (request: any, reply: any) => {
-        const { employeeId, tenantId } = request.user
+        const { employeeId } = request.user
         if (!employeeId) return reply.code(404).send(e404('No employee record linked to this account'))
-        const body = validate(updateMyProfileSchema, request.body)
-        const patch: Record<string, unknown> = {}
-        for (const key of ALLOWED_SELF_UPDATE_FIELDS) {
-            if (key in body && (body as any)[key] !== undefined) patch[key] = (body as any)[key]
-        }
-        if (Object.keys(patch).length === 0) return reply.code(400).send(e400('No allowed fields provided'))
-        patch.updatedAt = new Date()
-
-        const [updated] = await db
-            .update(employees)
-            .set(patch as any)
-            .where(and(eq(employees.tenantId, tenantId), eq(employees.id, employeeId)))
-            .returning()
-
-        if (!updated) return reply.code(404).send(e404('Employee not found'))
-
-        recordActivity({
-            tenantId,
-            userId: request.user.id,
-            actorName: request.user.name,
-            actorRole: request.user.role,
-            entityType: 'employee',
-            entityId: employeeId,
-            entityName: `${updated.firstName} ${updated.lastName}`,
-            action: 'update',
-            metadata: { fields: Object.keys(patch).filter((k) => k !== 'updatedAt') },
-            ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
-        }).catch(() => {})
-
-        return reply.send({ data: updated })
+        return reply.code(403).send(e403('Profile changes must be submitted for approval. Please submit a change request instead.'))
     })
 
     // GET /api/v1/employees
@@ -421,10 +415,17 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         return reply.send({ data: list })
     })
 
-    // GET /api/v1/employees/:id — basic profile for self, manager-subtree, or
-    // a same-department peer. Sensitive endpoints (documents, leave history,
-    // attendance, salary) keep using the stricter `canAccessEmployee` so peers
-    // can see each other's name/contact/role without exposing payroll or PII.
+    // GET /api/v1/employees/:id — profile for self, manager-subtree, or a
+    // same-department peer.
+    //
+    // ACCESS TIERS (the WHOLE employees row carries payroll + passport +
+    // Emirates ID + bank/IBAN, so the response is scoped to the caller's tier):
+    //   • Full access — self / reporting-subtree / HR (`canAccessEmployee`):
+    //     the complete record (the dedicated PII screens already trust these).
+    //   • Peer access — same-department colleague only (`canViewTeammate`):
+    //     a slim, PII-free basic profile (`toBasicProfile`).
+    // Previously this returned the full row to any same-department peer, leaking
+    // colleagues' salary / passport / Emirates ID / bank details.
     fastify.get('/:id', { ...auth }, async (request: any, reply: any) => {
         const id = parseUuidParam(request.params, 'id', reply)
         if (!id) return
@@ -433,9 +434,10 @@ export default async function employeesRoutes(fastify: FastifyInstance) {
         const employee = await getEmployeeWithReportingTo(user.tenantId, id)
         if (!employee) return reply.code(404).send(e404('Employee not found'))
 
-        if (!(await canViewTeammate(user, employee.id, request))) {
+        const fullAccess = await canAccessEmployee(user, employee.id, request)
+        if (!fullAccess && !(await canViewTeammate(user, employee.id, request))) {
             return reply.code(403).send(e403('Not authorized to view this employee'))
         }
-        return reply.send({ data: employee })
+        return reply.send({ data: fullAccess ? employee : toBasicProfile(employee) })
     })
 }

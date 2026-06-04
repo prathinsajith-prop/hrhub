@@ -22,6 +22,7 @@ const CATEGORIES: CostCategory[] = ['govt_fee', 'medical', 'typing', 'translatio
 const AMOUNT_RE = /^\d+(\.\d{1,2})?$/
 
 interface CostRow {
+    id: string
     category: CostCategory
     amount: string
     paidDate: string
@@ -31,6 +32,7 @@ interface CostRow {
 
 function emptyRow(): CostRow {
     return {
+        id: crypto.randomUUID(),
         category: 'govt_fee',
         amount: '',
         paidDate: new Date().toISOString().split('T')[0] ?? '',
@@ -194,7 +196,7 @@ export function AdvanceStageCostsDialog({
                             const removable = rows.length > 1 || touched
                             return (
                                 <div
-                                    key={idx}
+                                    key={row.id}
                                     className={cn(
                                         'rounded-xl border bg-background p-3 space-y-3 transition-colors',
                                         showAmountErr || showDateErr ? 'border-destructive/40' : '',
@@ -238,7 +240,7 @@ export function AdvanceStageCostsDialog({
                                                 id={`amt-${idx}`}
                                                 type="text"
                                                 inputMode="decimal"
-                                                placeholder="0.00"
+                                                placeholder="Amount"
                                                 value={row.amount}
                                                 onChange={e => {
                                                     const v = e.target.value
@@ -272,7 +274,7 @@ export function AdvanceStageCostsDialog({
                                             <Input
                                                 id={`ref-${idx}`}
                                                 type="text"
-                                                placeholder="INV-001"
+                                                placeholder="Receipt number"
                                                 value={row.receiptRef}
                                                 onChange={e => patch(idx, { receiptRef: e.target.value })}
                                                 disabled={busy}
@@ -286,7 +288,7 @@ export function AdvanceStageCostsDialog({
                                         <Input
                                             id={`desc-${idx}`}
                                             type="text"
-                                            placeholder="e.g. GDRFA entry permit fee"
+                                            placeholder="Cost description"
                                             value={row.description}
                                             onChange={e => patch(idx, { description: e.target.value })}
                                             disabled={busy}

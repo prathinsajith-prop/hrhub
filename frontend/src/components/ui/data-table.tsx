@@ -112,6 +112,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
         <div className="flex items-center gap-1">
           {/* Previous */}
           <button
+            type="button"
             onClick={onPrev}
             disabled={!canPrev || loading}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
@@ -129,6 +130,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
                 </span>
               ) : (
                 <button
+                  type="button"
                   key={p}
                   onClick={() => onPage(p as number)}
                   disabled={loading}
@@ -147,6 +149,7 @@ function PaginationBar({ currentPage, totalPages, from, to, total, loading, onPa
 
           {/* Next */}
           <button
+            type="button"
             onClick={onNext}
             disabled={!canNext || loading}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"

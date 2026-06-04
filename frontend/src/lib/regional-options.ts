@@ -15,9 +15,10 @@ const countries = getAllCountries()
 // currency entries (e.g. Zimbabwe) just contribute their primary one.
 const currencyMap = new Map<string, { code: string; name?: string; symbol?: string }>()
 for (const c of countries) {
-    if (!c.currency?.code) continue
-    if (!currencyMap.has(c.currency.code)) {
-        currencyMap.set(c.currency.code, c.currency)
+    const currency = c.currency
+    if (!currency?.code) continue
+    if (!currencyMap.has(currency.code)) {
+        currencyMap.set(currency.code, currency)
     }
 }
 export const CURRENCY_OPTIONS: ComboboxOption[] = Array.from(currencyMap.values())

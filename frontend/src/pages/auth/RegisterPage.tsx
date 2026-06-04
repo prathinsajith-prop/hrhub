@@ -238,7 +238,7 @@ export function RegisterPage() {
                 id="firstName"
                 type="text"
                 autoComplete="given-name"
-                placeholder="Mohammed"
+                placeholder="First name"
                 {...register('firstName')}
                 aria-invalid={!!errors.firstName}
                 className={cn(errors.firstName && 'border-destructive focus-visible:ring-destructive')}
@@ -251,7 +251,7 @@ export function RegisterPage() {
                 id="lastName"
                 type="text"
                 autoComplete="family-name"
-                placeholder="Al Rashidi"
+                placeholder="Last name"
                 {...register('lastName')}
                 aria-invalid={!!errors.lastName}
                 className={cn(errors.lastName && 'border-destructive focus-visible:ring-destructive')}
@@ -266,7 +266,7 @@ export function RegisterPage() {
               id="email"
               type="email"
               autoComplete="email"
-              placeholder="you@company.ae"
+              placeholder="Email address"
               {...register('email')}
               aria-invalid={!!errors.email}
               className={cn(errors.email && 'border-destructive focus-visible:ring-destructive')}
@@ -346,7 +346,7 @@ export function RegisterPage() {
               id="company"
               type="text"
               autoComplete="organization"
-              placeholder="Al Futtaim Group LLC"
+              placeholder="Company name"
               {...register('company')}
               aria-invalid={!!errors.company}
               className={cn(errors.company && 'border-destructive focus-visible:ring-destructive')}
@@ -433,7 +433,7 @@ export function RegisterPage() {
               <Input
                 id="tradeLicenseNo"
                 type="text"
-                placeholder="CN-1234567"
+                placeholder="Trade licence number"
                 {...register('tradeLicenseNo')}
               />
             </div>
@@ -451,7 +451,7 @@ export function RegisterPage() {
                   id="phone"
                   type="tel"
                   autoComplete="tel"
-                  placeholder="50 123 4567"
+                  placeholder="Phone number"
                   {...register('phone', {
                     onChange: (e) => { e.target.value = sanitizePhone(e.target.value) },
                   })}

@@ -275,6 +275,15 @@ export async function getMyTeams(tenantId: string, employeeId: string) {
  * Called when an employee's departmentId changes. Removes the employee from
  * any teams whose department no longer matches the new department.
  */
+/** Remove an employee from every team — used when an employee is archived so
+ *  no orphaned memberships linger on the org's teams. */
+export async function removeEmployeeFromAllTeams(tenantId: string, employeeId: string) {
+    await db.delete(teamMembers).where(and(
+        eq(teamMembers.employeeId, employeeId),
+        eq(teamMembers.tenantId, tenantId),
+    ))
+}
+
 export async function removeEmployeeFromMismatchedTeams(
     tenantId: string,
     employeeId: string,

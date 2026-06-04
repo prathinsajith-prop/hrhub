@@ -160,7 +160,7 @@ function ReviewDialog({ request, onClose }: { request: ProfileChangeRequest; onC
                                 id="pcr-reject-reason"
                                 value={rejectReason}
                                 onChange={(e) => setRejectReason(e.target.value)}
-                                placeholder="e.g. IBAN didn't match the bank certificate"
+                                placeholder="Reason for rejection"
                                 required
                             />
                         </div>
@@ -200,7 +200,7 @@ function ReviewDialog({ request, onClose }: { request: ProfileChangeRequest; onC
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                                 rows={2}
-                                placeholder="e.g. Confirmed against IBAN letter received 18 May"
+                                placeholder="Verification notes"
                                 className="resize-none text-sm"
                             />
                         </div>
