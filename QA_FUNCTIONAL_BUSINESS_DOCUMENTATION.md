@@ -162,7 +162,8 @@ Each module follows: **Purpose · Actions & Roles · Workflow/Statuses · Notifi
 
 **Key behaviors & workflows:**
 - **Login** (`POST /auth/login`): validates email (lowercased) + password (bcrypt). Success → access+refresh tokens, `failedLoginCount=0`, `lastLoginAt` set. If `twoFaEnabled` → returns `{requiresMfa:true, mfaToken}` (5-min token) instead of real tokens.
-- **Account lockout:** 5 consecutive failures → locked **15 minutes** (`lockedUntil`); auto-unlocks. 🔒 Known TOCTOU: counter increment not atomic → concurrent attempts can bypass threshold (fix applied via atomic `SET count=count+1`; verify).
+- **Account lockout:** 5 consecutive failures → locked **15 minutes** (`lockedUntil`); auto-unlocks. Counter increments atomically in SQL (`SET failedLoginCount = failedLoginCount + 1` with a `CASE` for `lockedUntil`), so concurrent failed attempts cannot bypass the threshold.
+- **Tenant IP allowlist:** HR/super_admin manage IPs/CIDRs in Org Settings → Security (`GET/PUT /settings/ip-allowlist`). Enforced on **every authenticated request** in the auth plugin: empty list = no restriction; non-empty → caller IP must match (exact IPv4 or any CIDR prefix; `::ffff:`-mapped IPv6 normalised; unparsable IPs fail closed → 403). Cached 5 min in Redis, busted immediately on update. **super_admin is exempt** so a misconfigured list can never lock the org owner out.
 - **2FA (TOTP):** setup → returns QR + secret; verify with 6-digit code → enables, generates **10 single-use backup codes** (shown once). Challenge flows: `/2fa/challenge` (TOTP) and `/2fa/backup-challenge` (backup code, consumed on use). Disable & backup-regenerate require a valid current TOTP. ⚠️ Code must check `.valid` explicitly (a truthiness bug would defeat 2FA).
 - **Password:** forgot → emails reset link (token hashed, 1-hr TTL, **always returns 200** to avoid enumeration); reset → sets password + **revokes all refresh tokens**; change-password (authenticated) → does **not** revoke sessions.
 - **Token refresh:** rotates (old deleted). Scheduled `cleanupExpiredTokens()` every 6h purges expired reset/refresh tokens.
@@ -185,8 +186,8 @@ Each module follows: **Purpose · Actions & Roles · Workflow/Statuses · Notifi
 - ☐ Audit: login/failed_login/logout rows; 2FA & password-change self-events.
 - ☐ Activity timeline: 2FA/password events appear on employee Updates (if linked).
 - ☐ Integration: deactivate user → blocked within 5-min Redis TTL; expired access token still works ≤15 min.
-- ☐ Edge: concurrent failed logins (lockout bypass 🔒); reused/expired reset token rejected; reused backup code rejected.
-- ☐ Security: enumeration (forgot/login timing); 2FA `.valid` enforced; rate limits (10 login / 15 min).
+- ☐ Edge: concurrent failed logins still trigger lockout (atomic counter); reused/expired reset token rejected; reused backup code rejected; IP allowlist — empty list allows all, non-member IP 403, super_admin exempt, update takes effect immediately (cache bust), CIDR ranges match correctly.
+- ☐ Security: enumeration (forgot/login timing); 2FA `.valid` enforced; rate limits (10 login / 15 min); tenant IP allowlist enforced for non-super_admin roles.
 - ☐ Performance: bcrypt latency under burst login; refresh singleton (no double-refresh race).
 
 ---

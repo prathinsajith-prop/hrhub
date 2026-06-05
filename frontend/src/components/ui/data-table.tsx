@@ -28,6 +28,14 @@ export interface DataTableAdvancedFilter {
   quickFilters?: QuickFilter[]
   placeholder?: string
   onApply?: () => void
+  /**
+   * Set when the page already filters `data` server-side from `search.searchInput`
+   * (the parent feeds the term to its query). The search box stays, but the term is
+   * NOT re-applied as a client-side global filter — otherwise rows the server matched
+   * on a field that has no accessor column (e.g. email, MOHRE no.) get filtered back
+   * out and the table shows "No results" while the count says there are matches.
+   */
+  serverFiltered?: boolean
 }
 
 /** Wire server-side pagination into DataTable so no external TablePagination is needed. */
@@ -188,7 +196,11 @@ export function DataTable<TData, TValue>({
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
 
   // When using advanced filter, the search input value lives in the search hook.
-  const globalFilter = advancedFilter ? advancedFilter.search.searchInput : internalGlobalFilter
+  // For server-filtered pages the term already narrowed `data`, so don't re-apply it
+  // here (it can only see accessor columns and would drop validly-matched rows).
+  const globalFilter = advancedFilter
+    ? (advancedFilter.serverFiltered ? '' : advancedFilter.search.searchInput)
+    : internalGlobalFilter
   const setGlobalFilter = advancedFilter
     ? (v: string) => advancedFilter.search.setSearchInput(typeof v === 'string' ? v : '')
     : setInternalGlobalFilter

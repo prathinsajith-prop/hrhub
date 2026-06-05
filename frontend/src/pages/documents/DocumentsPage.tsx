@@ -369,6 +369,7 @@ export function DocumentsPage() {
             search,
             filters: DOCUMENT_FILTERS,
             placeholder: 'Search documents…',
+            serverFiltered: true,
           }}
           pageSize={PAGE_SIZE}
           enableSelection

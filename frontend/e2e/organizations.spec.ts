@@ -61,7 +61,8 @@ test.describe('Team page', () => {
     test('shows team heading', async ({ page }) => {
         await page.goto('/team')
         await page.waitForLoadState('networkidle')
-        await expect(page.getByRole('heading', { name: /team/i }).first()).toBeVisible({ timeout: 10_000 })
+        // /team renders the Org Structure page, headed "Organization" / "Organization Structure".
+        await expect(page.getByRole('heading', { name: /organization|team/i }).first()).toBeVisible({ timeout: 10_000 })
     })
 })
 

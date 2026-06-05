@@ -250,6 +250,10 @@ test.describe('Attendance pagination', () => {
     test('table renders with pagination controls for large datasets', async ({ page }) => {
         await page.goto('/attendance')
         await page.waitForLoadState('networkidle')
+        // The Summary tab (default) is a cards+chart view with no table — the
+        // punch records DataTable lives on the "Punch history" tab. Switch to it
+        // before asserting on the table / its empty state.
+        await page.getByRole('tab', { name: /punch history/i }).click()
         const table = page.locator('table, [role="table"]').first()
         const empty = page.locator('text=/no records|no attendance/i').first()
         const hasTable = await table.isVisible().catch(() => false)
