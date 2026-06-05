@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Check, Eye, EyeOff, Languages, Lock, Mail, Phone, Pencil, Save, ShieldCheck, X } from 'lucide-react'
+import { Check, Eye, EyeOff, Languages, Lock, Mail, Phone, Pencil, Save, Settings, ShieldCheck, User, X } from 'lucide-react'
 
 import { ApiError } from '@/lib/api'
 import { useMyEmployee, type UpdateMyProfileBody } from '@/hooks/useMe'
@@ -9,7 +9,6 @@ import { useSubmitChangeRequest } from '@/hooks/useProfileChanges'
 import { useChangePassword } from '@/hooks/useChangePassword'
 import { TwoFactorCard } from '@/components/security/TwoFactorCard'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { ScheduleCard } from '@/components/shared/ScheduleCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -121,10 +120,14 @@ export function EmployeeProfilePage() {
                 </div>
             ) : null}
 
-            <Tabs defaultValue="personal">
-                <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
-                    <TabsTrigger value="personal">{t('common.personal', { defaultValue: 'Personal' })}</TabsTrigger>
-                    <TabsTrigger value="settings">{t('common.settings', { defaultValue: 'Settings' })}</TabsTrigger>
+            <Tabs defaultValue="personal" className="space-y-5">
+                <TabsList variant="underline">
+                    <TabsTrigger value="personal">
+                        <User className="size-3.5" /> {t('common.personal', { defaultValue: 'Personal' })}
+                    </TabsTrigger>
+                    <TabsTrigger value="settings">
+                        <Settings className="size-3.5" /> {t('common.settings', { defaultValue: 'Settings' })}
+                    </TabsTrigger>
                 </TabsList>
 
                 {/* ── Personal: Employment basics + Schedule + Contact + Address + Emergency ── */}
@@ -157,8 +160,6 @@ export function EmployeeProfilePage() {
                             </div>
                         </CardContent>
                     </Card>
-
-                    <ScheduleCard shift={employee.shift ?? null} />
 
                     <Card className="overflow-hidden border-border/70">
                         <CardContent className="p-5">

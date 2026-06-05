@@ -54,7 +54,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmployeeReportsPage } from './ReportsPage'
-import { AnnouncementsPage } from './AnnouncementsPage'
+import { AnnouncementsPage, AnnouncementFeed } from './AnnouncementsPage'
 import { RecognitionPage } from './RecognitionPage'
 import { ROUTES } from '@/lib/routes'
 import { cn, formatDate, formatShiftRange, initialsOf } from '@/lib/utils'
@@ -161,30 +161,46 @@ export function EmployeeHomePage() {
                 Announcements / Recognitions the embedded page is its own
                 full-width surface, so the sidebar is hidden and the main
                 column spans the full width. The data hooks above stay live
-                regardless, so switching back to Feed is instant. ── */}
-            <div className={cn('grid gap-6', tab === 'feed' && 'lg:grid-cols-3')}>
-                <div className={cn(tab === 'feed' && 'lg:col-span-2')}>
-                    <Tabs value={tab} onValueChange={setTab} className="space-y-5">
-                        <TabsList variant="underline">
-                            <TabsTrigger value="feed">
-                                <Newspaper className="size-3.5" /> {t('home.tabFeed', { defaultValue: 'Feed' })}
-                            </TabsTrigger>
-                            <TabsTrigger value="overview">
-                                <LayoutDashboard className="size-3.5" /> {t('home.tabOverview', { defaultValue: 'Overview' })}
-                            </TabsTrigger>
-                            <TabsTrigger value="announcements">
-                                <Megaphone className="size-3.5" /> {t('home.tabAnnouncements', { defaultValue: 'Announcements' })}
-                            </TabsTrigger>
-                            <TabsTrigger value="recognitions">
-                                <Award className="size-3.5" /> {t('home.tabRecognitions', { defaultValue: 'Recognitions' })}
-                            </TabsTrigger>
-                        </TabsList>
+                regardless, so switching back to Feed is instant.
 
-                        {/* ── Feed — activity stream: welcome, announcements preview, recent leave ── */}
-                        <TabsContent value="feed" className="space-y-6 focus-visible:outline-none">
-                            {portalPostEnabled ? (
-                                <StartPostComposer displayName={displayName} avatarUrl={me?.avatarUrl} />
-                            ) : null}
+                STRUCTURAL NOTE — the <Tabs> wrapper (and its TabsList
+                underline row) sits ABOVE the body grid, not inside the left
+                column. This makes the tab underline span the full content
+                width and pins the right rail (Attendance card etc.) to the
+                same Y as the first content card on the left. Previously the
+                tab strip lived only in the left column, so the right rail
+                started above the underline and broke its line. ── */}
+            <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+                <TabsList variant="underline">
+                    <TabsTrigger value="feed">
+                        <Newspaper className="size-3.5" /> {t('home.tabFeed', { defaultValue: 'Feed' })}
+                    </TabsTrigger>
+                    <TabsTrigger value="overview">
+                        <LayoutDashboard className="size-3.5" /> {t('home.tabOverview', { defaultValue: 'Overview' })}
+                    </TabsTrigger>
+                    <TabsTrigger value="announcements">
+                        <Megaphone className="size-3.5" /> {t('home.tabAnnouncements', { defaultValue: 'Announcements' })}
+                    </TabsTrigger>
+                    <TabsTrigger value="recognitions">
+                        <Award className="size-3.5" /> {t('home.tabRecognitions', { defaultValue: 'Recognitions' })}
+                    </TabsTrigger>
+                    {/* Posts (employee engagement) gets its own top-level home so
+                        what users write doesn't get buried inside the mixed Feed.
+                        The Start-a-post composer lives in this tab too — the
+                        composer + posts list are one surface. */}
+                    <TabsTrigger value="posts">
+                        <MessageCircle className="size-3.5" /> {t('home.tabPosts', { defaultValue: 'Posts' })}
+                    </TabsTrigger>
+                </TabsList>
+
+                <div className={cn('grid gap-6', (tab === 'feed' || tab === 'posts') && 'lg:grid-cols-3')}>
+                    <div className={cn((tab === 'feed' || tab === 'posts') && 'lg:col-span-2')}>
+                        {/* ── Feed — activity stream: welcome, announcements preview, recent leave.
+                            The Start-a-post composer used to live here but now sits
+                            inside the dedicated Posts tab — keeps composer + posts
+                            list as one surface and stops user posts from being
+                            buried in the mixed feed. ── */}
+                        <TabsContent value="feed" className="mt-0 space-y-6 focus-visible:outline-none">
                             <NewJoineeCard
                                 displayName={displayName}
                                 avatarUrl={me?.avatarUrl}
@@ -240,27 +256,42 @@ export function EmployeeHomePage() {
                         </TabsContent>
 
                         {/* ── Overview — the renamed Reports view, embedded ── */}
-                        <TabsContent value="overview" className="focus-visible:outline-none">
+                        <TabsContent value="overview" className="mt-0 focus-visible:outline-none">
                             <EmployeeReportsPage embedded />
                         </TabsContent>
 
                         {/* ── Announcements — full feed with comments ── */}
-                        <TabsContent value="announcements" className="focus-visible:outline-none">
+                        <TabsContent value="announcements" className="mt-0 focus-visible:outline-none">
                             <AnnouncementsPage embedded />
                         </TabsContent>
 
                         {/* ── Recognitions — company-wide recognition feed ── */}
-                        <TabsContent value="recognitions" className="focus-visible:outline-none">
+                        <TabsContent value="recognitions" className="mt-0 focus-visible:outline-none">
                             <RecognitionPage embedded />
                         </TabsContent>
-                    </Tabs>
-                </div>
-                {/* /Left column */}
 
-                {/* ── Right sidebar widgets — only meaningful on the Feed
-                    tab. Other tabs render their own full-width surface. ── */}
-                {tab === 'feed' && (
-                    <aside className="space-y-6">
+                        {/* ── Posts — employee engagement surface. Composer at the
+                            top, post-only list below with scroll-to-load. The
+                            AnnouncementFeed component (exported from the
+                            AnnouncementsPage) handles the card design + the
+                            IntersectionObserver pagination — single source of
+                            truth so the Posts tab here and the Posts sub-tab
+                            inside the Announcements page can never diverge. ── */}
+                        <TabsContent value="posts" className="mt-0 space-y-4 focus-visible:outline-none">
+                            {portalPostEnabled ? (
+                                <StartPostComposer displayName={displayName} avatarUrl={me?.avatarUrl} />
+                            ) : null}
+                            <AnnouncementFeed kind="post" />
+                        </TabsContent>
+                    </div>
+                    {/* /Left column */}
+
+                    {/* ── Right sidebar widgets — meaningful on Feed and Posts
+                        (both are "you-centric" surfaces). Overview / Announcements
+                        / Recognitions are full-width pages and don't need the
+                        rail. ── */}
+                    {(tab === 'feed' || tab === 'posts') && (
+                        <aside className="space-y-6">
                         <AttendanceSidebarCard
                             todayRecord={todayRecord}
                             isCheckedIn={isCheckedIn}
@@ -310,8 +341,9 @@ export function EmployeeHomePage() {
                             onViewAll={() => setTab('overview')}
                         />
                     </aside>
-                )}
-            </div>
+                    )}
+                </div>
+            </Tabs>
         </div>
     )
 }

@@ -1,28 +1,31 @@
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
-import { CalendarDays, Clock, Sparkles } from 'lucide-react'
+import { CalendarClock, CalendarDays, Clock, Sparkles } from 'lucide-react'
 
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ScheduleCard } from '@/components/shared/ScheduleCard'
+import { useMyEmployee } from '@/hooks/useMe'
 import { EmployeeAttendancePage } from './AttendancePage'
 import { EmployeeLeavePage } from './LeavePage'
 import { EmployeePerformancePage } from './PerformancePage'
 
-const TABS = ['attendance', 'leave', 'performance'] as const
+const TABS = ['attendance', 'schedule', 'leave', 'performance'] as const
 type WorkTab = (typeof TABS)[number]
 
 /**
  * "My Work" — a single home for the employee's time + performance: attendance,
- * leave, and performance reviews. Each tab embeds the existing page (rendered
- * without its own header via the `embedded` flag), so there's one source of
- * truth per feature and no duplicated logic. The active tab is reflected in the
- * URL (`?tab=`) so it's deep-linkable and back-button friendly.
+ * schedule (assigned shift + weekly off), leave, and performance reviews. Each
+ * tab embeds the existing page (rendered without its own header via the
+ * `embedded` flag), so there's one source of truth per feature. The active tab
+ * is reflected in the URL (`?tab=`) so it's deep-linkable and back-friendly.
  *
- * Shift/schedule is intentionally NOT here — it's static, read-only info that
- * lives on the Profile page (see ScheduleCard there).
+ * Schedule lives here (not on Profile) so all of an employee's time-related
+ * info sits together; the Profile page is for personal/contact details.
  */
 export function EmployeeWorkPage() {
     const { t } = useTranslation()
+    const { data: me } = useMyEmployee()
     const [params, setParams] = useSearchParams()
     const raw = params.get('tab') ?? ''
     const tab: WorkTab = (TABS as readonly string[]).includes(raw) ? (raw as WorkTab) : 'attendance'
@@ -41,7 +44,7 @@ export function EmployeeWorkPage() {
             <PageHeader
                 title={t('work.title', { defaultValue: 'My Work' })}
                 subtitle={t('work.subtitle', {
-                    defaultValue: 'Your attendance, leave and performance — all in one place.',
+                    defaultValue: 'Your schedule, attendance, leave and performance — all in one place.',
                 })}
             />
 
@@ -49,6 +52,9 @@ export function EmployeeWorkPage() {
                 <TabsList variant="underline">
                     <TabsTrigger value="attendance">
                         <Clock className="size-3.5" /> {t('nav.attendance')}
+                    </TabsTrigger>
+                    <TabsTrigger value="schedule">
+                        <CalendarClock className="size-3.5" /> {t('profile.schedule', { defaultValue: 'Schedule' })}
                     </TabsTrigger>
                     <TabsTrigger value="leave">
                         <CalendarDays className="size-3.5" /> {t('nav.leave')}
@@ -60,6 +66,12 @@ export function EmployeeWorkPage() {
 
                 <TabsContent value="attendance" className="focus-visible:outline-none">
                     <EmployeeAttendancePage embedded />
+                </TabsContent>
+                <TabsContent value="schedule" className="focus-visible:outline-none">
+                    {/* The employee's assigned shift — working hours + weekly off. */}
+                    <div className="max-w-xl">
+                        <ScheduleCard shift={me?.shift ?? null} />
+                    </div>
                 </TabsContent>
                 <TabsContent value="leave" className="focus-visible:outline-none">
                     <EmployeeLeavePage embedded />

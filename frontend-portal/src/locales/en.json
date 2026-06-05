@@ -334,6 +334,7 @@
         "tabOverview": "Overview",
         "tabAnnouncements": "Announcements",
         "tabRecognitions": "Recognitions",
+        "tabPosts": "Posts",
         "recentLeave": "Recent leave"
     },
     "goals": {
@@ -466,6 +467,8 @@
     },
     "payslips": {
         "title": "Payslips",
+        "tabHistory": "Payslip history",
+        "tabBank": "Bank details",
         "noPayslips": "No payslips yet",
         "month": "Month",
         "net": "Net salary",
@@ -743,6 +746,6 @@
     },
     "work": {
         "title": "My Work",
-        "subtitle": "Your attendance, leave and performance — all in one place."
+        "subtitle": "Your schedule, attendance, leave and performance — all in one place."
     }
 }

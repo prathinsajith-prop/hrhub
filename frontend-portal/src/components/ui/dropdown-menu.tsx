@@ -32,7 +32,12 @@ function DropdownMenuItem({
     return (
         <DropdownMenuPrimitive.Item
             className={cn(
-                'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-muted focus:text-foreground hover:bg-muted hover:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+                // Pointer cursor + a clean primary-tinted hover/focus surface so
+                // items read as clearly clickable and on-brand (the flat grey
+                // `bg-muted` looked inert). Icons inherit the text colour
+                // (currentColor), so they go primary on hover automatically.
+                // Per-item overrides (e.g. destructive red) win via twMerge.
+                'relative flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium outline-none transition-colors focus:bg-primary/10 focus:text-primary hover:bg-primary/10 hover:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
                 inset && 'pl-8',
                 className,
             )}
