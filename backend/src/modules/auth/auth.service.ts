@@ -52,7 +52,7 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
     const [user] = await db
         .select()
         .from(users)
-        .where(and(eq(users.email, input.email.toLowerCase()), eq(users.isActive, true)))
+        .where(eq(users.email, input.email.toLowerCase()))
         .limit(1)
 
     if (!user) {
@@ -67,9 +67,32 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
         return null
     }
 
+    // Deactivated account — surface a distinct message (like the 423 lockout)
+    // instead of the generic "Invalid email or password", and log the real
+    // reason rather than the misleading `user_not_found` the old isActive
+    // query filter produced.
+    if (!user.isActive) {
+        recordLoginEvent({
+            tenantId: user.tenantId,
+            userId: user.id,
+            email: user.email,
+            eventType: 'failed_login',
+            success: false,
+            ipAddress: input.ipAddress,
+            userAgent: input.userAgent,
+            failureReason: 'account_inactive',
+        }).catch(() => { })
+        throw Object.assign(
+            new Error('Your account is inactive. Please contact your administrator.'),
+            { statusCode: 403 },
+        )
+    }
+
     // Defense-in-depth: an archived employee must never authenticate, even if a
     // legacy `users` row was left active before archiving also began revoking
     // logins. Covers pre-existing archived records without a data backfill.
+    // Surfaced as its own 403 (not the generic 401) so a locked-out user knows
+    // to contact HR instead of retrying passwords.
     if (user.employeeId) {
         const [emp] = await db
             .select({ archived: employees.isArchived })
@@ -87,7 +110,14 @@ export async function loginUser(fastify: AnyFastify, input: LoginInput) {
                 userAgent: input.userAgent,
                 failureReason: 'employee_archived',
             }).catch(() => { })
-            return null
+            // Same user-facing wording as the inactive-account case above — the
+            // login screen shouldn't expose internal HR state ("archived"), and
+            // the user's next step is identical either way. The audit trail keeps
+            // the precise reason (`employee_archived` vs `account_inactive`).
+            throw Object.assign(
+                new Error('Your account is inactive. Please contact your administrator.'),
+                { statusCode: 403 },
+            )
         }
     }
 
