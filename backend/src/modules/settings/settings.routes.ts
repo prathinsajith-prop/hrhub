@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm'
 import { invalidatePrivacyPolicyCache } from '../../lib/privacy.js'
 import { dashboardSummaryCache, dashboardCache, invalidateL1AndL2 } from '../../lib/cache.js'
 import { recordActivity } from '../audit/audit.service.js'
+import { isValidIpEntry } from '../../lib/ip-allowlist.js'
 
 /**
  * Audit helper — every mutating route in this module funnels through this so
@@ -287,9 +288,11 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
         if (!Array.isArray(ipAllowlist)) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'ipAllowlist must be an array' })
         }
-        // Basic CIDR/IP validation
-        const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
-        const invalid = ipAllowlist.filter(ip => !cidrRegex.test(ip.trim()))
+        // Validate each entry is a real IPv4 / IPv4-CIDR (octets 0–255, prefix 0–32)
+        // using the same parser the auth matcher relies on — a loose regex would
+        // accept `999.1.1.1` or `127.0.0.1/33`, which the matcher then silently
+        // never matches.
+        const invalid = ipAllowlist.filter(ip => !isValidIpEntry(ip))
         if (invalid.length > 0) {
             return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: `Invalid IP/CIDR entries: ${invalid.join(', ')}` })
         }

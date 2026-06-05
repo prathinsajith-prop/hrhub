@@ -27,6 +27,23 @@ export function ipv4ToInt(ip: string): number | null {
 }
 
 /**
+ * True when `entry` is a syntactically valid IPv4 address or IPv4/CIDR block —
+ * octets 0–255 and (if present) a prefix of 0–32. Use this to validate entries
+ * on write so the matcher never has to silently ignore garbage like
+ * `999.1.1.1` or `127.0.0.1/33`.
+ */
+export function isValidIpEntry(entry: string): boolean {
+    const trimmed = entry.trim()
+    const slash = trimmed.indexOf('/')
+    if (slash === -1) return ipv4ToInt(trimmed) !== null
+    if (ipv4ToInt(trimmed.slice(0, slash)) === null) return false
+    const prefixStr = trimmed.slice(slash + 1)
+    if (!/^\d{1,2}$/.test(prefixStr)) return false
+    const prefix = Number(prefixStr)
+    return prefix >= 0 && prefix <= 32
+}
+
+/**
  * Normalise a Fastify `request.ip` for IPv4 matching. Node reports
  * IPv4-mapped IPv6 addresses as `::ffff:1.2.3.4` — strip the prefix so they
  * compare equal to their dotted-quad form. Pure IPv6 addresses return as-is

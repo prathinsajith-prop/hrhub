@@ -560,6 +560,7 @@ export function EmployeesPage() {
               search,
               filters: EMPLOYEE_FILTERS,
               placeholder: 'Search by name, ID, email…',
+              serverFiltered: true,
             }}
             pageSize={PAGE_SIZE}
             emptyMessage="No employees found."

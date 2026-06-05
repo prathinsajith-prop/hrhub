@@ -527,6 +527,7 @@ export function VisaPage() {
               search,
               filters: VISA_FILTERS,
               placeholder: 'Search by employee, MOHRE, GDRFA…',
+              serverFiltered: true,
             }}
             pageSize={8}
             enableSelection

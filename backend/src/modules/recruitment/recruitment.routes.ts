@@ -347,19 +347,24 @@ export default async function (fastify: any): Promise<void> {
                 properties: {
                     title: { type: 'string' },
                     department: { type: 'string' },
-                    location: { type: 'string' },
+                    // Optional free-text fields the New Job dialog sends as `null`
+                    // when left blank (location/description/closingDate). The DB
+                    // columns are nullable and the PATCH path already accepts null,
+                    // so accept it here too — otherwise posting a job without one of
+                    // these 400s with "The submitted data is invalid".
+                    location: { type: 'string', nullable: true },
                     type: { type: 'string', enum: ['full_time', 'part_time', 'contract', 'internship', 'temporary', 'freelance'] },
                     workplaceType: { type: 'string', enum: ['on_site', 'hybrid', 'remote'] },
                     openings: { type: 'integer', minimum: 1 },
                     experienceYears: { type: 'integer', minimum: 0, nullable: true },
                     minSalary: { type: 'number' },
                     maxSalary: { type: 'number' },
-                    industry: { type: 'string' },
-                    description: { type: 'string' },
+                    industry: { type: 'string', nullable: true },
+                    description: { type: 'string', nullable: true },
                     requirements: { type: 'array', items: { type: 'string' } },
                     skills: { type: 'array', items: { type: 'string' } },
                     qualifications: { type: 'array', items: { type: 'string' } },
-                    closingDate: { type: 'string' },
+                    closingDate: { type: 'string', nullable: true },
                 },
             },
         },

@@ -204,7 +204,10 @@ test.describe('Exit dialogs', () => {
 
         const dialog = page.getByRole('dialog')
         await expect(dialog).toBeVisible({ timeout: 5_000 })
-        const selects = dialog.locator('[data-radix-select-trigger], input')
+        // The wizard's first step uses EmployeeSelect — a Popover+Command combobox
+        // rendered as <button role="combobox">, not a native input or Radix Select
+        // trigger. Match that too so a working picker isn't read as "no controls".
+        const selects = dialog.locator('[data-radix-select-trigger], [role="combobox"], input')
         const count = await selects.count()
         expect(count).toBeGreaterThanOrEqual(1)
         await page.keyboard.press('Escape')

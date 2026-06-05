@@ -11,7 +11,7 @@
  *   • malformed entries / unparsable caller IPs FAIL CLOSED (never match)
  */
 import { describe, it, expect } from 'vitest'
-import { ipv4ToInt, normalizeIp, ipMatchesEntry, ipInAllowlist } from '../lib/ip-allowlist.js'
+import { ipv4ToInt, normalizeIp, ipMatchesEntry, ipInAllowlist, isValidIpEntry } from '../lib/ip-allowlist.js'
 
 // ── ipv4ToInt ───────────────────────────────────────────────────────────────
 
@@ -104,5 +104,39 @@ describe('ipInAllowlist', () => {
 
     it('rejects pure IPv6 callers when a list is set (fail closed)', () => {
         expect(ipInAllowlist('::1', ['10.0.0.0/8'])).toBe(false)
+    })
+})
+
+// ── isValidIpEntry (write-time validation) ──────────────────────────────────
+
+describe('isValidIpEntry', () => {
+    it('accepts plain IPv4 and IPv4/CIDR with valid octets and prefix', () => {
+        expect(isValidIpEntry('1.2.3.4')).toBe(true)
+        expect(isValidIpEntry('255.255.255.255')).toBe(true)
+        expect(isValidIpEntry('10.0.0.0/8')).toBe(true)
+        expect(isValidIpEntry('192.168.1.0/24')).toBe(true)
+        expect(isValidIpEntry('0.0.0.0/0')).toBe(true)
+        expect(isValidIpEntry('1.2.3.4/32')).toBe(true)
+        expect(isValidIpEntry('  10.0.0.1  ')).toBe(true) // trimmed
+    })
+
+    it('rejects out-of-range octets', () => {
+        expect(isValidIpEntry('999.1.1.1')).toBe(false)
+        expect(isValidIpEntry('256.0.0.1')).toBe(false)
+        expect(isValidIpEntry('1.2.3.4.5')).toBe(false)
+        expect(isValidIpEntry('1.2.3')).toBe(false)
+    })
+
+    it('rejects out-of-range or malformed CIDR prefixes', () => {
+        expect(isValidIpEntry('127.0.0.1/33')).toBe(false)
+        expect(isValidIpEntry('10.0.0.0/99')).toBe(false)
+        expect(isValidIpEntry('10.0.0.0/')).toBe(false)
+        expect(isValidIpEntry('10.0.0.0/ab')).toBe(false)
+    })
+
+    it('rejects non-IPv4 garbage', () => {
+        expect(isValidIpEntry('banana')).toBe(false)
+        expect(isValidIpEntry('')).toBe(false)
+        expect(isValidIpEntry('::1')).toBe(false)
     })
 })
