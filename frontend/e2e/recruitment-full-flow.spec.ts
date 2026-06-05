@@ -62,13 +62,23 @@ async function closeDialog(page: Page) {
 }
 
 async function createJob(page: Page, job: typeof JOBS[0]) {
+    // A success toast from the previous job can overlay the New Job button —
+    // dismiss any open toasts first (same guard addCandidate uses).
+    await page.locator('[data-radix-toast-close]').evaluateAll(els => els.forEach(el => (el as HTMLElement).click())).catch(() => {})
     await page.getByRole('button', { name: /new job/i }).last().click()
     const dlg = page.locator('[role="dialog"]')
     await expect(dlg).toBeVisible({ timeout: 8_000 })
 
-    await dlg.getByPlaceholder('e.g. Senior Property Consultant').fill(job.title)
-    await dlg.getByPlaceholder('e.g. Sales').fill(job.department)
-    await dlg.getByPlaceholder('e.g. Dubai Marina').fill(job.location)
+    // Job Title (free text) and Location (free text).
+    await dlg.getByPlaceholder('Job title').fill(job.title)
+    await dlg.getByPlaceholder('Location').fill(job.location)
+
+    // Department is now a required Combobox (button role=combobox → option popover),
+    // not a free-text field. Open it and pick the first available org unit.
+    await dlg.getByRole('combobox').first().click()
+    const deptOption = page.getByRole('option').first()
+    await expect(deptOption).toBeVisible({ timeout: 5_000 })
+    await deptOption.click()
 
     // Register the response listener BEFORE clicking so we don't miss it
     const responsePromise = page.waitForResponse(

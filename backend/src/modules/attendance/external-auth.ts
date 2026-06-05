@@ -26,6 +26,7 @@ import bcrypt from 'bcrypt'
 import { eq, sql } from 'drizzle-orm'
 import { db } from '../../db/index.js'
 import { connectedApps } from '../../db/schema/index.js'
+import { ipInAllowlist } from '../../lib/ip-allowlist.js'
 
 export interface AppCallerCtx {
     appId: string
@@ -41,24 +42,15 @@ declare module 'fastify' {
 }
 
 /**
- * Pure IP-allowlist check (exported for testing). Supports exact match plus
- * `/24` and `/16` CIDR prefixes — sufficient for the vast majority of
- * fixed-IP biometric vendors. Wider ranges should be modelled explicitly.
+ * Pure IP-allowlist check (exported for testing). Delegates to the shared
+ * matcher in lib/ip-allowlist.ts, which supports exact IPv4 plus arbitrary
+ * CIDR prefixes (/0–/32) and normalises IPv4-mapped IPv6 (`::ffff:…`).
+ * NOTE: unlike `ipInAllowlist`, an EMPTY list here means "no match" — the
+ * caller treats empty as "no restriction" before calling.
  */
 export function ipInList(ip: string, allowlist: readonly string[]): boolean {
-    for (const entry of allowlist) {
-        if (entry === ip) return true
-        if (entry.endsWith('/24')) {
-            const prefix = entry.slice(0, entry.lastIndexOf('.'))
-            if (ip.startsWith(`${prefix}.`)) return true
-        }
-        if (entry.endsWith('/16')) {
-            const parts = entry.split('.')
-            const prefix = `${parts[0]}.${parts[1]}`
-            if (ip.startsWith(`${prefix}.`)) return true
-        }
-    }
-    return false
+    if (!allowlist || allowlist.length === 0) return false
+    return ipInAllowlist(ip, allowlist)
 }
 
 /**

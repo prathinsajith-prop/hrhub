@@ -67,7 +67,7 @@ setup('authenticate as admin', async ({ page }) => {
     // Fill credentials and sign in
     await page.getByRole('textbox', { name: 'Work Email' }).fill(EMAIL)
     await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD)
-    await page.getByRole('button', { name: 'Sign In', exact: true }).click()
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
 
     // Wait until we land on the dashboard — confirms auth succeeded
     await page.waitForURL('**/dashboard', { timeout: 30_000 })

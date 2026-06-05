@@ -26,7 +26,8 @@ const PAGES = [
     { url: '/training',                 heading: /training/i },
     { url: '/loans',                    heading: /loans/i },
     { url: '/compliance',               heading: /compliance/i },
-    { url: '/leave-policies',           heading: /leave/i },
+    // /leave-policies redirects to Organization Settings (leave tab) by design.
+    { url: '/leave-policies',           heading: /organization settings|leave/i },
 
     // Insights
     { url: '/notifications',            heading: /notifications/i },
@@ -36,7 +37,8 @@ const PAGES = [
     // Workspace management
     { url: '/organizations',            heading: /organizations?/i },
     { url: '/organization-settings',    heading: /company|settings|organization/i },
-    { url: '/team',                     heading: /team/i },
+    // /team renders the Org Structure page ("Organization" / "Organization Structure").
+    { url: '/team',                     heading: /organization|team/i },
     { url: '/users',                    heading: /users?|members?/i },
     { url: '/apps',                     heading: /apps?|integrations?|connected/i },
     { url: '/subscription',             heading: /subscription|plan/i },
