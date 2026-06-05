@@ -303,6 +303,10 @@ export default async function settingsRoutes(fastify: any): Promise<void> {
             .set({ ipAllowlist: ipAllowlist.map(s => s.trim()), updatedAt: new Date() })
             .where(eq(tenants.id, request.user.tenantId))
             .returning({ ipAllowlist: tenants.ipAllowlist })
+        // Bust the authenticate plugin's allowlist cache so the new list takes
+        // effect immediately instead of after the 5-minute TTL.
+        const { cacheDel } = await import('../../lib/redis.js')
+        await cacheDel(`tenant:ipallow:${request.user.tenantId}`)
         audit(request, {
             entityType: 'settings_security',
             entityId: request.user.tenantId,
