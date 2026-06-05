@@ -49,7 +49,7 @@ setup('authenticate as employee', async ({ page }) => {
     await page.goto('/login')
     await page.getByRole('textbox', { name: 'Work Email' }).fill(EMAIL)
     await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD)
-    await page.getByRole('button', { name: 'Sign In', exact: true }).click()
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
     await page.waitForURL('**/dashboard', { timeout: 30_000 })
     await expect(page).toHaveURL(/dashboard/)
 

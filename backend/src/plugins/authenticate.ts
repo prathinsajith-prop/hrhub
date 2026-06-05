@@ -2,8 +2,9 @@ import fp from 'fastify-plugin'
 import type { JwtPayload, RequestUser } from '../types/index.js'
 import { cacheGet, cacheSet } from '../lib/redis.js'
 import { db } from '../db/index.js'
-import { users } from '../db/schema/index.js'
+import { users, tenants } from '../db/schema/index.js'
 import { eq } from 'drizzle-orm'
+import { ipInAllowlist } from '../lib/ip-allowlist.js'
 
 async function authenticatePlugin(fastify: any): Promise<void> {
     /**
@@ -40,6 +41,27 @@ async function authenticatePlugin(fastify: any): Promise<void> {
             // or contact an admin to have their account backfilled.
             if (!payload.employeeId) {
                 return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Account setup is incomplete. Please contact your administrator.' })
+            }
+
+            // Tenant IP allowlist (Org Settings → Security). Empty list = no
+            // restriction. Cached like isActive (tenant:ipallow:<id>, 5 min;
+            // the settings PUT busts it immediately). super_admin is exempt so
+            // a bad allowlist can never lock the org owner out of fixing it.
+            if (payload.role !== 'super_admin') {
+                const ipCacheKey = `tenant:ipallow:${payload.tenantId}`
+                let allowlist = await cacheGet<string[]>(ipCacheKey)
+                if (allowlist === null) {
+                    const [tenant] = await db
+                        .select({ ipAllowlist: tenants.ipAllowlist })
+                        .from(tenants)
+                        .where(eq(tenants.id, payload.tenantId))
+                        .limit(1)
+                    allowlist = tenant?.ipAllowlist ?? []
+                    await cacheSet(ipCacheKey, allowlist, 300)
+                }
+                if (!ipInAllowlist(request.ip, allowlist)) {
+                    return reply.code(403).send({ statusCode: 403, error: 'Forbidden', message: 'Access from this IP address is not allowed by your organization' })
+                }
             }
 
             request.user = {

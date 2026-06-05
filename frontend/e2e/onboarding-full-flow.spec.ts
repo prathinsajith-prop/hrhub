@@ -55,7 +55,9 @@ async function _firstEmployeeName(page: Page): Promise<string | null> {
 }
 
 async function openNewOnboardingDialog(page: Page) {
-    await page.getByRole('button', { name: /new onboarding/i }).click()
+    // The page can show two "New Onboarding" CTAs (header + empty-state) — both
+    // open the same dialog, so target the first.
+    await page.getByRole('button', { name: /new onboarding/i }).first().click()
     await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 })
 }
 

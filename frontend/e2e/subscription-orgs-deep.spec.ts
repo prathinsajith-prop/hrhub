@@ -66,9 +66,13 @@ test.describe('Organization Settings — deep functional', () => {
     })
 
     test('settings tabs visible (Company, Leave, Holidays, etc.)', async ({ page }) => {
-        const tabs = page.getByRole('tab')
-        const count = await tabs.count()
-        expect(count).toBeGreaterThanOrEqual(1)
+        // The section switcher renders as ARIA tabs on mobile (OverflowTabsList)
+        // and as a custom <nav> of buttons on desktop (xl, Playwright's default
+        // width). Accept either: assert a known section is reachable by its label.
+        const section = page
+            .getByRole('tab')
+            .or(page.getByRole('button', { name: /profile|company|leave|holidays|security|designations/i }))
+        await expect(section.first()).toBeVisible({ timeout: 10_000 })
     })
 
     test('tab switching works without JS errors', async ({ page }) => {
