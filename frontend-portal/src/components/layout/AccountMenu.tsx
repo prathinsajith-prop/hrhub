@@ -112,8 +112,8 @@ export function AccountMenu() {
                 <DropdownMenuItem
                     onClick={logout}
                     className={cn(
-                        'gap-2.5 text-rose-600 focus:bg-rose-50 focus:text-rose-700',
-                        'dark:text-rose-300 dark:focus:bg-rose-950/40',
+                        'text-rose-600 hover:bg-rose-50 hover:text-rose-700 focus:bg-rose-50 focus:text-rose-700',
+                        'dark:text-rose-300 dark:hover:bg-rose-950/40 dark:focus:bg-rose-950/40',
                     )}
                 >
                     <LogOut className="size-4" />

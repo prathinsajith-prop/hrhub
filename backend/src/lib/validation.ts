@@ -241,6 +241,15 @@ export const createVisaSchema = z.object({
     notes: z.string().max(1000).optional(),
 })
 
+// ── Recruitment tag catalog (skills / qualifications) ────────────────────────
+// Body of POST/PATCH /recruitment-tags/:kind — a single trimmed name, 1–80 chars.
+export const recruitmentTagBodySchema = z.object({
+    name: z.string({ error: 'Name is required' })
+        .trim()
+        .min(1, 'Name is required')
+        .max(80, 'Name is too long (max 80 characters)'),
+})
+
 // ── Utility: parse or throw 400 ───────────────────────────────────────────────
 export function validate<T>(schema: z.ZodType<T>, data: unknown): T {
     const result = schema.safeParse(data)

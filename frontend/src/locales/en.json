@@ -411,7 +411,10 @@
     "create": "Create",
     "disabled": "Disabled",
     "approved": "Approved",
-    "rejected": "Rejected"
+    "rejected": "Rejected",
+    "loadingMore": "Loading more…",
+    "suggestionsLoaded": "{{count}} loaded · scroll for more",
+    "suggestionsOfTotal": "{{count}} / {{total}} · scroll for more"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -683,6 +686,7 @@
     "recommendations": {
       "candidatesTitle": "Recommended candidates",
       "candidatesEmpty": "No strong matches in the talent pool yet",
+      "candidatesEmptyDesc": "Recommendations appear when other candidates in the pool match this role’s skills, qualifications, and location.",
       "jobsTitle": "Recommended jobs",
       "jobsEmpty": "No other open roles match yet",
       "matchPct": "{{score}}% match",
@@ -809,6 +813,8 @@
       "allCount": "All · {{count}}",
       "noCandidatesYet": "No candidates yet",
       "candidatesWillAppear": "Candidates who apply will appear here.",
+      "applicants": "Applicants",
+      "recommended": "Recommended",
       "noCandidatesInStage": "No candidates in this stage.",
       "showAll": "Show all",
       "jobNotFound": "Job not found.",
@@ -816,6 +822,45 @@
       "viewCandidate": "View candidate",
       "experienceYears": "{{count}}y exp",
       "expectedSalary": "{{salary}} expected"
+    },
+    "tagManager": {
+      "stagesTab": "Stages",
+      "skillsTab": "Skills",
+      "qualificationsTab": "Qualifications",
+      "noMatches": "No matches for “{{query}}”.",
+      "loadingMore": "Loading more…",
+      "scrollForMore": "Scroll for more · {{loaded}} of {{total}}",
+      "deleteTitle": "Delete “{{name}}”?",
+      "skills": {
+        "title": "Skills",
+        "desc": "The skill tags suggested when creating jobs and screening candidates. Type-ahead across recruitment forms reuses these so spelling and casing stay consistent.",
+        "addLabel": "Add skill",
+        "editLabel": "Edit skill",
+        "deleteLabel": "Delete skill",
+        "placeholder": "e.g. TypeScript",
+        "emptyTitle": "No skills yet",
+        "emptyDesc": "Add the skills your roles hire for — they’ll appear as suggestions across recruitment.",
+        "searchPlaceholder": "Search skills…",
+        "added": "Skill added",
+        "updated": "Skill updated",
+        "deleted": "Skill deleted",
+        "deleteDesc": "This removes the skill from suggestions. Jobs and candidates already tagged with it keep their own copy."
+      },
+      "qualifications": {
+        "title": "Qualifications",
+        "desc": "The qualification tags suggested when creating jobs and screening candidates. Type-ahead across recruitment forms reuses these so spelling and casing stay consistent.",
+        "addLabel": "Add qualification",
+        "editLabel": "Edit qualification",
+        "deleteLabel": "Delete qualification",
+        "placeholder": "e.g. Bachelor’s in Computer Science",
+        "emptyTitle": "No qualifications yet",
+        "emptyDesc": "Add the qualifications your roles require — they’ll appear as suggestions across recruitment.",
+        "searchPlaceholder": "Search qualifications…",
+        "added": "Qualification added",
+        "updated": "Qualification updated",
+        "deleted": "Qualification deleted",
+        "deleteDesc": "This removes the qualification from suggestions. Jobs and candidates already tagged with it keep their own copy."
+      }
     }
   },
   "visa": {

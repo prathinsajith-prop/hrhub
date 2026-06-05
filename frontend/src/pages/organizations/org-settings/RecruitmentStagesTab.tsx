@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { GripVertical, Pencil, Plus, RotateCcw, Trash2, Workflow, Check, Eye, EyeOff, Flag, Goal } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { GripVertical, Pencil, Plus, RotateCcw, Trash2, Workflow, Check, Eye, EyeOff, Flag, Goal, Sparkles, GraduationCap } from 'lucide-react'
 import {
     DndContext,
     KeyboardSensor,
@@ -44,6 +45,8 @@ import {
     useResetRecruitmentStages,
 } from '@/hooks/useRecruitment'
 import { STAGE_PALETTE, STAGE_PALETTE_KEYS, resolveStageColor, type RecruitmentStage } from '@/lib/recruitmentStages'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { RecruitmentTagManager } from './RecruitmentTagManager'
 
 /**
  * Organization Settings → Recruitment Stages.
@@ -297,7 +300,29 @@ function StageDialog({
 
 const EMPTY: RecruitmentStage[] = []
 
+/**
+ * Recruitment settings — three sub-tabs (styled like the Salary Components tab):
+ * the pipeline Stages (default), and the per-tenant Skills and Qualifications
+ * catalogs that power type-ahead across the recruitment forms.
+ */
 export function RecruitmentStagesTab() {
+    const { t } = useTranslation()
+    const [tab, setTab] = useState<'stages' | 'skills' | 'qualifications'>('stages')
+    return (
+        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-4">
+            <TabsList className="bg-muted/60">
+                <TabsTrigger value="stages" className="gap-1.5 text-sm"><Workflow className="size-3.5" /> {t('recruitment.tagManager.stagesTab', { defaultValue: 'Stages' })}</TabsTrigger>
+                <TabsTrigger value="skills" className="gap-1.5 text-sm"><Sparkles className="size-3.5" /> {t('recruitment.tagManager.skillsTab', { defaultValue: 'Skills' })}</TabsTrigger>
+                <TabsTrigger value="qualifications" className="gap-1.5 text-sm"><GraduationCap className="size-3.5" /> {t('recruitment.tagManager.qualificationsTab', { defaultValue: 'Qualifications' })}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="stages" className="mt-4"><StagesPanel /></TabsContent>
+            <TabsContent value="skills" className="mt-4"><RecruitmentTagManager kind="skills" /></TabsContent>
+            <TabsContent value="qualifications" className="mt-4"><RecruitmentTagManager kind="qualifications" /></TabsContent>
+        </Tabs>
+    )
+}
+
+function StagesPanel() {
     const { data, isLoading } = useRecruitmentStages()
     const serverStages = data ?? EMPTY
     const reorder = useReorderRecruitmentStages()
