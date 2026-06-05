@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GripVertical, Pencil, Plus, RotateCcw, Trash2, Workflow, Check, Eye, EyeOff, Flag, Goal, Sparkles, GraduationCap } from 'lucide-react'
 import {
     DndContext,
@@ -305,13 +306,14 @@ const EMPTY: RecruitmentStage[] = []
  * catalogs that power type-ahead across the recruitment forms.
  */
 export function RecruitmentStagesTab() {
+    const { t } = useTranslation()
     const [tab, setTab] = useState<'stages' | 'skills' | 'qualifications'>('stages')
     return (
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-4">
             <TabsList className="bg-muted/60">
-                <TabsTrigger value="stages" className="gap-1.5 text-sm"><Workflow className="size-3.5" /> Stages</TabsTrigger>
-                <TabsTrigger value="skills" className="gap-1.5 text-sm"><Sparkles className="size-3.5" /> Skills</TabsTrigger>
-                <TabsTrigger value="qualifications" className="gap-1.5 text-sm"><GraduationCap className="size-3.5" /> Qualifications</TabsTrigger>
+                <TabsTrigger value="stages" className="gap-1.5 text-sm"><Workflow className="size-3.5" /> {t('recruitment.tagManager.stagesTab', { defaultValue: 'Stages' })}</TabsTrigger>
+                <TabsTrigger value="skills" className="gap-1.5 text-sm"><Sparkles className="size-3.5" /> {t('recruitment.tagManager.skillsTab', { defaultValue: 'Skills' })}</TabsTrigger>
+                <TabsTrigger value="qualifications" className="gap-1.5 text-sm"><GraduationCap className="size-3.5" /> {t('recruitment.tagManager.qualificationsTab', { defaultValue: 'Qualifications' })}</TabsTrigger>
             </TabsList>
             <TabsContent value="stages" className="mt-4"><StagesPanel /></TabsContent>
             <TabsContent value="skills" className="mt-4"><RecruitmentTagManager kind="skills" /></TabsContent>

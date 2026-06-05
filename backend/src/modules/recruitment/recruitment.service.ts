@@ -96,50 +96,26 @@ export async function getJob(tenantId: string, id: string) {
 export async function getJobTagSuggestions(tenantId: string) {
     const [skills, qualifications] = await Promise.all([
         db.select({ name: recruitmentSkills.name }).from(recruitmentSkills)
-            .where(eq(recruitmentSkills.tenantId, tenantId)).orderBy(recruitmentSkills.name),
+            .where(and(eq(recruitmentSkills.tenantId, tenantId), isNull(recruitmentSkills.deletedAt)))
+            .orderBy(recruitmentSkills.name),
         db.select({ name: recruitmentQualifications.name }).from(recruitmentQualifications)
-            .where(eq(recruitmentQualifications.tenantId, tenantId)).orderBy(recruitmentQualifications.name),
+            .where(and(eq(recruitmentQualifications.tenantId, tenantId), isNull(recruitmentQualifications.deletedAt)))
+            .orderBy(recruitmentQualifications.name),
     ])
     return { skills: skills.map((r) => r.name), qualifications: qualifications.map((r) => r.name) }
 }
 
 /**
- * Paginated skill-suggestion query backing the job dialog's type-ahead. Returns
- * a single page (default 10) plus `hasMore` so the client can render an
- * infinite-scroll dropdown without ever materialising the whole catalog.
- *
- * `q` is a case-insensitive substring match on the skill name. Empty string =
- * no filter (alphabetical listing). One COUNT(*) OVER() in the same query so
- * pagination metadata costs nothing extra.
+ * Paginated skill-suggestion query backing the job dialog's type-ahead. Same
+ * query as {@link listRecruitmentTags} (one page + COUNT(*) OVER() metadata),
+ * projected down to names only — the dropdown never needs ids.
  */
 export async function listSkillSuggestions(
     tenantId: string,
     params: { q?: string; limit: number; offset: number },
 ) {
-    const { q, limit, offset } = params
-    const conds = [eq(recruitmentSkills.tenantId, tenantId)] as any[]
-    const query = q?.trim()
-    if (query) conds.push(ilike(recruitmentSkills.name, `%${query}%`))
-
-    const rows = await db
-        .select({
-            name: recruitmentSkills.name,
-            totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
-        })
-        .from(recruitmentSkills)
-        .where(and(...conds))
-        .orderBy(asc(recruitmentSkills.name))
-        .limit(limit)
-        .offset(offset)
-
-    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    return {
-        data: rows.map((r) => r.name),
-        total,
-        limit,
-        offset,
-        hasMore: offset + rows.length < total,
-    }
+    const page = await listRecruitmentTags(tenantId, 'skills', params)
+    return { ...page, data: page.data.map((r) => r.name) }
 }
 
 /** Sibling of {@link listSkillSuggestions} for the qualifications catalog. */
@@ -147,38 +123,19 @@ export async function listQualificationSuggestions(
     tenantId: string,
     params: { q?: string; limit: number; offset: number },
 ) {
-    const { q, limit, offset } = params
-    const conds = [eq(recruitmentQualifications.tenantId, tenantId)] as any[]
-    const query = q?.trim()
-    if (query) conds.push(ilike(recruitmentQualifications.name, `%${query}%`))
-
-    const rows = await db
-        .select({
-            name: recruitmentQualifications.name,
-            totalCount: sql<number>`COUNT(*) OVER()`.as('totalCount'),
-        })
-        .from(recruitmentQualifications)
-        .where(and(...conds))
-        .orderBy(asc(recruitmentQualifications.name))
-        .limit(limit)
-        .offset(offset)
-
-    const total = rows.length > 0 ? Number(rows[0].totalCount) : 0
-    return {
-        data: rows.map((r) => r.name),
-        total,
-        limit,
-        offset,
-        hasMore: offset + rows.length < total,
-    }
+    const page = await listRecruitmentTags(tenantId, 'qualifications', params)
+    return { ...page, data: page.data.map((r) => r.name) }
 }
 
 // ─── Recruitment tag catalog CRUD (skills / qualifications) ───────────────────
 // HR manages the per-tenant skill & qualification catalogs from Organization
 // Settings → Recruitment. These are the same tables the job dialogs read for
-// type-ahead suggestions. Names are unique per tenant, case-insensitively.
-// Deleting a catalog entry is safe: jobs/applications store their own skill
-// arrays (denormalised jsonb), so removing a suggestion never mutates a record.
+// type-ahead suggestions. Names are unique per tenant, case-insensitively,
+// among LIVE rows (partial unique index, migration 0091).
+// Deleting a catalog entry is a soft delete (project convention) — the row is
+// tombstoned via `deleted_at`, never removed. Jobs/applications store their own
+// skill arrays (denormalised jsonb), so removing a suggestion never mutates a
+// record, and the freed name can be re-added as a fresh live row.
 
 export type RecruitmentTagKind = 'skills' | 'qualifications'
 const TAG_TABLES = { skills: recruitmentSkills, qualifications: recruitmentQualifications } as const
@@ -187,6 +144,21 @@ function tagTableFor(kind: RecruitmentTagKind) {
 }
 function conflict(message: string) {
     return Object.assign(new Error(message), { statusCode: 409 })
+}
+
+/**
+ * Escape LIKE/ILIKE metacharacters (`\`, `%`, `_`) so user-typed search text
+ * matches literally — without this, a search for "C_" matches every two-letter
+ * tag starting with C, and "%" matches everything.
+ */
+export function escapeLikePattern(input: string): string {
+    return input.replace(/[\\%_]/g, '\\$&')
+}
+
+/** True when a thrown DB error is a Postgres unique violation (23505). */
+function isUniqueViolation(err: unknown): boolean {
+    const e = err as { code?: string; cause?: { code?: string } } | null
+    return e?.code === '23505' || e?.cause?.code === '23505'
 }
 
 /**
@@ -204,9 +176,9 @@ export async function listRecruitmentTags(
 ) {
     const tbl = tagTableFor(kind)
     const { q, limit, offset } = params
-    const conds = [eq(tbl.tenantId, tenantId)] as any[]
+    const conds = [eq(tbl.tenantId, tenantId), isNull(tbl.deletedAt)] as any[]
     const query = q?.trim()
-    if (query) conds.push(ilike(tbl.name, `%${query}%`))
+    if (query) conds.push(ilike(tbl.name, `%${escapeLikePattern(query)}%`))
 
     const rows = await db
         .select({
@@ -233,8 +205,10 @@ export async function listRecruitmentTags(
 export async function createRecruitmentTag(tenantId: string, kind: RecruitmentTagKind, nameRaw: string) {
     const tbl = tagTableFor(kind)
     const name = nameRaw.trim()
-    // onConflictDoNothing hits the (tenant, lower(name)) unique index; an empty
-    // return means the name already exists → 409.
+    // onConflictDoNothing hits the partial (tenant, lower(name)) unique index,
+    // which only covers LIVE rows — so a previously deleted name can be
+    // re-added (fresh row; the tombstone stays for audit). An empty return
+    // means a live duplicate exists → 409.
     const [row] = await db.insert(tbl).values({ tenantId, name }).onConflictDoNothing().returning()
     if (!row) throw conflict('That name already exists.')
     return row
@@ -243,26 +217,43 @@ export async function createRecruitmentTag(tenantId: string, kind: RecruitmentTa
 export async function updateRecruitmentTag(tenantId: string, kind: RecruitmentTagKind, id: string, nameRaw: string) {
     const tbl = tagTableFor(kind)
     const name = nameRaw.trim()
+    // Friendly pre-check against live rows. NOT race-proof on its own — a
+    // concurrent rename can land between this SELECT and the UPDATE — so the
+    // unique index stays the source of truth and a 23505 below maps to the
+    // same 409 (mirrors the biometric mapper-id pattern).
     const dupe = await db.select({ id: tbl.id }).from(tbl)
-        .where(and(eq(tbl.tenantId, tenantId), ne(tbl.id, id), sql`lower(${tbl.name}) = lower(${name})`)).limit(1)
+        .where(and(eq(tbl.tenantId, tenantId), ne(tbl.id, id), isNull(tbl.deletedAt), sql`lower(${tbl.name}) = lower(${name})`)).limit(1)
     if (dupe.length) throw conflict('That name already exists.')
-    const [row] = await db.update(tbl).set({ name })
-        .where(and(eq(tbl.id, id), eq(tbl.tenantId, tenantId))).returning()
-    return row ?? null
+    try {
+        const [row] = await db.update(tbl).set({ name })
+            .where(and(eq(tbl.id, id), eq(tbl.tenantId, tenantId), isNull(tbl.deletedAt))).returning()
+        return row ?? null
+    } catch (err) {
+        if (isUniqueViolation(err)) throw conflict('That name already exists.')
+        throw err
+    }
 }
 
+/**
+ * Soft delete (project convention — business data is tombstoned, never
+ * removed). The partial unique index ignores tombstones, so the name becomes
+ * immediately reusable. Deleting an already-deleted row returns null → 404.
+ */
 export async function deleteRecruitmentTag(tenantId: string, kind: RecruitmentTagKind, id: string) {
     const tbl = tagTableFor(kind)
-    const [row] = await db.delete(tbl)
-        .where(and(eq(tbl.id, id), eq(tbl.tenantId, tenantId))).returning()
+    const [row] = await db.update(tbl).set({ deletedAt: new Date() })
+        .where(and(eq(tbl.id, id), eq(tbl.tenantId, tenantId), isNull(tbl.deletedAt))).returning()
     return row ?? null
 }
 
 /**
- * Upsert a job's skills/qualifications into the per-tenant catalogs. This is the
- * ONLY writer of the catalog — résumé-upload areas (candidate add, public
- * careers, referral) read suggestions but never add to it. Conflicts on the
- * case-insensitive unique index are ignored (first-seen casing is preserved).
+ * Upsert a job's skills/qualifications into the per-tenant catalogs. Together
+ * with the Org Settings CRUD this is the only writer — résumé-upload areas
+ * (candidate add, public careers, referral) read suggestions but never add.
+ * Conflicts on the case-insensitive partial unique index (live rows only) are
+ * ignored (first-seen casing is preserved). A name HR previously deleted from
+ * the catalog is re-added as a fresh live row when a job uses it again — the
+ * vocabulary tracks what's actually in use.
  */
 async function upsertJobCatalog(
     tenantId: string,

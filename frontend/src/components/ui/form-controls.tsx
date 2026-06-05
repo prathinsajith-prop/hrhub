@@ -285,26 +285,27 @@ function ImageUpload({
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 //
-// The `pill` (segmented control) variant is the portal's default page-level tab
-// look since the unified visual refresh — soft muted rail with the active tab
-// rendered as a raised card. Reads as a single component (not loose links),
-// supports icons + count badges, and shares its visual language with the
-// Radix-based `<Tabs>` in `@/components/ui/tabs.tsx` so the two never look
-// out-of-family on the same page.
+// The `pill` (segmented control) variant matches the unified visual refresh —
+// soft muted rail with the active tab rendered as a raised card. Reads as a
+// single component (not loose links), supports icons + count badges, and
+// shares its visual language with the Radix-based `<Tabs>` in
+// `@/components/ui/tabs.tsx` so the two never look out-of-family on the same
+// page.
 //
-// The legacy `underline` variant is still available for the rare case where a
-// flatter look is wanted (e.g. inline section nav inside an already-elevated
-// card). It got the same polish: thicker primary underline, hover wash, badge
-// pill style identical to the pill variant.
+// The `underline` variant stays the DEFAULT — existing callers (Visa,
+// Recruitment) were built against it (some even pass `border-b-0` overrides),
+// so flipping the default would silently restyle them. New surfaces that want
+// the segmented look opt in with `variant="pill"`. Both variants share the
+// same polish: hover wash + the TabCountBadge pill.
 interface TabsProps {
   tabs: { id: string; label: string; icon?: React.ReactNode; badge?: number }[]
   activeTab: string
   onChange: (id: string) => void
   className?: string
   /**
-   * Visual style. Defaults to `'pill'` (segmented control) — the portal's
-   * primary page-level nav style. `'underline'` keeps the older row-of-links
-   * look for nested/inline section tabs.
+   * Visual style. Defaults to `'underline'` (row-of-links with a primary
+   * indicator — what existing pages were designed against). Pass `'pill'`
+   * for the segmented-control look.
    */
   variant?: 'underline' | 'pill'
 }
@@ -326,7 +327,7 @@ function TabCountBadge({ active, count }: { active: boolean; count: number }) {
   )
 }
 
-function Tabs({ tabs, activeTab, onChange, className, variant = 'pill' }: TabsProps) {
+function Tabs({ tabs, activeTab, onChange, className, variant = 'underline' }: TabsProps) {
   if (variant === 'pill') {
     return (
       <div

@@ -11,8 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/form-controls'
 import { DatePicker } from '@/components/ui/date-picker'
 import { useAssets, useAssignAsset, type Asset } from '@/hooks/useAssets'
-import { useCreateJob, useUpdateJob, useSkillSuggestions, useQualificationSuggestions } from '@/hooks/useRecruitment'
-import type { ChipsFieldPagedSource } from '@/components/shared/ChipsField'
+import { useCreateJob, useUpdateJob, usePagedSuggestions } from '@/hooks/useRecruitment'
 import { useCreateVisa } from '@/hooks/useVisa'
 import { useCreateLeave } from '@/hooks/useLeave'
 import { useCreateEmployee, useUpdateEmployee, useNextEmployeeNo, useEmployeeSalaryComponents } from '@/hooks/useEmployees'
@@ -275,31 +274,13 @@ export function NewJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     const [qualInput, setQualInput] = useState('')
     const reqInputRef = useRef<HTMLInputElement>(null)
     const createJob = useCreateJob()
-    // Paginated suggestion hooks — each ChipsField pushes its trimmed input
+    // Paginated suggestion sources — each ChipsField pushes its trimmed input
     // back via `onQueryChange` (debounced in ChipsField) which updates the
     // queryKey and refetches from offset 0. Server returns 10 items per page;
-    // the dropdown's IntersectionObserver triggers fetchNextPage as the
-    // sentinel scrolls into view.
-    const [skillQuery, setSkillQuery] = useState('')
-    const [qualQuery, setQualQuery] = useState('')
-    const skillSuggestions = useSkillSuggestions(skillQuery)
-    const qualSuggestions = useQualificationSuggestions(qualQuery)
-    const skillPaged: ChipsFieldPagedSource = {
-        items: skillSuggestions.data?.pages.flatMap((p) => p.data) ?? [],
-        hasMore: !!skillSuggestions.hasNextPage,
-        isLoading: skillSuggestions.isLoading,
-        isFetchingMore: skillSuggestions.isFetchingNextPage,
-        onLoadMore: () => { if (!skillSuggestions.isFetchingNextPage) skillSuggestions.fetchNextPage() },
-        onQueryChange: setSkillQuery,
-    }
-    const qualPaged: ChipsFieldPagedSource = {
-        items: qualSuggestions.data?.pages.flatMap((p) => p.data) ?? [],
-        hasMore: !!qualSuggestions.hasNextPage,
-        isLoading: qualSuggestions.isLoading,
-        isFetchingMore: qualSuggestions.isFetchingNextPage,
-        onLoadMore: () => { if (!qualSuggestions.isFetchingNextPage) qualSuggestions.fetchNextPage() },
-        onQueryChange: setQualQuery,
-    }
+    // the dropdown's IntersectionObserver triggers the next fetch as the
+    // sentinel scrolls into view. All the wiring lives in usePagedSuggestions.
+    const skillPaged = usePagedSuggestions('skill-suggestions')
+    const qualPaged = usePagedSuggestions('qualification-suggestions')
     const { data: orgUnitsRaw = [] } = useOrgUnits()
     const orgUnits = Array.isArray(orgUnitsRaw) ? orgUnitsRaw as OrgUnit[] : []
     const orgOptions = buildOrgOptions(orgUnits)
@@ -2223,26 +2204,8 @@ export function EditJobDialog({
     const editReqInputRef = useRef<HTMLInputElement>(null)
     const updateJob = useUpdateJob()
     // Same paginated-suggestions wiring as NewJobDialog; see comments there.
-    const [skillQueryEdit, setSkillQueryEdit] = useState('')
-    const [qualQueryEdit, setQualQueryEdit] = useState('')
-    const skillSuggestionsEdit = useSkillSuggestions(skillQueryEdit)
-    const qualSuggestionsEdit = useQualificationSuggestions(qualQueryEdit)
-    const skillPagedEdit: ChipsFieldPagedSource = {
-        items: skillSuggestionsEdit.data?.pages.flatMap((p) => p.data) ?? [],
-        hasMore: !!skillSuggestionsEdit.hasNextPage,
-        isLoading: skillSuggestionsEdit.isLoading,
-        isFetchingMore: skillSuggestionsEdit.isFetchingNextPage,
-        onLoadMore: () => { if (!skillSuggestionsEdit.isFetchingNextPage) skillSuggestionsEdit.fetchNextPage() },
-        onQueryChange: setSkillQueryEdit,
-    }
-    const qualPagedEdit: ChipsFieldPagedSource = {
-        items: qualSuggestionsEdit.data?.pages.flatMap((p) => p.data) ?? [],
-        hasMore: !!qualSuggestionsEdit.hasNextPage,
-        isLoading: qualSuggestionsEdit.isLoading,
-        isFetchingMore: qualSuggestionsEdit.isFetchingNextPage,
-        onLoadMore: () => { if (!qualSuggestionsEdit.isFetchingNextPage) qualSuggestionsEdit.fetchNextPage() },
-        onQueryChange: setQualQueryEdit,
-    }
+    const skillPagedEdit = usePagedSuggestions('skill-suggestions')
+    const qualPagedEdit = usePagedSuggestions('qualification-suggestions')
     const { data: orgUnitsRawEdit = [] } = useOrgUnits()
     const orgUnitsEdit = Array.isArray(orgUnitsRawEdit) ? orgUnitsRawEdit as OrgUnit[] : []
     const orgOptionsEdit = buildOrgOptions(orgUnitsEdit)

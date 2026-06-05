@@ -64,7 +64,7 @@ If you can't see a feature in this guide, your role probably doesn't include it 
 ## 3. For Everyone (Self-Service)
 
 ### My Profile
-**My Profile** shows your personal and job details. You can update a few fields yourself (phone, personal email, emergency contact, home address). Changes to sensitive details (like bank info) may go to HR for approval — you'll be notified when they're approved or need changes.
+**My Profile** shows your personal and job details. You can update a few fields yourself (phone, personal email, emergency contact, home address). Changes to sensitive details (like bank info) may go to HR for approval — you'll be notified when they're approved or need changes. Your work **schedule** (shift hours and weekly off) lives under **My Work → Schedule**.
 
 ### Leave
 1. Go to **My Leave** and click **Request Leave**.
@@ -75,7 +75,7 @@ If you can't see a feature in this guide, your role probably doesn't include it 
 Your **leave balance** shows what you've earned, taken, and have remaining. Public holidays and weekends aren't counted as leave days.
 
 ### Payslips
-**My Payslips** lists your monthly payslips. Open one to see the breakdown (basic, allowances, deductions, net pay) and download it as a PDF. You'll get an email when a new payslip is ready.
+**My Payslips** has two tabs: **Payslip history** lists your monthly payslips — open one to see the breakdown (basic, allowances, deductions, net pay) and download it as a PDF; **Bank details** shows the account your salary lands in (edits route through HR approval). You'll get an email when a new payslip is ready.
 
 ### Attendance
 **My Attendance** shows your daily record. Depending on your company's setup you may **check in/out** from here, or attendance may come from a biometric device. The monthly calendar shows present/late/leave/holiday days.
@@ -89,8 +89,8 @@ Request a salary loan from **My Loans**: enter the amount and monthly repayment.
 ### Complaints (Confidential)
 Raise a workplace concern from **My Complaints**. You choose how confidential it is (named, confidential, or anonymous). Your description is stored securely. HR is alerted immediately, and you're notified when it's acknowledged and resolved. Each complaint has a target response time based on its severity.
 
-### Announcements
-Company news appears in **Announcements**, targeted to the right people. Some announcements ask you to **acknowledge** that you've read them — please do when prompted.
+### Announcements & Posts
+Company news appears in **Announcements**, targeted to the right people. Some announcements ask you to **acknowledge** that you've read them — please do when prompted. If your company has employee posting enabled, the Home page also has a **Posts** tab where you can share an update with colleagues and read what others have posted.
 
 ### Careers & Referrals
 Your company may have a public **careers page** you can share (`/careers/<company code>/jobs`) where candidates browse roles and apply with a résumé. You can also **refer** someone for an open role from the portal.
@@ -118,6 +118,7 @@ Add employees one at a time or **bulk-import** many via a spreadsheet. Maintain 
 - Each candidate shows where they came from: **careers site, referral, or added by HR**.
 - Schedule interviews — the candidate and interviewer get an email.
 - When ready, **convert a candidate into an employee** — this automatically starts their onboarding checklist.
+- Curate the **skills and qualifications** suggestion lists in **Org Settings → Recruitment** — these power the type-ahead when creating jobs, so everyone tags roles consistently. Deleting an entry only removes the suggestion; existing jobs and candidates keep their tags.
 
 ### Onboarding
 New hires get a checklist (e.g. collect documents, IT setup, induction). You can email the new hire a secure **upload link** so they can submit documents before day one. When every step is complete, the employee is automatically marked **active** and welcomed.

@@ -1,9 +1,11 @@
+import { useCallback, useState } from 'react'
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type InfiniteData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import { toast } from '@/components/ui/overlays'
 import type { Candidate, Job, RecommendedCandidate, RecommendedJob } from '@/types'
 import type { RecruitmentStage } from '@/lib/recruitmentStages'
+import type { ChipsFieldPagedSource } from '@/components/shared/ChipsField'
 
 interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
 interface AppParams { jobId?: string; stage?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number; enabled?: boolean }
@@ -104,6 +106,29 @@ export function useSkillSuggestions(q: string = '') {
 
 export function useQualificationSuggestions(q: string = '') {
     return useSuggestionsInfinite('qualification-suggestions', q)
+}
+
+/**
+ * One-stop ChipsField `paged` source for a suggestions endpoint. Owns the
+ * debounce-target query state, the infinite query, and the load-more guard so
+ * the job dialogs don't repeat the wiring per field (New/Edit × skills/quals
+ * = 4 call sites). `onQueryChange`/`onLoadMore` are stable across renders so
+ * ChipsField's debounce + IntersectionObserver effects don't churn.
+ */
+export function usePagedSuggestions(endpoint: 'skill-suggestions' | 'qualification-suggestions'): ChipsFieldPagedSource {
+    const [query, setQuery] = useState('')
+    const { data, hasNextPage, isLoading, isFetchingNextPage, fetchNextPage } = useSuggestionsInfinite(endpoint, query)
+    const onLoadMore = useCallback(() => {
+        if (!isFetchingNextPage) fetchNextPage()
+    }, [isFetchingNextPage, fetchNextPage])
+    return {
+        items: data?.pages.flatMap((p) => p.data) ?? [],
+        hasMore: !!hasNextPage,
+        isLoading,
+        isFetchingMore: isFetchingNextPage,
+        onLoadMore,
+        onQueryChange: setQuery,
+    }
 }
 
 export function useCreateJob() {

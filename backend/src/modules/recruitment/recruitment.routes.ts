@@ -5,7 +5,7 @@ import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
-import { validate, createEmployeeSchema } from '../../lib/validation.js'
+import { validate, createEmployeeSchema, recruitmentTagBodySchema } from '../../lib/validation.js'
 import { parseOptionalCount, parseOptionalAmount } from '../../lib/applicant-numbers.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
@@ -238,12 +238,14 @@ export default async function (fastify: any): Promise<void> {
     // authenticated user (the job dialogs need them); writes are HR-only.
     const TAG_KINDS = new Set(['skills', 'qualifications'])
     const tagEntity = (kind: string) => (kind === 'skills' ? 'recruitment_skill' : 'recruitment_qualification')
+    // Zod-validated body (schema in lib/validation.ts) — trimmed name, 1–80 chars.
     function readTagName(request: any, reply: any): string | null {
-        const raw = (request.body as any)?.name
-        const name = typeof raw === 'string' ? raw.trim() : ''
-        if (!name) { reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Name is required' }); return null }
-        if (name.length > 80) { reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Name is too long (max 80 characters)' }); return null }
-        return name
+        const parsed = recruitmentTagBodySchema.safeParse(request.body)
+        if (!parsed.success) {
+            reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parsed.error.issues[0]?.message ?? 'Invalid name' })
+            return null
+        }
+        return parsed.data.name
     }
 
     // GET /api/v1/recruitment-tags/:kind?q=&limit=10&offset=0 — paginated +

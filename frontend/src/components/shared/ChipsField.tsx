@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X as XIcon, Plus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/primitives'
@@ -71,27 +72,34 @@ export function ChipsField({
     suggestions?: string[]
     paged?: ChipsFieldPagedSource
 }) {
+    const { t } = useTranslation()
     const [focused, setFocused] = useState(false)
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
     // ── PAGED MODE ───────────────────────────────────────────────────────────
     // Push the typed query up to the parent so it can refetch from offset 0.
-    // Debounced 200ms so we don't fire on every keystroke. Static value
-    // means the effect's identity is stable even if the parent re-renders.
+    // Debounced 200ms so we don't fire on every keystroke. Depend on the
+    // callback itself, NOT the `paged` object — callers build that object
+    // fresh every render, but the callback is typically a stable setState,
+    // so the timer only resets when the input actually changes.
+    const onQueryChange = paged?.onQueryChange
     useEffect(() => {
-        if (!paged?.onQueryChange) return
-        const id = window.setTimeout(() => paged.onQueryChange!(inputValue.trim()), 200)
+        if (!onQueryChange) return
+        const id = window.setTimeout(() => onQueryChange(inputValue.trim()), 200)
         return () => window.clearTimeout(id)
-    }, [inputValue, paged])
+    }, [inputValue, onQueryChange])
 
     // In paged mode, hide chips the user has already added from the server-
     // returned page. Server-side dedup isn't worth a column round-trip; this is
-    // a cheap O(n) filter on (at most) a few pages of strings.
+    // a cheap O(n) filter on (at most) a few pages of strings. Keyed off
+    // `paged.items` (stable between fetches) rather than the per-render
+    // `paged` wrapper so the memo actually memoises.
+    const pagedItems = paged?.items
     const pagedVisible = useMemo(() => {
-        if (!paged) return []
+        if (!pagedItems) return []
         const added = new Set(chips.map((c) => c.toLowerCase()))
-        return paged.items.filter((s) => !added.has(s.toLowerCase()))
-    }, [paged, chips])
+        return pagedItems.filter((s) => !added.has(s.toLowerCase()))
+    }, [pagedItems, chips])
 
     // ── CLIENT MODE ──────────────────────────────────────────────────────────
     // Case-insensitive: hide suggestions already added; filter by the typed text.
@@ -131,9 +139,11 @@ export function ChipsField({
 
     // IntersectionObserver on the sentinel <li> at the bottom of the dropdown —
     // when it enters the scrollable list's viewport we reveal the next page.
-    // In paged mode that fires `paged.onLoadMore()`; in client mode we just
-    // bump the local slice. The observer's root is the <ul> itself so it works
-    // for an internally scrolling popover (not the page).
+    // In paged mode that fires `onLoadMore`; in client mode we just bump the
+    // local slice. The observer's root is the <ul> itself so it works for an
+    // internally scrolling popover (not the page). Depends on the stable
+    // `onLoadMore` callback, not the per-render `paged` wrapper.
+    const onLoadMore = paged?.onLoadMore
     const listRef = useRef<HTMLUListElement | null>(null)
     const sentinelRef = useRef<HTMLLIElement | null>(null)
     useEffect(() => {
@@ -144,14 +154,14 @@ export function ChipsField({
         const io = new IntersectionObserver(
             (entries) => {
                 if (!entries[0]?.isIntersecting) return
-                if (paged) paged.onLoadMore()
+                if (onLoadMore) onLoadMore()
                 else setVisibleCount((n) => Math.min(n + PAGE_SIZE, filtered.length))
             },
             { root, rootMargin: '40px' },
         )
         io.observe(sentinel)
         return () => io.disconnect()
-    }, [focused, hasMore, paged, filtered.length])
+    }, [focused, hasMore, onLoadMore, filtered.length])
 
     const pick = (value: string) => {
         if (onAddValue) onAddValue(value)
@@ -204,7 +214,7 @@ export function ChipsField({
                     >
                         {isLoading && visible.length === 0 ? (
                             <li className="flex items-center justify-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-                                <Loader2 className="size-3.5 animate-spin" /> Loading…
+                                <Loader2 className="size-3.5 animate-spin" /> {t('common.loading')}
                             </li>
                         ) : null}
 
@@ -232,11 +242,11 @@ export function ChipsField({
                                 className="flex items-center justify-center gap-1.5 px-2 py-1.5 text-center text-[11px] text-muted-foreground"
                             >
                                 {isFetchingMore ? (
-                                    <><Loader2 className="size-3 animate-spin" /> Loading more…</>
+                                    <><Loader2 className="size-3 animate-spin" /> {t('common.loadingMore')}</>
                                 ) : paged ? (
-                                    <>{visible.length} loaded · scroll for more</>
+                                    <>{t('common.suggestionsLoaded', { count: visible.length })}</>
                                 ) : (
-                                    <>{visible.length} / {total} · scroll for more</>
+                                    <>{t('common.suggestionsOfTotal', { count: visible.length, total })}</>
                                 )}
                             </li>
                         )}

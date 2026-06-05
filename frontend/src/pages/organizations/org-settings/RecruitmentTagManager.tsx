@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GraduationCap, Loader2, Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 
 import { Card, Input, Label } from '@/components/ui/primitives'
@@ -25,44 +26,12 @@ import {
     type RecruitmentTag,
 } from '@/hooks/useRecruitment'
 
-// Copy + icon per catalog kind. Kept in code (like the sibling Recruitment
-// Stages tab) so the three recruitment sub-tabs read consistently.
-const META: Record<RecruitmentTagKind, {
-    icon: typeof Sparkles
-    title: string
-    singular: string
-    desc: string
-    addLabel: string
-    placeholder: string
-    emptyTitle: string
-    emptyDesc: string
-    searchPlaceholder: string
-}> = {
-    skills: {
-        icon: Sparkles,
-        title: 'Skills',
-        singular: 'skill',
-        desc: 'The skill tags suggested when creating jobs and screening candidates. Type-ahead across recruitment forms reuses these so spelling and casing stay consistent.',
-        addLabel: 'Add skill',
-        placeholder: 'e.g. TypeScript',
-        emptyTitle: 'No skills yet',
-        emptyDesc: 'Add the skills your roles hire for — they’ll appear as suggestions across recruitment.',
-        searchPlaceholder: 'Search skills…',
-    },
-    qualifications: {
-        icon: GraduationCap,
-        title: 'Qualifications',
-        singular: 'qualification',
-        desc: 'The qualification tags suggested when creating jobs and screening candidates. Type-ahead across recruitment forms reuses these so spelling and casing stay consistent.',
-        addLabel: 'Add qualification',
-        placeholder: 'e.g. Bachelor’s in Computer Science',
-        emptyTitle: 'No qualifications yet',
-        emptyDesc: 'Add the qualifications your roles require — they’ll appear as suggestions across recruitment.',
-        searchPlaceholder: 'Search qualifications…',
-    },
+// Icon per catalog kind — all copy lives in the locale files under
+// `recruitment.tagManager.<kind>.*` (EN + AR, per project i18n rule).
+const ICONS: Record<RecruitmentTagKind, typeof Sparkles> = {
+    skills: Sparkles,
+    qualifications: GraduationCap,
 }
-
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 /**
  * CRUD for one recruitment tag catalog (skills or qualifications). Reused for
@@ -74,8 +43,10 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
  * doesn't fire a fetch.
  */
 export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
-    const meta = META[kind]
-    const Icon = meta.icon
+    const { t } = useTranslation()
+    const Icon = ICONS[kind]
+    // Per-kind key prefix: recruitment.tagManager.skills.* / .qualifications.*
+    const tk = `recruitment.tagManager.${kind}`
 
     // Search state — `search` is the input value (instant); `query` is the
     // debounced value pushed into the query key. Keeps typing snappy and
@@ -124,10 +95,10 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
         try {
             if (dialog?.mode === 'edit' && dialog.tag) {
                 await update.mutateAsync({ id: dialog.tag.id, name: value })
-                toast.success(`${cap(meta.singular)} updated`)
+                toast.success(t(`${tk}.updated`))
             } else {
                 await create.mutateAsync(value)
-                toast.success(`${cap(meta.singular)} added`)
+                toast.success(t(`${tk}.added`))
             }
             closeDialog()
         } catch {
@@ -139,7 +110,7 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
         if (!pendingDelete) return
         try {
             await remove.mutateAsync(pendingDelete.id)
-            toast.success(`${cap(meta.singular)} deleted`)
+            toast.success(t(`${tk}.deleted`))
         } finally {
             setPendingDelete(null)
         }
@@ -182,16 +153,16 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
                         </div>
                         <div className="min-w-0">
                             <h2 className="text-base font-semibold flex items-center gap-2">
-                                {meta.title}
+                                {t(`${tk}.title`)}
                                 {total > 0 && (
                                     <Badge variant="secondary" className="tabular-nums">{total}</Badge>
                                 )}
                             </h2>
-                            <p className="text-xs text-muted-foreground mt-0.5 max-w-prose">{meta.desc}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 max-w-prose">{t(`${tk}.desc`)}</p>
                         </div>
                     </div>
                     <Button type="button" size="sm" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
-                        {meta.addLabel}
+                        {t(`${tk}.addLabel`)}
                     </Button>
                 </div>
 
@@ -201,7 +172,7 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
                         <Input
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder={meta.searchPlaceholder}
+                            placeholder={t(`${tk}.searchPlaceholder`)}
                             className="ps-9"
                         />
                     </div>
@@ -216,17 +187,17 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
                     // Truly empty catalog (no search applied).
                     <EmptyState
                         icon={Icon}
-                        title={meta.emptyTitle}
-                        description={meta.emptyDesc}
+                        title={t(`${tk}.emptyTitle`)}
+                        description={t(`${tk}.emptyDesc`)}
                         action={(
                             <Button type="button" size="sm" leftIcon={<Plus className="size-3.5" />} onClick={openCreate}>
-                                {meta.addLabel}
+                                {t(`${tk}.addLabel`)}
                             </Button>
                         )}
                     />
                 ) : items.length === 0 ? (
                     // Search yielded nothing.
-                    <p className="py-6 text-center text-sm text-muted-foreground">No matches for “{query}”.</p>
+                    <p className="py-6 text-center text-sm text-muted-foreground">{t('recruitment.tagManager.noMatches', { query })}</p>
                 ) : (
                     // Scroll container — the IntersectionObserver root. The
                     // max-height caps the dialog so the page itself doesn't
@@ -243,14 +214,14 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
                                 >
                                     <span className="min-w-0 truncate text-sm text-foreground">{tag.name}</span>
                                     <div className="flex items-center gap-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                                        <Button type="button" variant="ghost" size="icon-sm" aria-label={`Edit ${meta.singular}`} onClick={() => openEdit(tag)}>
+                                        <Button type="button" variant="ghost" size="icon-sm" aria-label={t(`${tk}.editLabel`)} onClick={() => openEdit(tag)}>
                                             <Pencil className="size-3.5" />
                                         </Button>
                                         <Button
                                             type="button"
                                             variant="ghost"
                                             size="icon-sm"
-                                            aria-label={`Delete ${meta.singular}`}
+                                            aria-label={t(`${tk}.deleteLabel`)}
                                             className="text-rose-600 hover:text-rose-700"
                                             onClick={() => setPendingDelete(tag)}
                                         >
@@ -272,9 +243,9 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
                                 className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs text-muted-foreground"
                             >
                                 {isFetchingNextPage ? (
-                                    <><Loader2 className="size-3.5 animate-spin" /> Loading more…</>
+                                    <><Loader2 className="size-3.5 animate-spin" /> {t('recruitment.tagManager.loadingMore')}</>
                                 ) : (
-                                    <>Scroll for more · {items.length} of {total}</>
+                                    <>{t('recruitment.tagManager.scrollForMore', { loaded: items.length, total })}</>
                                 )}
                             </div>
                         )}
@@ -285,24 +256,24 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
             <Dialog open={!!dialog} onOpenChange={(o) => !o && closeDialog()}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{dialog?.mode === 'edit' ? `Edit ${meta.singular}` : meta.addLabel}</DialogTitle>
+                        <DialogTitle>{dialog?.mode === 'edit' ? t(`${tk}.editLabel`) : t(`${tk}.addLabel`)}</DialogTitle>
                     </DialogHeader>
                     <DialogBody>
                         <div className="space-y-1.5">
-                            <Label>Name</Label>
+                            <Label>{t('common.name')}</Label>
                             <Input
                                 autoFocus
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                placeholder={meta.placeholder}
+                                placeholder={t(`${tk}.placeholder`)}
                                 maxLength={80}
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save() } }}
                             />
                         </div>
                     </DialogBody>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={closeDialog} disabled={saving}>Cancel</Button>
-                        <Button type="button" onClick={save} loading={saving} disabled={!name.trim()}>Save</Button>
+                        <Button type="button" variant="outline" onClick={closeDialog} disabled={saving}>{t('common.cancel')}</Button>
+                        <Button type="button" onClick={save} loading={saving} disabled={!name.trim()}>{t('common.save')}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -310,9 +281,9 @@ export function RecruitmentTagManager({ kind }: { kind: RecruitmentTagKind }) {
             <ConfirmDialog
                 open={!!pendingDelete}
                 onOpenChange={(o) => !o && setPendingDelete(null)}
-                title={pendingDelete ? `Delete “${pendingDelete.name}”?` : ''}
-                description={`This removes the ${meta.singular} from suggestions. Jobs and candidates already tagged with it keep their own copy.`}
-                confirmLabel="Delete"
+                title={pendingDelete ? t('recruitment.tagManager.deleteTitle', { name: pendingDelete.name }) : ''}
+                description={t(`${tk}.deleteDesc`)}
+                confirmLabel={t('common.delete')}
                 variant="destructive"
                 onConfirm={confirmDelete}
             />
