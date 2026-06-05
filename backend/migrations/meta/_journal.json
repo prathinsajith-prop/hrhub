@@ -638,6 +638,13 @@
       "when": 1782576000000,
       "tag": "0090_announcement_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1782662400000,
+      "tag": "0091_recruitment_tag_soft_delete",
+      "breakpoints": true
     }
   ]
 }

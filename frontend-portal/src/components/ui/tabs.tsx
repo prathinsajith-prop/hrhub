@@ -22,15 +22,18 @@ type TabsVariant = 'pill' | 'underline'
 const TabsVariantContext = React.createContext<TabsVariant>('pill')
 
 const LIST_VARIANTS: Record<TabsVariant, string> = {
-    pill: 'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
+    // Compact segmented control: a raised "card" chip marks the active tab.
+    pill: 'inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-border/50 bg-muted/50 p-1 text-muted-foreground',
+    // Editorial section-nav: each tab is a hoverable surface that lifts on the
+    // baseline, with an animated primary underline pill on the active tab.
     underline:
-        'inline-flex h-auto w-full items-center justify-start gap-5 overflow-x-auto rounded-none border-b border-border/60 bg-transparent p-0 text-muted-foreground sm:gap-6',
+        'inline-flex h-auto w-full items-center justify-start gap-1 overflow-x-auto rounded-none border-b border-border/60 bg-transparent p-0 text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
 }
 
 const TRIGGER_VARIANTS: Record<TabsVariant, string> = {
-    pill: 'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm',
+    pill: 'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium ring-offset-background transition-all hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border/60 [&_svg]:size-3.5 [&_svg]:shrink-0',
     underline:
-        'relative -mb-px inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 border-transparent bg-transparent px-0.5 pb-2.5 pt-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=active]:border-primary data-[state=active]:text-primary',
+        'group relative -mb-px inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-t-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-primary/[0.06] data-[state=active]:text-primary data-[state=active]:font-semibold after:pointer-events-none after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary after:opacity-0 after:transition-opacity data-[state=active]:after:opacity-100 [&_svg]:size-3.5 [&_svg]:shrink-0',
 }
 
 function TabsList({

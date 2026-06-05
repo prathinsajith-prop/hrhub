@@ -206,16 +206,24 @@ export const referralsRelations = relations(referrals, ({ one }) => ({
 // create/edit dialogs and every résumé-upload area. Curated ONLY from the job
 // screens (the upsert runs in createJob/updateJob); candidate/referral/careers
 // forms read these but never add to them. Case-insensitively unique per tenant
-// (see the uq_* indexes in migration 0088) which double as the upsert conflict
-// target — kept as separate tables so each catalog is independently queryable.
+// (see the uq_* indexes in migrations 0088/0091) which double as the upsert
+// conflict target — kept as separate tables so each catalog is independently
+// queryable.
+//
+// Soft-delete: rows are tombstoned via `deleted_at` (project-wide convention —
+// business data is never hard-deleted). The unique indexes are PARTIAL
+// (WHERE deleted_at IS NULL) so deleting an entry frees its name: re-adding
+// the same name inserts a fresh live row while the tombstone stays behind for
+// audit/restore.
 export const recruitmentSkills = pgTable('recruitment_skills', {
     id: uuid('id').primaryKey().defaultRandom(),
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
     tenantNameIdx: index('idx_recruitment_skills_tenant_name').on(t.tenantId, t.name),
-    tenantNameUniq: uniqueIndex('uq_recruitment_skills_tenant_name').on(t.tenantId, sql`lower(${t.name})`),
+    tenantNameUniq: uniqueIndex('uq_recruitment_skills_tenant_name').on(t.tenantId, sql`lower(${t.name})`).where(sql`${t.deletedAt} IS NULL`),
 }))
 
 export const recruitmentQualifications = pgTable('recruitment_qualifications', {
@@ -223,9 +231,10 @@ export const recruitmentQualifications = pgTable('recruitment_qualifications', {
     tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
 }, (t) => ({
     tenantNameIdx: index('idx_recruitment_qualifications_tenant_name').on(t.tenantId, t.name),
-    tenantNameUniq: uniqueIndex('uq_recruitment_qualifications_tenant_name').on(t.tenantId, sql`lower(${t.name})`),
+    tenantNameUniq: uniqueIndex('uq_recruitment_qualifications_tenant_name').on(t.tenantId, sql`lower(${t.name})`).where(sql`${t.deletedAt} IS NULL`),
 }))
 
 export const recruitmentSkillsRelations = relations(recruitmentSkills, ({ one }) => ({

@@ -372,19 +372,21 @@ Each module follows: **Purpose · Actions & Roles · Workflow/Statuses · Notifi
 ---
 ### 3.10 Recruitment & Public Careers Portal
 
-**Purpose:** Job postings, candidate pipeline (kanban), interviews, public careers site, referrals, convert-to-employee, candidate-source tracking.
+**Purpose:** Job postings, candidate pipeline (kanban), interviews, public careers site, referrals, convert-to-employee, candidate-source tracking, per-tenant skill/qualification catalogs.
 
-**Actions & Roles:** Jobs/candidates/stages/interviews/convert: **hr_manager, super_admin**. Referral submit: **employee**. Public browse/apply: **unauthenticated** (careers portal).
+**Actions & Roles:** Jobs/candidates/stages/interviews/convert: **hr_manager, super_admin**. Skill/qualification catalog manage: **hr_manager, super_admin** (reads: any authenticated user — job dialogs need them). Referral submit: **employee**. Public browse/apply: **unauthenticated** (careers portal).
 
 **Workflow/Statuses:** Job `draft → open → closed / on_hold` (free transitions, no approval). Candidate pipeline = per-tenant customizable stages (default received→screening→interview→offer→hired/rejected; `pre_boarding` gates conversion). Interview `scheduled → completed/cancelled/no_show`.
 
 **Candidate source tracking:** `direct` (added by HR), `careers` (public portal), `referral` (employee). Shown as a color-coded badge on kanban cards, list rows, and candidate profile; filterable by Source.
 
+**Skill & qualification catalogs:** Per-tenant vocabulary powering type-ahead suggestions in job dialogs and résumé-upload forms. Managed in **Org Settings → Recruitment** (sub-tabs: Stages / Skills / Qualifications) — searchable, server-paginated list (10/page infinite scroll) with add/rename/delete. Names are case-insensitively unique per tenant among live entries; duplicate add/rename → 409. Delete is **soft** (tombstone; entry vanishes from suggestions, the name is immediately reusable; jobs/candidates keep their own denormalised copies). The catalog is also auto-upserted from job create/update (a deleted name re-enters when a job uses it again). Suggestion endpoints (`/jobs/skill-suggestions`, `/jobs/qualification-suggestions`) are paginated with debounced literal substring search (LIKE metacharacters escaped). Job detail page shows the candidates card with two lenses: **Applicants** (stage/source filters) and **Recommended** (talent-pool matches), with count badges; auto-opens Recommended when there are no applicants but matches exist.
+
 **Public careers portal:** `/careers/:companyCode/jobs` (grid, 25/page infinite scroll, filters: search/department/location/type via facets endpoint), `/jobs/:id` (detail), apply with resume (PDF/DOC/DOCX ≤5MB). Tenant resolved by `companyCode`. Rate limits: browse 60/min, apply 5/10min.
 
 **Notifications/Emails:** Candidate add/stage-change → WebSocket to HR (live kanban). Public apply → **applicant confirmation email** + **HR "new application" alert** (email + in-app). Interview scheduled → **email to candidate + interviewer** + in-app to interviewer. Convert → employee gets in-app notification.
 
-**Audit:** job/application/stage/interview/recruitment_stage create/update/delete; public applicant logged with `actorRole:'public'`, `actorId:null`, `metadata.source='careers_portal'`. Convert → dual-entry (application update + employee create).
+**Audit:** job/application/stage/interview/recruitment_stage create/update/delete; recruitment_skill / recruitment_qualification create/update/delete (catalog CRUD); public applicant logged with `actorRole:'public'`, `actorId:null`, `metadata.source='careers_portal'`. Convert → dual-entry (application update + employee create).
 
 **Validations/Edge cases:** duplicate application guard (same email+job unless prior rejected → 409); resume magic-byte MIME + 5MB; bulk import (max 500); stage delete blocked if candidates on it (409); careers apply requires resume (validated); resume S3 upload failure is swallowed (application still saved). ⚠️ Referrals table exists but referral management routes appear incomplete; ⚠️ no CAPTCHA on public apply (rate-limit only).
 
@@ -392,7 +394,7 @@ Each module follows: **Purpose · Actions & Roles · Workflow/Statuses · Notifi
 
 **Dependencies:** candidate (pre_boarding) → convert → employee → auto onboarding checklist (9 steps); careers/referral → pipeline; WebSocket live updates.
 
-**QA Checklist (Recruitment):** ☐ Functional job CRUD; add candidate; drag stage; interview schedule/feedback; convert; public browse/filter/apply; referral. ☐ Workflow job statuses; pipeline stages; pre_boarding gate; stage-delete block. ☐ Notification WS candidate-added/stage-changed; convert notifies employee. ☐ Email applicant confirmation + HR new-application alert + interview invitations. ☐ Permission HR mutate; public unauthenticated apply; employee referral. ☐ Audit incl. public actorRole; convert dual-entry. ☐ Timeline on converted employee. ☐ Reporting recruitment KPIs + export. ☐ Integration convert→onboarding; careers companyCode resolution; source badge+filter. ☐ Edge duplicate apply (409), resume MIME/size, rate-limit apply, S3 failure swallow, missing companyCode. ☐ Security public endpoint exposure, no CAPTCHA, cross-tenant. ☐ Performance 25/page infinite scroll; facets.
+**QA Checklist (Recruitment):** ☐ Functional job CRUD; add candidate; drag stage; interview schedule/feedback; convert; public browse/filter/apply; referral; skill/qualification catalog add/rename/delete + search. ☐ Workflow job statuses; pipeline stages; pre_boarding gate; stage-delete block. ☐ Notification WS candidate-added/stage-changed; convert notifies employee. ☐ Email applicant confirmation + HR new-application alert + interview invitations. ☐ Permission HR mutate; catalog writes HR-only (reads any auth); public unauthenticated apply; employee referral. ☐ Audit incl. public actorRole; convert dual-entry; catalog create/update/delete. ☐ Timeline on converted employee. ☐ Reporting recruitment KPIs + export. ☐ Integration convert→onboarding; careers companyCode resolution; source badge+filter; job-save upserts catalog; type-ahead reflects catalog edits. ☐ Edge duplicate apply (409), duplicate catalog name (409, case-insensitive), deleted catalog name re-addable, `%`/`_` searched literally, resume MIME/size, rate-limit apply, S3 failure swallow, missing companyCode. ☐ Security public endpoint exposure, no CAPTCHA, cross-tenant (incl. catalog). ☐ Performance 25/page infinite scroll; facets; suggestion paging 10/page.
 
 ---
 

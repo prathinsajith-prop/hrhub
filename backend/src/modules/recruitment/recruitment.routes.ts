@@ -1,11 +1,11 @@
 import * as XLSX from 'xlsx'
-import { listJobs, getJob, getJobTagSuggestions, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
+import { listJobs, getJob, getJobTagSuggestions, listSkillSuggestions, listQualificationSuggestions, createJob, updateJob, softDeleteJob, listApplications, createApplication, updateApplicationStage, updateApplication, getApplication, softDeleteApplication, listRecruitmentStages, createRecruitmentStage, updateRecruitmentStage, deleteRecruitmentStage, reorderRecruitmentStages, resetRecruitmentStages, listRecruitmentTags, createRecruitmentTag, updateRecruitmentTag, deleteRecruitmentTag, validateBulkJobRows, bulkCreateJobs, validateBulkCandidateRows, bulkCreateCandidates, getPublicTenantByCode, listPublicJobs, getPublicJob, getPublicJobFacets, type RecruitmentTagKind, type BulkJobInputRow, type BulkCandidateInputRow } from './recruitment.service.js'
 import { recommendCandidatesForJob, recommendJobsForCandidate } from './matching.service.js'
 import { generateReportPdf } from '../../lib/pdf.js'
 import { recordActivity } from '../audit/audit.service.js'
 import { createEmployee, generateNextEmployeeNo } from '../employees/employees.service.js'
 import { enforceEmployeeQuota } from '../subscription/subscription.service.js'
-import { validate, createEmployeeSchema } from '../../lib/validation.js'
+import { validate, createEmployeeSchema, recruitmentTagBodySchema } from '../../lib/validation.js'
 import { parseOptionalCount, parseOptionalAmount } from '../../lib/applicant-numbers.js'
 import { createChecklist } from '../onboarding/onboarding.service.js'
 import { db } from '../../db/index.js'
@@ -182,6 +182,136 @@ export default async function (fastify: any): Promise<void> {
     fastify.get('/jobs/tag-suggestions', { ...auth, schema: { tags: ['Recruitment'] } }, async (request, reply) => {
         const data = await getJobTagSuggestions(request.user.tenantId)
         return reply.send({ data })
+    })
+
+    // GET /api/v1/jobs/skill-suggestions — paginated catalog query for the
+    // job-dialog type-ahead. Returns one page (default 10) plus pagination
+    // metadata, so a large tenant skill catalog never round-trips in full.
+    // `q` is a case-insensitive substring match on the skill name.
+    fastify.get('/jobs/skill-suggestions', {
+        ...auth,
+        schema: {
+            tags: ['Recruitment'],
+            querystring: {
+                type: 'object',
+                properties: {
+                    q: { type: 'string' },
+                    limit: { type: 'integer', minimum: 1, maximum: 50 },
+                    offset: { type: 'integer', minimum: 0 },
+                },
+            },
+        },
+    }, async (request, reply) => {
+        const q = (request.query as { q?: string })?.q
+        const limit = Math.min(Number((request.query as { limit?: number })?.limit) || 10, 50)
+        const offset = Math.max(Number((request.query as { offset?: number })?.offset) || 0, 0)
+        const result = await listSkillSuggestions(request.user.tenantId, { q, limit, offset })
+        return reply.send(result)
+    })
+
+    // GET /api/v1/jobs/qualification-suggestions — sibling endpoint for the
+    // qualifications catalog. Same shape / pagination contract as the skills
+    // suggestions above.
+    fastify.get('/jobs/qualification-suggestions', {
+        ...auth,
+        schema: {
+            tags: ['Recruitment'],
+            querystring: {
+                type: 'object',
+                properties: {
+                    q: { type: 'string' },
+                    limit: { type: 'integer', minimum: 1, maximum: 50 },
+                    offset: { type: 'integer', minimum: 0 },
+                },
+            },
+        },
+    }, async (request, reply) => {
+        const q = (request.query as { q?: string })?.q
+        const limit = Math.min(Number((request.query as { limit?: number })?.limit) || 10, 50)
+        const offset = Math.max(Number((request.query as { offset?: number })?.offset) || 0, 0)
+        const result = await listQualificationSuggestions(request.user.tenantId, { q, limit, offset })
+        return reply.send(result)
+    })
+
+    // ── Skill / qualification catalog management (Org Settings → Recruitment) ──
+    // `:kind` is 'skills' | 'qualifications'. Reads are available to any
+    // authenticated user (the job dialogs need them); writes are HR-only.
+    const TAG_KINDS = new Set(['skills', 'qualifications'])
+    const tagEntity = (kind: string) => (kind === 'skills' ? 'recruitment_skill' : 'recruitment_qualification')
+    // Zod-validated body (schema in lib/validation.ts) — trimmed name, 1–80 chars.
+    function readTagName(request: any, reply: any): string | null {
+        const parsed = recruitmentTagBodySchema.safeParse(request.body)
+        if (!parsed.success) {
+            reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: parsed.error.issues[0]?.message ?? 'Invalid name' })
+            return null
+        }
+        return parsed.data.name
+    }
+
+    // GET /api/v1/recruitment-tags/:kind?q=&limit=10&offset=0 — paginated +
+    // searchable catalog for the Org Settings CRUD list. Returns the
+    // standard `{ data, total, limit, offset, hasMore }` envelope.
+    fastify.get('/recruitment-tags/:kind', {
+        ...auth,
+        schema: {
+            tags: ['Recruitment'],
+            querystring: {
+                type: 'object',
+                properties: {
+                    q: { type: 'string' },
+                    limit: { type: 'integer', minimum: 1, maximum: 50 },
+                    offset: { type: 'integer', minimum: 0 },
+                },
+            },
+        },
+    }, async (request: any, reply: any) => {
+        const { kind } = request.params as { kind: string }
+        if (!TAG_KINDS.has(kind)) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid kind' })
+        const q = (request.query as { q?: string })?.q
+        const limit = Math.min(Number((request.query as { limit?: number })?.limit) || 10, 50)
+        const offset = Math.max(Number((request.query as { offset?: number })?.offset) || 0, 0)
+        const result = await listRecruitmentTags(request.user.tenantId, kind as RecruitmentTagKind, { q, limit, offset })
+        return reply.send(result)
+    })
+
+    fastify.post('/recruitment-tags/:kind', { ...writeAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const { kind } = request.params as { kind: string }
+        if (!TAG_KINDS.has(kind)) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid kind' })
+        const name = readTagName(request, reply); if (name === null) return
+        const row = await createRecruitmentTag(request.user.tenantId, kind as RecruitmentTagKind, name)
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: tagEntity(kind), entityId: row.id, entityName: row.name, action: 'create',
+            ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.code(201).send({ data: row })
+    })
+
+    fastify.patch('/recruitment-tags/:kind/:id', { ...writeAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const { kind, id } = request.params as { kind: string; id: string }
+        if (!TAG_KINDS.has(kind)) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid kind' })
+        const name = readTagName(request, reply); if (name === null) return
+        const row = await updateRecruitmentTag(request.user.tenantId, kind as RecruitmentTagKind, id, name)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: tagEntity(kind), entityId: row.id, entityName: row.name, action: 'update',
+            ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: row })
+    })
+
+    fastify.delete('/recruitment-tags/:kind/:id', { ...writeAuth, schema: { tags: ['Recruitment'] } }, async (request: any, reply: any) => {
+        const { kind, id } = request.params as { kind: string; id: string }
+        if (!TAG_KINDS.has(kind)) return reply.code(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid kind' })
+        const row = await deleteRecruitmentTag(request.user.tenantId, kind as RecruitmentTagKind, id)
+        if (!row) return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: 'Not found' })
+        recordActivity({
+            tenantId: request.user.tenantId, userId: request.user.id, actorName: request.user.name, actorRole: request.user.role,
+            entityType: tagEntity(kind), entityId: row.id, entityName: row.name, action: 'delete',
+            ipAddress: request.ip, userAgent: request.headers['user-agent'],
+        }).catch(() => { })
+        return reply.send({ data: { ok: true } })
     })
 
     // GET /api/v1/jobs/:id

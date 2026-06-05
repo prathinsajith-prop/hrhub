@@ -1,9 +1,11 @@
+import { useCallback, useState } from 'react'
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type InfiniteData } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { buildFilterQueryString, type AppliedFiltersMap } from '@/lib/filters'
 import { toast } from '@/components/ui/overlays'
 import type { Candidate, Job, RecommendedCandidate, RecommendedJob } from '@/types'
 import type { RecruitmentStage } from '@/lib/recruitmentStages'
+import type { ChipsFieldPagedSource } from '@/components/shared/ChipsField'
 
 interface JobParams { status?: string; department?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number }
 interface AppParams { jobId?: string; stage?: string; q?: string; filters?: AppliedFiltersMap; limit?: number; offset?: number; enabled?: boolean }
@@ -55,6 +57,80 @@ export function useJobTagSuggestions() {
     })
 }
 
+// ─── Paginated skill / qualification suggestions ──────────────────────────────
+//
+// Drives the job-dialog ChipsField type-ahead. Each page is a server fetch (10
+// items by default) — the dropdown grows via useInfiniteQuery's fetchNextPage
+// when the bottom of the list scrolls into view. The query string is folded
+// into the queryKey so typing into the input refetches from offset=0.
+//
+// Why server-paginated (not client slice): the per-tenant catalog can grow
+// large in long-running recruitment use, and the candidate / referral / public
+// careers forms also read these — keeping the wire payload small avoids slow
+// dialog opens on tenants with hundreds of tags.
+
+export interface SuggestionsPage {
+    data: string[]
+    total: number
+    limit: number
+    offset: number
+    hasMore: boolean
+}
+
+const SUGGESTIONS_PAGE_SIZE = 10
+
+function useSuggestionsInfinite(endpoint: 'skill-suggestions' | 'qualification-suggestions', q: string) {
+    const query = q.trim()
+    return useInfiniteQuery<SuggestionsPage, Error, InfiniteData<SuggestionsPage>, [string, string], number>({
+        // Query key includes the trimmed query so distinct text inputs cache
+        // independently. Empty string is the unfiltered (alphabetical) listing.
+        queryKey: [endpoint, query],
+        initialPageParam: 0,
+        queryFn: ({ pageParam }) => {
+            const qs = new URLSearchParams()
+            if (query) qs.set('q', query)
+            qs.set('limit', String(SUGGESTIONS_PAGE_SIZE))
+            qs.set('offset', String(pageParam))
+            return api.get<SuggestionsPage>(`/jobs/${endpoint}?${qs}`)
+        },
+        getNextPageParam: (last) => (last.hasMore ? last.offset + last.limit : undefined),
+        // Keep cached pages warm but not forever — the catalog gets updated
+        // whenever a job save lands, and useUpdateJob/useCreateJob invalidate.
+        staleTime: 60_000,
+    })
+}
+
+export function useSkillSuggestions(q: string = '') {
+    return useSuggestionsInfinite('skill-suggestions', q)
+}
+
+export function useQualificationSuggestions(q: string = '') {
+    return useSuggestionsInfinite('qualification-suggestions', q)
+}
+
+/**
+ * One-stop ChipsField `paged` source for a suggestions endpoint. Owns the
+ * debounce-target query state, the infinite query, and the load-more guard so
+ * the job dialogs don't repeat the wiring per field (New/Edit × skills/quals
+ * = 4 call sites). `onQueryChange`/`onLoadMore` are stable across renders so
+ * ChipsField's debounce + IntersectionObserver effects don't churn.
+ */
+export function usePagedSuggestions(endpoint: 'skill-suggestions' | 'qualification-suggestions'): ChipsFieldPagedSource {
+    const [query, setQuery] = useState('')
+    const { data, hasNextPage, isLoading, isFetchingNextPage, fetchNextPage } = useSuggestionsInfinite(endpoint, query)
+    const onLoadMore = useCallback(() => {
+        if (!isFetchingNextPage) fetchNextPage()
+    }, [isFetchingNextPage, fetchNextPage])
+    return {
+        items: data?.pages.flatMap((p) => p.data) ?? [],
+        hasMore: !!hasNextPage,
+        isLoading,
+        isFetchingMore: isFetchingNextPage,
+        onLoadMore,
+        onQueryChange: setQuery,
+    }
+}
+
 export function useCreateJob() {
     const qc = useQueryClient()
     return useMutation({
@@ -63,6 +139,8 @@ export function useCreateJob() {
             qc.invalidateQueries({ queryKey: ['jobs'] })
             // New skills/qualifications may have been introduced — refresh the type-ahead vocabulary.
             qc.invalidateQueries({ queryKey: ['job-tag-suggestions'] })
+            qc.invalidateQueries({ queryKey: ['skill-suggestions'] })
+            qc.invalidateQueries({ queryKey: ['qualification-suggestions'] })
         },
     })
 }
@@ -258,6 +336,8 @@ export function useUpdateJob() {
             qc.invalidateQueries({ queryKey: ['jobs'] })       // list view
             qc.invalidateQueries({ queryKey: ['job', id] })    // detail page
             qc.invalidateQueries({ queryKey: ['job-tag-suggestions'] }) // refresh tag vocabulary
+            qc.invalidateQueries({ queryKey: ['skill-suggestions'] })
+            qc.invalidateQueries({ queryKey: ['qualification-suggestions'] })
         },
     })
 }
@@ -491,5 +571,89 @@ export function useResetRecruitmentStages() {
             api.post<{ data: RecruitmentStage[] }>('/stages/reset').then(r => r.data),
         onSuccess: (data) => qc.setQueryData(STAGES_KEY, data),
         onError: (err: Error) => toast.error('Failed to reset stages', err.message),
+    })
+}
+
+// ─── Recruitment tag catalog (skills / qualifications) ────────────────────────
+// CRUD for the per-tenant skill & qualification catalogs managed in Org Settings.
+// Mutations invalidate both the managed list and the job dialogs' tag suggestions
+// so type-ahead stays in sync. `kind` is part of the query key so the two
+// catalogs cache independently.
+
+export type RecruitmentTagKind = 'skills' | 'qualifications'
+export interface RecruitmentTag { id: string; name: string }
+// Query key omits the q (parameterised below) so cache invalidations from
+// create/update/delete invalidate every search-scoped page in one go.
+const tagKey = (kind: RecruitmentTagKind) => ['recruitment-tags', kind] as const
+
+export interface RecruitmentTagsPage {
+    data: RecruitmentTag[]
+    total: number
+    limit: number
+    offset: number
+    hasMore: boolean
+}
+
+const TAGS_PAGE_SIZE = 10
+
+/**
+ * Paginated, searchable catalog list for the Org Settings CRUD page. Driven by
+ * `useInfiniteQuery` so the Tag Manager renders 10 rows initially and pulls
+ * the next 10 each time the bottom sentinel scrolls into view. The trimmed
+ * `q` is folded into the queryKey so typing into the search input refetches
+ * cleanly from offset 0 without manual cache mutation.
+ */
+export function useRecruitmentTags(kind: RecruitmentTagKind, q: string = '') {
+    const query = q.trim()
+    return useInfiniteQuery<RecruitmentTagsPage, Error, InfiniteData<RecruitmentTagsPage>, readonly [string, RecruitmentTagKind, string], number>({
+        queryKey: ['recruitment-tags', kind, query] as const,
+        initialPageParam: 0,
+        queryFn: ({ pageParam }) => {
+            const qs = new URLSearchParams()
+            if (query) qs.set('q', query)
+            qs.set('limit', String(TAGS_PAGE_SIZE))
+            qs.set('offset', String(pageParam))
+            return api.get<RecruitmentTagsPage>(`/recruitment-tags/${kind}?${qs}`)
+        },
+        getNextPageParam: (last) => (last.hasMore ? last.offset + last.limit : undefined),
+        staleTime: 60_000,
+    })
+}
+
+function useTagInvalidate(kind: RecruitmentTagKind) {
+    const qc = useQueryClient()
+    return () => {
+        qc.invalidateQueries({ queryKey: tagKey(kind) })
+        qc.invalidateQueries({ queryKey: ['job-tag-suggestions'] })
+        qc.invalidateQueries({ queryKey: ['skill-suggestions'] })
+        qc.invalidateQueries({ queryKey: ['qualification-suggestions'] })
+    }
+}
+
+export function useCreateRecruitmentTag(kind: RecruitmentTagKind) {
+    const invalidate = useTagInvalidate(kind)
+    return useMutation({
+        mutationFn: (name: string) => api.post<{ data: RecruitmentTag }>(`/recruitment-tags/${kind}`, { name }).then(r => r.data),
+        onSuccess: invalidate,
+        onError: (err: Error) => toast.error('Could not add', err.message),
+    })
+}
+
+export function useUpdateRecruitmentTag(kind: RecruitmentTagKind) {
+    const invalidate = useTagInvalidate(kind)
+    return useMutation({
+        mutationFn: ({ id, name }: { id: string; name: string }) =>
+            api.patch<{ data: RecruitmentTag }>(`/recruitment-tags/${kind}/${id}`, { name }).then(r => r.data),
+        onSuccess: invalidate,
+        onError: (err: Error) => toast.error('Could not rename', err.message),
+    })
+}
+
+export function useDeleteRecruitmentTag(kind: RecruitmentTagKind) {
+    const invalidate = useTagInvalidate(kind)
+    return useMutation({
+        mutationFn: (id: string) => api.delete(`/recruitment-tags/${kind}/${id}`),
+        onSuccess: invalidate,
+        onError: (err: Error) => toast.error('Could not delete', err.message),
     })
 }
