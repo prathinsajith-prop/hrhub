@@ -20,7 +20,7 @@ export interface AccountFlags {
 
 export function useAccountFlags(): AccountFlags & { isLoading: boolean } {
     const userId = useAuthStore((s) => s.user?.id)
-    const query = useQuery({
+    const { data, isLoading } = useQuery({
         queryKey: ['auth-me-flags', userId],
         queryFn: () => api.get<{ data: User }>('/auth/me').then((r) => r.data),
         enabled: !!userId,
@@ -30,8 +30,8 @@ export function useAccountFlags(): AccountFlags & { isLoading: boolean } {
         refetchInterval: 30_000,
     })
     return {
-        attendancePunchEnabled: query.data?.attendancePunchEnabled ?? true,
-        attendanceManualEntryEnabled: query.data?.attendanceManualEntryEnabled ?? true,
-        isLoading: query.isLoading,
+        attendancePunchEnabled: data?.attendancePunchEnabled ?? true,
+        attendanceManualEntryEnabled: data?.attendanceManualEntryEnabled ?? true,
+        isLoading,
     }
 }

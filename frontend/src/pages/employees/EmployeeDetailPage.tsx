@@ -437,7 +437,7 @@ function ChangeSalaryDialog({ open, onOpenChange, employeeId, currentBasic, curr
     onOpenChange(o)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
     if (!effectiveDate) { toast.error('Effective date required', 'Enter the date the salary change takes effect.'); return }
     if (basicNum <= 0)  { toast.error('Basic salary required', 'Enter an amount for the Basic component.'); return }
@@ -699,7 +699,7 @@ function TransferDialog({ open, onOpenChange, employeeId, orgUnits, currentDept,
     onOpenChange(o)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
     if (!transferDate)  { toast.error('Transfer date required', 'Enter the date the transfer takes effect.'); return }
     if (!departmentId)  { toast.error('Department required', 'Select the department to transfer to.'); return }
@@ -1203,7 +1203,7 @@ export function EmployeeDetailPage() {
       onError: (err) => {
         // Surface the server's reason (protected account, blocking dependency, …)
         // instead of a generic failure so admins know why an archive was refused.
-        const data = (err as any)?.data ?? null
+        const data = (err as { data?: { code?: string; dependencies?: Array<{ message: string }> } })?.data ?? null
         const code: string | undefined = data?.code
         const deps: Array<{ message: string }> = data?.dependencies ?? []
         const detail = deps.length ? deps.map((d) => `• ${d.message}`).join('\n') : (err as Error)?.message
@@ -3666,7 +3666,7 @@ function AddWarningDialog({
               <div className="flex items-center gap-2 text-sm">
                 <FileText className="size-4 text-primary shrink-0" />
                 <span className="truncate max-w-[240px]">{file.name}</span>
-                <button className="shrink-0 text-muted-foreground hover:text-destructive"
+                <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive"
                   onClick={e => { e.stopPropagation(); setFile(null) }}>
                   <XIcon className="size-3.5" />
                 </button>
